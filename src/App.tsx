@@ -3,8 +3,16 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import AppSidebar from "@/components/AppSidebar";
+import Index from "./pages/Index";
+import NaviPage from "./pages/NaviPage";
+import MavisChat from "./pages/MavisChat";
+import CharacterPage from "./pages/CharacterPage";
+import QuestsPage from "./pages/QuestsPage";
+import JournalPage from "./pages/JournalPage";
+import StatsPage from "./pages/StatsPage";
+import SettingsPage from "./pages/SettingsPage";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -14,11 +22,22 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <div className="flex min-h-screen">
+          <AppSidebar />
+          <main className="flex-1 p-6 overflow-y-auto">
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/navi" element={<NaviPage />} />
+              <Route path="/mavis" element={<MavisChat />} />
+              <Route path="/character" element={<CharacterPage />} />
+              <Route path="/quests" element={<QuestsPage />} />
+              <Route path="/journal" element={<JournalPage />} />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

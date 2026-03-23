@@ -77,16 +77,19 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string | null
+          equipped_skin: string
           id: string
         }
         Insert: {
           created_at?: string
           display_name?: string | null
+          equipped_skin?: string
           id: string
         }
         Update: {
           created_at?: string
           display_name?: string | null
+          equipped_skin?: string
           id?: string
         }
         Relationships: []

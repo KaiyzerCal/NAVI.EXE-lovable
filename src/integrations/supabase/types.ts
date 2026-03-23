@@ -91,6 +91,54 @@ export type Database = {
         }
         Relationships: []
       }
+      skin_unlock_conditions: {
+        Row: {
+          description: string | null
+          id: string
+          skin_name: string
+          unlock_type: string
+          unlock_value: number
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          skin_name: string
+          unlock_type?: string
+          unlock_value?: number
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          skin_name?: string
+          unlock_type?: string
+          unlock_value?: number
+        }
+        Relationships: []
+      }
+      user_unlocked_skins: {
+        Row: {
+          id: string
+          skin_name: string
+          unlock_source: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          skin_name: string
+          unlock_source?: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          skin_name?: string
+          unlock_source?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

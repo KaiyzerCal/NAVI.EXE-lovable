@@ -74,7 +74,7 @@ async function streamChat({
 const INITIAL_MESSAGE: DisplayMessage = {
   id: "initial",
   role: "assistant",
-  content: "Systems online, Operator. MAVIS initialized. How can I assist you today?",
+  content: "Systems online, Operator. NAVI AI initialized. How can I assist you today?",
   timestamp: new Date(),
 };
 
@@ -193,7 +193,7 @@ export default function MavisChat() {
     } catch (e: any) {
       setIsLoading(false);
       toast({
-        title: "MAVIS Error",
+        title: "NAVI Error",
         description: e.message || "Failed to get response",
         variant: "destructive",
       });
@@ -211,7 +211,7 @@ export default function MavisChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title="MAVIS AI" subtitle="// NEURAL LINK ACTIVE" />
+      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE" />
 
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
         {messages.map((msg) => (
@@ -262,7 +262,7 @@ export default function MavisChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Message MAVIS..."
+          placeholder="Message NAVI..."
           disabled={isLoading}
           className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50"
         />

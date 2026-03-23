@@ -18,10 +18,15 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
 
     // Ensure bucket exists
-    await supabase.storage.createBucket("navi-skins", { public: true }).catch(() => {});
+    const { error: bucketError } = await supabase.storage.createBucket("navi-skins", { public: true });
+    if (bucketError && !bucketError.message.includes("already exists")) {
+      console.log("Bucket creation error:", bucketError.message);
+    }
 
     // Check if already cached
     const filePath = `${skinName.toLowerCase()}.png`;

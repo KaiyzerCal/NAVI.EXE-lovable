@@ -20,23 +20,19 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Ensure bucket exists
+    await supabase.storage.createBucket("navi-skins", { public: true }).catch(() => {});
+
     // Check if already cached
     const filePath = `${skinName.toLowerCase()}.png`;
-    const { data: existing } = await supabase.storage
+    const { data: fileData } = await supabase.storage
       .from("navi-skins")
-      .createSignedUrl(filePath, 60);
-
-    if (existing?.signedUrl) {
-      // Verify the file actually exists by trying to download a tiny bit
-      const { data: fileData } = await supabase.storage
-        .from("navi-skins")
-        .download(filePath);
-      if (fileData) {
-        const publicUrl = `${supabaseUrl}/storage/v1/object/public/navi-skins/${filePath}`;
-        return new Response(JSON.stringify({ imageUrl: publicUrl }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      .download(filePath);
+    if (fileData) {
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/navi-skins/${filePath}`;
+      return new Response(JSON.stringify({ imageUrl: publicUrl }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Generate with AI

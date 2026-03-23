@@ -1,31 +1,24 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
-import { motion } from "framer-motion";
-import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, X, Loader2 } from "lucide-react";
 import { useState } from "react";
 import naviDefault from "@/assets/navi-default.png";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TECH" | "SPECIAL";
 
 interface NaviSkin {
   name: string;
   category: SkinCategory;
-  color: string; // tailwind hsl accent
+  color: string;
   unlocked: boolean;
   rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
 }
-
-const CATEGORY_COLORS: Record<SkinCategory, string> = {
-  ELEMENTAL: "hsl(15, 90%, 55%)",
-  CLASS: "hsl(45, 90%, 55%)",
-  MYTHIC: "hsl(280, 80%, 60%)",
-  COSMIC: "hsl(220, 90%, 60%)",
-  NATURE: "hsl(140, 70%, 45%)",
-  TECH: "hsl(185, 100%, 50%)",
-  SPECIAL: "hsl(340, 80%, 55%)",
-};
 
 const RARITY_BORDER: Record<string, string> = {
   COMMON: "border-muted-foreground/30",
@@ -42,77 +35,70 @@ const RARITY_BG: Record<string, string> = {
 };
 
 const ALL_SKINS: NaviSkin[] = [
-  // Elemental
-  { name: "FLAMEBIRD", category: "ELEMENTAL", color: "hsl(15,90%,55%)", unlocked: false, rarity: "RARE" },
-  { name: "AQUACAT", category: "ELEMENTAL", color: "hsl(200,90%,55%)", unlocked: false, rarity: "RARE" },
-  { name: "THUNDERDOG", category: "ELEMENTAL", color: "hsl(50,95%,55%)", unlocked: false, rarity: "RARE" },
-  { name: "CRYSTALFISH", category: "ELEMENTAL", color: "hsl(190,80%,70%)", unlocked: false, rarity: "EPIC" },
-  { name: "SHADOWBUNNY", category: "ELEMENTAL", color: "hsl(270,40%,30%)", unlocked: false, rarity: "EPIC" },
-  { name: "IRONBEAR", category: "ELEMENTAL", color: "hsl(220,10%,50%)", unlocked: false, rarity: "RARE" },
-  { name: "STORMDRAKE", category: "ELEMENTAL", color: "hsl(210,80%,60%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "VENOMBUG", category: "ELEMENTAL", color: "hsl(100,70%,40%)", unlocked: false, rarity: "COMMON" },
-  { name: "FROSTFOX", category: "ELEMENTAL", color: "hsl(195,90%,75%)", unlocked: false, rarity: "RARE" },
-  { name: "EMBERCORE", category: "ELEMENTAL", color: "hsl(20,95%,50%)", unlocked: false, rarity: "EPIC" },
-  { name: "TIDECALLER", category: "ELEMENTAL", color: "hsl(210,70%,50%)", unlocked: false, rarity: "RARE" },
-  // Class
-  { name: "NETOP", category: "CLASS", color: "hsl(185,100%,50%)", unlocked: true, rarity: "COMMON" },
-  { name: "WARRIOR", category: "CLASS", color: "hsl(0,70%,50%)", unlocked: false, rarity: "COMMON" },
-  { name: "GUARDIAN", category: "CLASS", color: "hsl(210,60%,50%)", unlocked: false, rarity: "RARE" },
-  { name: "PALADIN", category: "CLASS", color: "hsl(45,90%,60%)", unlocked: false, rarity: "EPIC" },
-  { name: "BERSERKER", category: "CLASS", color: "hsl(0,90%,45%)", unlocked: false, rarity: "RARE" },
-  { name: "SORCERER", category: "CLASS", color: "hsl(270,80%,55%)", unlocked: false, rarity: "EPIC" },
-  { name: "RANGER", category: "CLASS", color: "hsl(120,60%,40%)", unlocked: false, rarity: "COMMON" },
-  { name: "NAVIGATOR", category: "CLASS", color: "hsl(185,80%,45%)", unlocked: false, rarity: "RARE" },
-  { name: "ROCKETEER", category: "CLASS", color: "hsl(30,90%,55%)", unlocked: false, rarity: "EPIC" },
-  { name: "ALCHEMIST", category: "CLASS", color: "hsl(55,80%,50%)", unlocked: false, rarity: "RARE" },
-  // Mythic
-  { name: "PHOENIX", category: "MYTHIC", color: "hsl(25,100%,55%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "LEVIATHAN", category: "MYTHIC", color: "hsl(220,80%,45%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "THUNDERGOD", category: "MYTHIC", color: "hsl(50,100%,55%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "BANSHEE", category: "MYTHIC", color: "hsl(280,60%,50%)", unlocked: false, rarity: "EPIC" },
-  { name: "GOLEM", category: "MYTHIC", color: "hsl(30,30%,40%)", unlocked: false, rarity: "RARE" },
-  { name: "FROSTGIANT", category: "MYTHIC", color: "hsl(200,80%,75%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "SUNWYRM", category: "MYTHIC", color: "hsl(40,100%,55%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "MOONWITCH", category: "MYTHIC", color: "hsl(260,50%,60%)", unlocked: false, rarity: "EPIC" },
-  { name: "TREANT", category: "MYTHIC", color: "hsl(130,50%,35%)", unlocked: false, rarity: "RARE" },
-  { name: "RAGNAROK", category: "MYTHIC", color: "hsl(0,80%,40%)", unlocked: false, rarity: "LEGENDARY" },
-  // Cosmic
-  { name: "STARDUST", category: "COSMIC", color: "hsl(270,70%,70%)", unlocked: false, rarity: "EPIC" },
-  { name: "NEBULA", category: "COSMIC", color: "hsl(300,60%,50%)", unlocked: false, rarity: "EPIC" },
-  { name: "XENOMORPH", category: "COSMIC", color: "hsl(150,40%,30%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "GALACTIC", category: "COSMIC", color: "hsl(240,70%,55%)", unlocked: false, rarity: "EPIC" },
-  { name: "COSMIC", category: "COSMIC", color: "hsl(260,80%,60%)", unlocked: false, rarity: "RARE" },
-  { name: "VOIDWALKER", category: "COSMIC", color: "hsl(280,30%,20%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "UFOSIGNAL", category: "COSMIC", color: "hsl(160,90%,55%)", unlocked: false, rarity: "RARE" },
-  { name: "SOLARIS", category: "COSMIC", color: "hsl(45,100%,60%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "CELESTIAL", category: "COSMIC", color: "hsl(210,60%,70%)", unlocked: false, rarity: "EPIC" },
-  { name: "GENESIS", category: "COSMIC", color: "hsl(180,70%,50%)", unlocked: false, rarity: "LEGENDARY" },
-  // Nature
-  { name: "LEAFSPIRIT", category: "NATURE", color: "hsl(120,70%,45%)", unlocked: false, rarity: "COMMON" },
-  { name: "GALEFORCE", category: "NATURE", color: "hsl(180,50%,60%)", unlocked: false, rarity: "RARE" },
-  { name: "BLOOMFAE", category: "NATURE", color: "hsl(330,70%,65%)", unlocked: false, rarity: "EPIC" },
-  { name: "PALMSHAMAN", category: "NATURE", color: "hsl(80,60%,40%)", unlocked: false, rarity: "RARE" },
-  { name: "TEMPEST", category: "NATURE", color: "hsl(200,60%,50%)", unlocked: false, rarity: "EPIC" },
-  { name: "MISTCLOUD", category: "NATURE", color: "hsl(210,30%,70%)", unlocked: false, rarity: "COMMON" },
-  { name: "SUNSHARD", category: "NATURE", color: "hsl(40,90%,55%)", unlocked: false, rarity: "RARE" },
-  // Tech
-  { name: "CYBERCORE", category: "TECH", color: "hsl(185,100%,50%)", unlocked: false, rarity: "RARE" },
-  { name: "NETBOT", category: "TECH", color: "hsl(170,80%,45%)", unlocked: false, rarity: "COMMON" },
-  { name: "DATASTREAM", category: "TECH", color: "hsl(190,90%,55%)", unlocked: false, rarity: "RARE" },
-  { name: "BROADCAST", category: "TECH", color: "hsl(30,80%,55%)", unlocked: false, rarity: "COMMON" },
-  { name: "DNAWEAVER", category: "TECH", color: "hsl(300,60%,55%)", unlocked: false, rarity: "EPIC" },
-  { name: "MAGNETAR", category: "TECH", color: "hsl(0,60%,50%)", unlocked: false, rarity: "EPIC" },
-  { name: "NEUROMIND", category: "TECH", color: "hsl(250,70%,60%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "ATOMSPARK", category: "TECH", color: "hsl(55,90%,50%)", unlocked: false, rarity: "RARE" },
-  // Special
-  { name: "SOULBLADE", category: "SPECIAL", color: "hsl(340,80%,55%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "HEARTBOND", category: "SPECIAL", color: "hsl(350,80%,60%)", unlocked: false, rarity: "EPIC" },
-  { name: "HEXCORE", category: "SPECIAL", color: "hsl(280,70%,45%)", unlocked: false, rarity: "EPIC" },
-  { name: "GEMSTONE", category: "SPECIAL", color: "hsl(160,60%,55%)", unlocked: false, rarity: "RARE" },
-  { name: "STARMARK", category: "SPECIAL", color: "hsl(45,90%,60%)", unlocked: false, rarity: "RARE" },
-  { name: "EYEOFTRUTH", category: "SPECIAL", color: "hsl(200,80%,55%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "ORACLE", category: "SPECIAL", color: "hsl(270,60%,60%)", unlocked: false, rarity: "LEGENDARY" },
-  { name: "ANCHOR", category: "SPECIAL", color: "hsl(210,40%,40%)", unlocked: false, rarity: "COMMON" },
+  { name: "FLAMEBIRD", category: "ELEMENTAL", color: "orange-red", unlocked: false, rarity: "RARE" },
+  { name: "AQUACAT", category: "ELEMENTAL", color: "ocean blue", unlocked: false, rarity: "RARE" },
+  { name: "THUNDERDOG", category: "ELEMENTAL", color: "electric yellow", unlocked: false, rarity: "RARE" },
+  { name: "CRYSTALFISH", category: "ELEMENTAL", color: "ice blue crystal", unlocked: false, rarity: "EPIC" },
+  { name: "SHADOWBUNNY", category: "ELEMENTAL", color: "dark purple shadow", unlocked: false, rarity: "EPIC" },
+  { name: "IRONBEAR", category: "ELEMENTAL", color: "steel grey", unlocked: false, rarity: "RARE" },
+  { name: "STORMDRAKE", category: "ELEMENTAL", color: "stormy blue lightning", unlocked: false, rarity: "LEGENDARY" },
+  { name: "VENOMBUG", category: "ELEMENTAL", color: "toxic green", unlocked: false, rarity: "COMMON" },
+  { name: "FROSTFOX", category: "ELEMENTAL", color: "icy white-blue", unlocked: false, rarity: "RARE" },
+  { name: "EMBERCORE", category: "ELEMENTAL", color: "deep ember orange", unlocked: false, rarity: "EPIC" },
+  { name: "TIDECALLER", category: "ELEMENTAL", color: "teal ocean", unlocked: false, rarity: "RARE" },
+  { name: "NETOP", category: "CLASS", color: "cyan digital", unlocked: true, rarity: "COMMON" },
+  { name: "WARRIOR", category: "CLASS", color: "crimson red", unlocked: false, rarity: "COMMON" },
+  { name: "GUARDIAN", category: "CLASS", color: "royal blue", unlocked: false, rarity: "RARE" },
+  { name: "PALADIN", category: "CLASS", color: "golden holy", unlocked: false, rarity: "EPIC" },
+  { name: "BERSERKER", category: "CLASS", color: "blood red dark", unlocked: false, rarity: "RARE" },
+  { name: "SORCERER", category: "CLASS", color: "mystic purple", unlocked: false, rarity: "EPIC" },
+  { name: "RANGER", category: "CLASS", color: "forest green", unlocked: false, rarity: "COMMON" },
+  { name: "NAVIGATOR", category: "CLASS", color: "teal compass", unlocked: false, rarity: "RARE" },
+  { name: "ROCKETEER", category: "CLASS", color: "fiery orange jet", unlocked: false, rarity: "EPIC" },
+  { name: "ALCHEMIST", category: "CLASS", color: "gold-green potion", unlocked: false, rarity: "RARE" },
+  { name: "PHOENIX", category: "MYTHIC", color: "blazing orange-gold fire", unlocked: false, rarity: "LEGENDARY" },
+  { name: "LEVIATHAN", category: "MYTHIC", color: "deep sea blue", unlocked: false, rarity: "LEGENDARY" },
+  { name: "THUNDERGOD", category: "MYTHIC", color: "gold lightning", unlocked: false, rarity: "LEGENDARY" },
+  { name: "BANSHEE", category: "MYTHIC", color: "ghostly purple", unlocked: false, rarity: "EPIC" },
+  { name: "GOLEM", category: "MYTHIC", color: "earthy brown rock", unlocked: false, rarity: "RARE" },
+  { name: "FROSTGIANT", category: "MYTHIC", color: "glacial white-blue", unlocked: false, rarity: "LEGENDARY" },
+  { name: "SUNWYRM", category: "MYTHIC", color: "solar gold-orange", unlocked: false, rarity: "LEGENDARY" },
+  { name: "MOONWITCH", category: "MYTHIC", color: "silver-violet moon", unlocked: false, rarity: "EPIC" },
+  { name: "TREANT", category: "MYTHIC", color: "mossy dark green", unlocked: false, rarity: "RARE" },
+  { name: "RAGNAROK", category: "MYTHIC", color: "apocalyptic red-black", unlocked: false, rarity: "LEGENDARY" },
+  { name: "STARDUST", category: "COSMIC", color: "sparkling lavender", unlocked: false, rarity: "EPIC" },
+  { name: "NEBULA", category: "COSMIC", color: "pink-purple nebula", unlocked: false, rarity: "EPIC" },
+  { name: "XENOMORPH", category: "COSMIC", color: "alien dark green", unlocked: false, rarity: "LEGENDARY" },
+  { name: "GALACTIC", category: "COSMIC", color: "deep space blue", unlocked: false, rarity: "EPIC" },
+  { name: "COSMIC", category: "COSMIC", color: "violet cosmic", unlocked: false, rarity: "RARE" },
+  { name: "VOIDWALKER", category: "COSMIC", color: "void black-purple", unlocked: false, rarity: "LEGENDARY" },
+  { name: "UFOSIGNAL", category: "COSMIC", color: "neon green alien", unlocked: false, rarity: "RARE" },
+  { name: "SOLARIS", category: "COSMIC", color: "blazing sun gold", unlocked: false, rarity: "LEGENDARY" },
+  { name: "CELESTIAL", category: "COSMIC", color: "heavenly blue-white", unlocked: false, rarity: "EPIC" },
+  { name: "GENESIS", category: "COSMIC", color: "creation teal-gold", unlocked: false, rarity: "LEGENDARY" },
+  { name: "LEAFSPIRIT", category: "NATURE", color: "bright leaf green", unlocked: false, rarity: "COMMON" },
+  { name: "GALEFORCE", category: "NATURE", color: "wind silver-teal", unlocked: false, rarity: "RARE" },
+  { name: "BLOOMFAE", category: "NATURE", color: "pink blossom", unlocked: false, rarity: "EPIC" },
+  { name: "PALMSHAMAN", category: "NATURE", color: "tropical green", unlocked: false, rarity: "RARE" },
+  { name: "TEMPEST", category: "NATURE", color: "stormy grey-blue", unlocked: false, rarity: "EPIC" },
+  { name: "MISTCLOUD", category: "NATURE", color: "soft grey mist", unlocked: false, rarity: "COMMON" },
+  { name: "SUNSHARD", category: "NATURE", color: "warm amber gold", unlocked: false, rarity: "RARE" },
+  { name: "CYBERCORE", category: "TECH", color: "neon cyan circuit", unlocked: false, rarity: "RARE" },
+  { name: "NETBOT", category: "TECH", color: "digital teal", unlocked: false, rarity: "COMMON" },
+  { name: "DATASTREAM", category: "TECH", color: "data blue streams", unlocked: false, rarity: "RARE" },
+  { name: "BROADCAST", category: "TECH", color: "signal orange", unlocked: false, rarity: "COMMON" },
+  { name: "DNAWEAVER", category: "TECH", color: "bio purple helix", unlocked: false, rarity: "EPIC" },
+  { name: "MAGNETAR", category: "TECH", color: "magnetic red", unlocked: false, rarity: "EPIC" },
+  { name: "NEUROMIND", category: "TECH", color: "neural violet glow", unlocked: false, rarity: "LEGENDARY" },
+  { name: "ATOMSPARK", category: "TECH", color: "atomic yellow spark", unlocked: false, rarity: "RARE" },
+  { name: "SOULBLADE", category: "SPECIAL", color: "crimson soul flame", unlocked: false, rarity: "LEGENDARY" },
+  { name: "HEARTBOND", category: "SPECIAL", color: "warm pink heart", unlocked: false, rarity: "EPIC" },
+  { name: "HEXCORE", category: "SPECIAL", color: "dark violet hex", unlocked: false, rarity: "EPIC" },
+  { name: "GEMSTONE", category: "SPECIAL", color: "emerald gem green", unlocked: false, rarity: "RARE" },
+  { name: "STARMARK", category: "SPECIAL", color: "golden star", unlocked: false, rarity: "RARE" },
+  { name: "EYEOFTRUTH", category: "SPECIAL", color: "mystic blue eye", unlocked: false, rarity: "LEGENDARY" },
+  { name: "ORACLE", category: "SPECIAL", color: "ethereal purple oracle", unlocked: false, rarity: "LEGENDARY" },
+  { name: "ANCHOR", category: "SPECIAL", color: "navy anchor steel", unlocked: false, rarity: "COMMON" },
 ];
 
 const naviSkills = [
@@ -126,10 +112,24 @@ const naviSkills = [
 const CATEGORIES: SkinCategory[] = ["ELEMENTAL", "CLASS", "MYTHIC", "COSMIC", "NATURE", "TECH", "SPECIAL"];
 const currentNaviLevel = 8;
 
+// Simple color map for skin card circles
+const SKIN_HUE: Record<SkinCategory, string> = {
+  ELEMENTAL: "hsl(15, 80%, 50%)",
+  CLASS: "hsl(45, 80%, 50%)",
+  MYTHIC: "hsl(280, 70%, 55%)",
+  COSMIC: "hsl(240, 70%, 55%)",
+  NATURE: "hsl(130, 60%, 42%)",
+  TECH: "hsl(185, 90%, 45%)",
+  SPECIAL: "hsl(340, 75%, 50%)",
+};
+
 export default function NaviPage() {
   const [selectedCategory, setSelectedCategory] = useState<SkinCategory | "ALL">("ALL");
   const [equippedSkin, setEquippedSkin] = useState("NETOP");
   const [searchQuery, setSearchQuery] = useState("");
+  const [previewSkin, setPreviewSkin] = useState<NaviSkin | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   const filteredSkins = ALL_SKINS.filter((s) => {
     const matchesCategory = selectedCategory === "ALL" || s.category === selectedCategory;
@@ -139,9 +139,79 @@ export default function NaviPage() {
 
   const unlockedCount = ALL_SKINS.filter((s) => s.unlocked).length;
 
+  const handleSkinClick = async (skin: NaviSkin) => {
+    setPreviewSkin(skin);
+    setPreviewImage(null);
+    setGenerating(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-navi-skin", {
+        body: { skinName: skin.name, skinColor: skin.color },
+      });
+
+      if (error) throw error;
+      if (data?.imageUrl) {
+        setPreviewImage(data.imageUrl + "?t=" + Date.now());
+      }
+    } catch (err) {
+      console.error("Failed to generate skin:", err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader title="NAVI" subtitle="// COMPANION STATUS" />
+
+      {/* Skin Preview Modal */}
+      <Dialog open={!!previewSkin} onOpenChange={() => setPreviewSkin(null)}>
+        <DialogContent className="sm:max-w-md bg-card border-primary/30 p-0 overflow-hidden">
+          {previewSkin && (
+            <div className="flex flex-col items-center p-6">
+              <div className="w-56 h-56 rounded-lg bg-muted/30 border border-border flex items-center justify-center mb-4 relative overflow-hidden">
+                {generating ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 size={32} className="text-primary animate-spin" />
+                    <p className="text-xs font-mono text-muted-foreground animate-pulse">GENERATING ARTWORK...</p>
+                  </div>
+                ) : previewImage ? (
+                  <img
+                    src={previewImage}
+                    alt={previewSkin.name}
+                    className="w-full h-full object-contain drop-shadow-[0_0_16px_hsl(185,100%,50%,0.3)]"
+                  />
+                ) : (
+                  <p className="text-xs font-mono text-muted-foreground">FAILED TO LOAD</p>
+                )}
+              </div>
+              <h3 className="font-display text-lg text-primary font-bold">{previewSkin.name}</h3>
+              <div className="flex gap-2 mt-1 mb-3">
+                <span className="text-[10px] font-mono text-muted-foreground">{previewSkin.category}</span>
+                <span className={`text-[10px] font-mono ${
+                  previewSkin.rarity === "LEGENDARY" ? "text-accent" :
+                  previewSkin.rarity === "EPIC" ? "text-secondary" :
+                  previewSkin.rarity === "RARE" ? "text-primary" : "text-muted-foreground"
+                }`}>{previewSkin.rarity}</span>
+              </div>
+              {previewSkin.unlocked && (
+                <Button
+                  size="sm"
+                  onClick={() => { setEquippedSkin(previewSkin.name); setPreviewSkin(null); }}
+                  className="font-mono text-xs"
+                >
+                  EQUIP SKIN
+                </Button>
+              )}
+              {!previewSkin.unlocked && (
+                <p className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                  <Lock size={10} /> LOCKED
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Navi Display */}
       <motion.div
@@ -166,7 +236,7 @@ export default function NaviPage() {
       <HudCard title="SKIN LOCKER" icon={<Sparkles size={14} />} glow className="mb-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-mono text-muted-foreground">
-            {unlockedCount}/{ALL_SKINS.length} UNLOCKED
+            {unlockedCount}/{ALL_SKINS.length} UNLOCKED • TAP TO PREVIEW
           </p>
           <Input
             placeholder="Search skins..."
@@ -176,7 +246,6 @@ export default function NaviPage() {
           />
         </div>
 
-        {/* Category Filters */}
         <div className="flex flex-wrap gap-1.5 mb-4">
           <button
             onClick={() => setSelectedCategory("ALL")}
@@ -203,24 +272,22 @@ export default function NaviPage() {
           ))}
         </div>
 
-        {/* Skin Grid */}
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[320px] overflow-y-auto pr-1">
           {filteredSkins.map((skin) => (
             <button
               key={skin.name}
-              onClick={() => skin.unlocked && setEquippedSkin(skin.name)}
+              onClick={() => handleSkinClick(skin)}
               className={`rounded border p-2 flex flex-col items-center gap-1.5 transition-all relative group ${
                 RARITY_BORDER[skin.rarity]
               } ${RARITY_BG[skin.rarity]} ${
                 equippedSkin === skin.name ? "ring-1 ring-primary" : ""
-              } ${skin.unlocked ? "cursor-pointer hover:border-primary/60" : "cursor-default opacity-60"}`}
+              } cursor-pointer hover:border-primary/60`}
             >
-              {/* Color avatar circle */}
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold"
                 style={{
-                  background: `linear-gradient(135deg, ${skin.color}, ${skin.color}88)`,
-                  boxShadow: skin.unlocked ? `0 0 8px ${skin.color}44` : "none",
+                  background: `linear-gradient(135deg, ${SKIN_HUE[skin.category]}, ${SKIN_HUE[skin.category]}88)`,
+                  boxShadow: `0 0 8px ${SKIN_HUE[skin.category]}44`,
                 }}
               >
                 {skin.unlocked ? (

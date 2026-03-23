@@ -12,6 +12,12 @@ export interface ProfileData {
   bond_trust: number;
   bond_loyalty: number;
   navi_level: number;
+  navi_name: string;
+  xp_total: number;
+  current_streak: number;
+  longest_streak: number;
+  user_navi_description: string | null;
+  last_active: string | null;
 }
 
 const defaults: ProfileData = {
@@ -19,11 +25,17 @@ const defaults: ProfileData = {
   equipped_skin: "NETOP",
   character_class: null,
   mbti_type: null,
-  navi_personality: "ANALYTICAL",
+  navi_personality: "GUARDIAN",
   bond_affection: 50,
   bond_trust: 50,
   bond_loyalty: 50,
   navi_level: 1,
+  navi_name: "NAVI",
+  xp_total: 0,
+  current_streak: 0,
+  longest_streak: 0,
+  user_navi_description: null,
+  last_active: null,
 };
 
 export function useProfile() {

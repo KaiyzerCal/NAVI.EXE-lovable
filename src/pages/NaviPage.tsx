@@ -106,11 +106,12 @@ const ALL_SKINS: NaviSkin[] = [
 ];
 
 const NAVI_PERSONALITIES = [
-  { id: "ANALYTICAL", label: "Analytical", desc: "Logical, data-driven, precise" },
-  { id: "CHEERFUL", label: "Cheerful", desc: "Upbeat, encouraging, warm" },
-  { id: "STERN", label: "Stern", desc: "Disciplined, no-nonsense, tough love" },
-  { id: "PLAYFUL", label: "Playful", desc: "Witty, humorous, light-hearted" },
-  { id: "MYSTERIOUS", label: "Mysterious", desc: "Cryptic, wise, enigmatic" },
+  { id: "GUARDIAN", label: "Guardian", desc: "Loyal, encouraging, steady" },
+  { id: "HYPE", label: "Hype", desc: "Energetic, hyped, high-voltage" },
+  { id: "COMPANION", label: "Companion", desc: "Soft, empathetic, heart-first" },
+  { id: "ROGUE", label: "Rogue", desc: "Witty, sarcastic, sharp (Lv3+)", unlockLevel: 3 },
+  { id: "SHADOW", label: "Shadow", desc: "Mysterious, cryptic, precise (Lv5+)", unlockLevel: 5 },
+  { id: "SAGE", label: "Sage", desc: "Analytical, strategic, tactical (Lv8+)", unlockLevel: 8 },
 ];
 
 const NAVI_SKILLS_BY_LEVEL: { name: string; unlockLevel: number; max: number; desc: string }[] = [

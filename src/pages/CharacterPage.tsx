@@ -1,10 +1,14 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
+import MbtiQuiz, { MBTI_CLASS_MAP } from "@/components/MbtiQuiz";
 import { motion } from "framer-motion";
-import { Shield, Sword, Brain, Heart, Zap, Star, Cpu } from "lucide-react";
+import { Shield, Sword, Brain, Heart, Zap, Star, Eye } from "lucide-react";
 import { useState } from "react";
-import naviDefault from "@/assets/navi-default.png";
+import { useProfile } from "@/hooks/useProfile";
+import { useOwner } from "@/hooks/useOwner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const tabs = ["PROFILE", "SKILLS"] as const;
 
@@ -35,10 +39,37 @@ const naviSkills = [
 
 export default function CharacterPage() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("PROFILE");
+  const { profile, updateProfile } = useProfile();
+  const isOwner = useOwner();
+  const [editMode, setEditMode] = useState(false);
+
+  const characterClass = profile.character_class || "Unknown";
+  const mbtiType = profile.mbti_type || null;
+  const classInfo = mbtiType ? MBTI_CLASS_MAP[mbtiType] : null;
+
+  const handleQuizComplete = (mbti: string, charClass: string) => {
+    updateProfile({ mbti_type: mbti, character_class: charClass });
+  };
+
+  // Show quiz if no class assigned yet
+  if (!mbtiType && !profile.character_class) {
+    return (
+      <div>
+        <PageHeader title="CHARACTER" subtitle="// OPERATOR CALIBRATION REQUIRED" />
+        <MbtiQuiz onComplete={handleQuizComplete} />
+      </div>
+    );
+  }
 
   return (
     <div>
-      <PageHeader title="CHARACTER" subtitle="// OPERATOR PROFILE" />
+      <PageHeader title="CHARACTER" subtitle="// OPERATOR PROFILE">
+        {isOwner && (
+          <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)} className="text-xs font-mono">
+            <Eye size={12} className="mr-1" /> {editMode ? "VIEW MODE" : "EDIT MODE"}
+          </Button>
+        )}
+      </PageHeader>
 
       {/* Character Card */}
       <motion.div
@@ -52,11 +83,38 @@ export default function CharacterPage() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
-              <h2 className="font-display text-lg text-primary font-bold">OPERATOR</h2>
-              <span className="text-xs font-mono bg-secondary/10 text-secondary px-2 py-0.5 rounded">TECHNOMANCER</span>
+              <h2 className="font-display text-lg text-primary font-bold">
+                {profile.display_name || "OPERATOR"}
+              </h2>
+              <span className="text-xs font-mono bg-secondary/10 text-secondary px-2 py-0.5 rounded">
+                {characterClass.toUpperCase()}
+              </span>
             </div>
+            {mbtiType && (
+              <p className="text-[10px] font-mono text-muted-foreground mb-1">
+                MBTI: {mbtiType} // {classInfo?.desc || ""}
+              </p>
+            )}
             <p className="text-xs font-mono text-muted-foreground mb-3">LEVEL 12 // 2,450 / 3,000 XP</p>
             <ProgressBar value={2450} max={3000} variant="cyan" size="md" showValue={false} />
+            {editMode && (
+              <div className="mt-3 flex gap-2 items-center">
+                <Input
+                  className="h-7 text-xs w-40"
+                  placeholder="Character class..."
+                  defaultValue={characterClass}
+                  onBlur={(e) => updateProfile({ character_class: e.target.value })}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-[10px] font-mono"
+                  onClick={() => updateProfile({ mbti_type: null, character_class: null })}
+                >
+                  RETAKE QUIZ
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -84,9 +142,7 @@ export default function CharacterPage() {
             <div className="space-y-3">
               {baseStats.map((stat) => (
                 <div key={stat.name} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-primary">
-                    {stat.icon}
-                  </div>
+                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-primary">{stat.icon}</div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-mono text-muted-foreground">{stat.name}</span>
@@ -102,7 +158,7 @@ export default function CharacterPage() {
           <HudCard title="EQUIPMENT" icon={<Star size={14} />} glow>
             <div className="space-y-2">
               {[
-                { slot: "TITLE", item: "Technomancer", rarity: "RARE" },
+                { slot: "TITLE", item: characterClass, rarity: "RARE" },
                 { slot: "BADGE", item: "Early Adopter", rarity: "EPIC" },
                 { slot: "PERK", item: "Night Owl (+10% XP after 10PM)", rarity: "UNCOMMON" },
               ].map((eq) => (
@@ -123,7 +179,6 @@ export default function CharacterPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
-          {/* Operator Skills */}
           <HudCard title="OPERATOR SKILLS" icon={<Zap size={14} />} glow>
             <div className="space-y-3">
               {operatorSkills.map((skill) => (
@@ -139,15 +194,7 @@ export default function CharacterPage() {
             </div>
           </HudCard>
 
-          {/* Navi Skills */}
-          <HudCard title="NAVI SKILLS" icon={<Cpu size={14} />} glow>
-            <div className="flex items-center gap-3 mb-4 p-2 rounded bg-primary/5 border border-primary/20">
-              <img src={naviDefault} alt="NAVI" className="w-10 h-10 object-contain" />
-              <div>
-                <p className="font-display text-xs text-primary">NAVI.EXE</p>
-                <p className="text-[10px] font-mono text-muted-foreground">ROOKIE // LVL 8</p>
-              </div>
-            </div>
+          <HudCard title="NAVI SKILLS" icon={<Brain size={14} />} glow>
             <div className="space-y-3">
               {naviSkills.map((skill) => (
                 <div key={skill.name}>

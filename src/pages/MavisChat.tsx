@@ -83,6 +83,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user } = useAuth();
+  const { profile } = useProfile();
   const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

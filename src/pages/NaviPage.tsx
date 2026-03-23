@@ -144,7 +144,27 @@ export default function NaviPage() {
           setUnlockConditions(map);
         }
       });
+    // Fetch equipped skin from profile
+    supabase
+      .from("profiles")
+      .select("equipped_skin")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.equipped_skin) setEquippedSkin(data.equipped_skin);
+      });
   }, [user]);
+
+  const handleEquipSkin = async (skinName: string) => {
+    setEquippedSkin(skinName);
+    setPreviewSkin(null);
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({ equipped_skin: skinName } as any)
+        .eq("id", user.id);
+    }
+  };
 
   const isSkinUnlocked = (name: string) => unlockedSkins.has(name);
 

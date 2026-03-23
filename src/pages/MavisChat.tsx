@@ -211,7 +211,7 @@ export default function MavisChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title="MAVIS AI" subtitle="// NEURAL LINK ACTIVE" />
+      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE" />
 
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
         {messages.map((msg) => (

@@ -182,7 +182,7 @@ export default function NaviPage() {
                   previewSkin.rarity === "RARE" ? "text-primary" : "text-muted-foreground"
                 }`}>{previewSkin.rarity}</span>
               </div>
-              {previewSkin.unlocked && (
+              {isSkinUnlocked(previewSkin.name) && (
                 <Button
                   size="sm"
                   onClick={() => { setEquippedSkin(previewSkin.name); setPreviewSkin(null); }}
@@ -191,10 +191,18 @@ export default function NaviPage() {
                   EQUIP SKIN
                 </Button>
               )}
-              {!previewSkin.unlocked && (
-                <p className="text-xs font-mono text-muted-foreground flex items-center gap-1">
-                  <Lock size={10} /> LOCKED
-                </p>
+              {!isSkinUnlocked(previewSkin.name) && (
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                    <Lock size={10} /> LOCKED
+                  </p>
+                  {unlockConditions[previewSkin.name] && (
+                    <p className="text-[10px] font-mono text-primary flex items-center gap-1">
+                      <Trophy size={10} />
+                      {unlockConditions[previewSkin.name].description}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}

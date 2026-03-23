@@ -74,7 +74,7 @@ async function streamChat({
 const INITIAL_MESSAGE: DisplayMessage = {
   id: "initial",
   role: "assistant",
-  content: "Systems online, Operator. MAVIS initialized. How can I assist you today?",
+  content: "Systems online, Operator. NAVI AI initialized. How can I assist you today?",
   timestamp: new Date(),
 };
 

@@ -163,6 +163,16 @@ export default function MavisChat() {
     try {
       await streamChat({
         messages: chatHistory,
+        context: {
+          navi_name: profile.navi_name,
+          display_name: profile.display_name,
+          navi_level: profile.navi_level,
+          navi_personality: profile.navi_personality,
+          xp_total: profile.xp_total,
+          current_streak: profile.current_streak,
+          longest_streak: profile.longest_streak,
+          user_navi_description: profile.user_navi_description,
+        },
         onDelta: (chunk) => {
           assistantContent += chunk;
           const content = assistantContent;

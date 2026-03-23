@@ -15,7 +15,6 @@ type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TE
 interface NaviSkin {
   name: string;
   category: SkinCategory;
-  unlocked: boolean;
   rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
 }
 

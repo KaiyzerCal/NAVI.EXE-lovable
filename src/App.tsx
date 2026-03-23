@@ -3,7 +3,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppSidebar from "@/components/AppSidebar";
+import AuthPage from "./pages/AuthPage";
 import Index from "./pages/Index";
 import NaviPage from "./pages/NaviPage";
 import MavisChat from "./pages/MavisChat";
@@ -13,8 +15,42 @@ import JournalPage from "./pages/JournalPage";
 import StatsPage from "./pages/StatsPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
+import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
+
+function AppContent() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
+
+  if (!user) return <AuthPage />;
+
+  return (
+    <div className="flex min-h-screen">
+      <AppSidebar />
+      <main className="flex-1 p-6 overflow-y-auto">
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/navi" element={<NaviPage />} />
+          <Route path="/mavis" element={<MavisChat />} />
+          <Route path="/character" element={<CharacterPage />} />
+          <Route path="/quests" element={<QuestsPage />} />
+          <Route path="/journal" element={<JournalPage />} />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -22,22 +58,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <div className="flex min-h-screen">
-          <AppSidebar />
-          <main className="flex-1 p-6 overflow-y-auto">
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/navi" element={<NaviPage />} />
-              <Route path="/mavis" element={<MavisChat />} />
-              <Route path="/character" element={<CharacterPage />} />
-              <Route path="/quests" element={<QuestsPage />} />
-              <Route path="/journal" element={<JournalPage />} />
-              <Route path="/stats" element={<StatsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
-        </div>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

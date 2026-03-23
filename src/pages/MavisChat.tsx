@@ -1,11 +1,13 @@
 import PageHeader from "@/components/PageHeader";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Send, Bot, User, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { getOrCreateConversation, loadMessages, saveMessage, type ChatMessage } from "@/lib/chatService";
 
-interface Message {
+interface DisplayMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -69,44 +71,90 @@ async function streamChat({
   onDone();
 }
 
-const initialMessages: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content: "Systems online, Operator. MAVIS initialized. How can I assist you today?",
-    timestamp: new Date(),
-  },
-];
+const INITIAL_MESSAGE: DisplayMessage = {
+  id: "initial",
+  role: "assistant",
+  content: "Systems online, Operator. MAVIS initialized. How can I assist you today?",
+  timestamp: new Date(),
+};
 
 export default function MavisChat() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [dbLoading, setDbLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Load conversation on mount
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const convId = await getOrCreateConversation(user.id);
+        if (cancelled) return;
+        setConversationId(convId);
+
+        const dbMessages = await loadMessages(convId);
+        if (cancelled) return;
+
+        if (dbMessages.length > 0) {
+          setMessages(
+            dbMessages.map((m) => ({
+              id: m.id,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              timestamp: new Date(m.created_at),
+            }))
+          );
+        }
+      } catch (err: any) {
+        console.error("Failed to load chat history:", err);
+      } finally {
+        if (!cancelled) setDbLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
-    const userMsg: Message = {
-      id: Date.now().toString(),
+  const sendMessage = useCallback(async () => {
+    if (!input.trim() || isLoading || !user || !conversationId) return;
+
+    const userContent = input.trim();
+    setInput("");
+    setIsLoading(true);
+
+    // Save user message to DB
+    let userMsgId: string;
+    try {
+      userMsgId = await saveMessage(conversationId, user.id, "user", userContent);
+    } catch {
+      toast({ title: "Error", description: "Failed to save message", variant: "destructive" });
+      setIsLoading(false);
+      return;
+    }
+
+    const userMsg: DisplayMessage = {
+      id: userMsgId,
       role: "user",
-      content: input,
+      content: userContent,
       timestamp: new Date(),
     };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
-    setInput("");
-    setIsLoading(true);
 
     let assistantContent = "";
-
-    const chatHistory = updatedMessages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.content,
-    }));
+    const chatHistory = updatedMessages
+      .filter((m) => m.id !== "initial")
+      .map((m) => ({ role: m.role, content: m.content }));
 
     try {
       await streamChat({
@@ -127,12 +175,18 @@ export default function MavisChat() {
             ];
           });
         },
-        onDone: () => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === "streaming" ? { ...m, id: Date.now().toString() } : m
-            )
-          );
+        onDone: async () => {
+          // Save assistant message to DB
+          try {
+            const assistantId = await saveMessage(conversationId, user.id, "assistant", assistantContent);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === "streaming" ? { ...m, id: assistantId } : m
+              )
+            );
+          } catch (err) {
+            console.error("Failed to save assistant message:", err);
+          }
           setIsLoading(false);
         },
       });
@@ -144,7 +198,16 @@ export default function MavisChat() {
         variant: "destructive",
       });
     }
-  };
+  }, [input, isLoading, user, conversationId, messages]);
+
+  if (dbLoading) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-2rem)] items-center justify-center">
+        <Loader2 className="animate-spin text-primary" size={24} />
+        <p className="text-xs font-mono text-muted-foreground mt-2">Loading neural link...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
@@ -162,20 +225,20 @@ export default function MavisChat() {
               className={`w-8 h-8 rounded shrink-0 flex items-center justify-center ${
                 msg.role === "assistant"
                   ? "bg-primary/10 border border-primary/30"
-                  : "bg-neon-purple/10 border border-neon-purple/30"
+                  : "bg-secondary/10 border border-secondary/30"
               }`}
             >
               {msg.role === "assistant" ? (
                 <Bot size={14} className="text-primary" />
               ) : (
-                <User size={14} className="text-neon-purple" />
+                <User size={14} className="text-secondary" />
               )}
             </div>
             <div
               className={`max-w-[75%] rounded px-3 py-2 ${
                 msg.role === "assistant"
                   ? "bg-card border border-border"
-                  : "bg-neon-purple/10 border border-neon-purple/20"
+                  : "bg-secondary/10 border border-secondary/20"
               }`}
             >
               <div className="text-sm font-body prose prose-invert prose-sm max-w-none">

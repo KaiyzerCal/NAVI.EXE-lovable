@@ -2,7 +2,9 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Swords, Star, BookOpen, Activity, TrendingUp, Zap } from "lucide-react";
+import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi } from "lucide-react";
+import { useProfile } from "@/hooks/useProfile";
+import { useNavigate } from "react-router-dom";
 
 const fadeIn = {
   initial: { opacity: 0, y: 12 },

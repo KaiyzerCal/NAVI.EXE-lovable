@@ -2,10 +2,12 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Loader2, Trophy } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
 type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TECH" | "SPECIAL";
@@ -13,7 +15,6 @@ type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TE
 interface NaviSkin {
   name: string;
   category: SkinCategory;
-  unlocked: boolean;
   rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
 }
 
@@ -36,70 +37,70 @@ const RARITY_BG: Record<string, string> = {
 };
 
 const ALL_SKINS: NaviSkin[] = [
-  { name: "FLAMEBIRD", category: "ELEMENTAL", unlocked: false, rarity: "RARE" },
-  { name: "AQUACAT", category: "ELEMENTAL", unlocked: false, rarity: "RARE" },
-  { name: "THUNDERDOG", category: "ELEMENTAL", unlocked: false, rarity: "RARE" },
-  { name: "CRYSTALFISH", category: "ELEMENTAL", unlocked: false, rarity: "EPIC" },
-  { name: "SHADOWBUNNY", category: "ELEMENTAL", unlocked: false, rarity: "EPIC" },
-  { name: "IRONBEAR", category: "ELEMENTAL", unlocked: false, rarity: "RARE" },
-  { name: "STORMDRAKE", category: "ELEMENTAL", unlocked: false, rarity: "LEGENDARY" },
-  { name: "VENOMBUG", category: "ELEMENTAL", unlocked: false, rarity: "COMMON" },
-  { name: "FROSTFOX", category: "ELEMENTAL", unlocked: false, rarity: "RARE" },
-  { name: "EMBERCORE", category: "ELEMENTAL", unlocked: false, rarity: "EPIC" },
-  { name: "TIDECALLER", category: "ELEMENTAL", unlocked: false, rarity: "RARE" },
-  { name: "NETOP", category: "CLASS", unlocked: true, rarity: "COMMON" },
-  { name: "WARRIOR", category: "CLASS", unlocked: false, rarity: "COMMON" },
-  { name: "GUARDIAN", category: "CLASS", unlocked: false, rarity: "RARE" },
-  { name: "PALADIN", category: "CLASS", unlocked: false, rarity: "EPIC" },
-  { name: "BERSERKER", category: "CLASS", unlocked: false, rarity: "RARE" },
-  { name: "SORCERER", category: "CLASS", unlocked: false, rarity: "EPIC" },
-  { name: "RANGER", category: "CLASS", unlocked: false, rarity: "COMMON" },
-  { name: "NAVIGATOR", category: "CLASS", unlocked: false, rarity: "RARE" },
-  { name: "ROCKETEER", category: "CLASS", unlocked: false, rarity: "EPIC" },
-  { name: "ALCHEMIST", category: "CLASS", unlocked: false, rarity: "RARE" },
-  { name: "PHOENIX", category: "MYTHIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "LEVIATHAN", category: "MYTHIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "THUNDERGOD", category: "MYTHIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "BANSHEE", category: "MYTHIC", unlocked: false, rarity: "EPIC" },
-  { name: "GOLEM", category: "MYTHIC", unlocked: false, rarity: "RARE" },
-  { name: "FROSTGIANT", category: "MYTHIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "SUNWYRM", category: "MYTHIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "MOONWITCH", category: "MYTHIC", unlocked: false, rarity: "EPIC" },
-  { name: "TREANT", category: "MYTHIC", unlocked: false, rarity: "RARE" },
-  { name: "RAGNAROK", category: "MYTHIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "STARDUST", category: "COSMIC", unlocked: false, rarity: "EPIC" },
-  { name: "NEBULA", category: "COSMIC", unlocked: false, rarity: "EPIC" },
-  { name: "XENOMORPH", category: "COSMIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "GALACTIC", category: "COSMIC", unlocked: false, rarity: "EPIC" },
-  { name: "COSMIC", category: "COSMIC", unlocked: false, rarity: "RARE" },
-  { name: "VOIDWALKER", category: "COSMIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "UFOSIGNAL", category: "COSMIC", unlocked: false, rarity: "RARE" },
-  { name: "SOLARIS", category: "COSMIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "CELESTIAL", category: "COSMIC", unlocked: false, rarity: "EPIC" },
-  { name: "GENESIS", category: "COSMIC", unlocked: false, rarity: "LEGENDARY" },
-  { name: "LEAFSPIRIT", category: "NATURE", unlocked: false, rarity: "COMMON" },
-  { name: "GALEFORCE", category: "NATURE", unlocked: false, rarity: "RARE" },
-  { name: "BLOOMFAE", category: "NATURE", unlocked: false, rarity: "EPIC" },
-  { name: "PALMSHAMAN", category: "NATURE", unlocked: false, rarity: "RARE" },
-  { name: "TEMPEST", category: "NATURE", unlocked: false, rarity: "EPIC" },
-  { name: "MISTCLOUD", category: "NATURE", unlocked: false, rarity: "COMMON" },
-  { name: "SUNSHARD", category: "NATURE", unlocked: false, rarity: "RARE" },
-  { name: "CYBERCORE", category: "TECH", unlocked: false, rarity: "RARE" },
-  { name: "NETBOT", category: "TECH", unlocked: false, rarity: "COMMON" },
-  { name: "DATASTREAM", category: "TECH", unlocked: false, rarity: "RARE" },
-  { name: "BROADCAST", category: "TECH", unlocked: false, rarity: "COMMON" },
-  { name: "DNAWEAVER", category: "TECH", unlocked: false, rarity: "EPIC" },
-  { name: "MAGNETAR", category: "TECH", unlocked: false, rarity: "EPIC" },
-  { name: "NEUROMIND", category: "TECH", unlocked: false, rarity: "LEGENDARY" },
-  { name: "ATOMSPARK", category: "TECH", unlocked: false, rarity: "RARE" },
-  { name: "SOULBLADE", category: "SPECIAL", unlocked: false, rarity: "LEGENDARY" },
-  { name: "HEARTBOND", category: "SPECIAL", unlocked: false, rarity: "EPIC" },
-  { name: "HEXCORE", category: "SPECIAL", unlocked: false, rarity: "EPIC" },
-  { name: "GEMSTONE", category: "SPECIAL", unlocked: false, rarity: "RARE" },
-  { name: "STARMARK", category: "SPECIAL", unlocked: false, rarity: "RARE" },
-  { name: "EYEOFTRUTH", category: "SPECIAL", unlocked: false, rarity: "LEGENDARY" },
-  { name: "ORACLE", category: "SPECIAL", unlocked: false, rarity: "LEGENDARY" },
-  { name: "ANCHOR", category: "SPECIAL", unlocked: false, rarity: "COMMON" },
+  { name: "FLAMEBIRD", category: "ELEMENTAL", rarity: "RARE" },
+  { name: "AQUACAT", category: "ELEMENTAL", rarity: "RARE" },
+  { name: "THUNDERDOG", category: "ELEMENTAL", rarity: "RARE" },
+  { name: "CRYSTALFISH", category: "ELEMENTAL", rarity: "EPIC" },
+  { name: "SHADOWBUNNY", category: "ELEMENTAL", rarity: "EPIC" },
+  { name: "IRONBEAR", category: "ELEMENTAL", rarity: "RARE" },
+  { name: "STORMDRAKE", category: "ELEMENTAL", rarity: "LEGENDARY" },
+  { name: "VENOMBUG", category: "ELEMENTAL", rarity: "COMMON" },
+  { name: "FROSTFOX", category: "ELEMENTAL", rarity: "RARE" },
+  { name: "EMBERCORE", category: "ELEMENTAL", rarity: "EPIC" },
+  { name: "TIDECALLER", category: "ELEMENTAL", rarity: "RARE" },
+  { name: "NETOP", category: "CLASS", rarity: "COMMON" },
+  { name: "WARRIOR", category: "CLASS", rarity: "COMMON" },
+  { name: "GUARDIAN", category: "CLASS", rarity: "RARE" },
+  { name: "PALADIN", category: "CLASS", rarity: "EPIC" },
+  { name: "BERSERKER", category: "CLASS", rarity: "RARE" },
+  { name: "SORCERER", category: "CLASS", rarity: "EPIC" },
+  { name: "RANGER", category: "CLASS", rarity: "COMMON" },
+  { name: "NAVIGATOR", category: "CLASS", rarity: "RARE" },
+  { name: "ROCKETEER", category: "CLASS", rarity: "EPIC" },
+  { name: "ALCHEMIST", category: "CLASS", rarity: "RARE" },
+  { name: "PHOENIX", category: "MYTHIC", rarity: "LEGENDARY" },
+  { name: "LEVIATHAN", category: "MYTHIC", rarity: "LEGENDARY" },
+  { name: "THUNDERGOD", category: "MYTHIC", rarity: "LEGENDARY" },
+  { name: "BANSHEE", category: "MYTHIC", rarity: "EPIC" },
+  { name: "GOLEM", category: "MYTHIC", rarity: "RARE" },
+  { name: "FROSTGIANT", category: "MYTHIC", rarity: "LEGENDARY" },
+  { name: "SUNWYRM", category: "MYTHIC", rarity: "LEGENDARY" },
+  { name: "MOONWITCH", category: "MYTHIC", rarity: "EPIC" },
+  { name: "TREANT", category: "MYTHIC", rarity: "RARE" },
+  { name: "RAGNAROK", category: "MYTHIC", rarity: "LEGENDARY" },
+  { name: "STARDUST", category: "COSMIC", rarity: "EPIC" },
+  { name: "NEBULA", category: "COSMIC", rarity: "EPIC" },
+  { name: "XENOMORPH", category: "COSMIC", rarity: "LEGENDARY" },
+  { name: "GALACTIC", category: "COSMIC", rarity: "EPIC" },
+  { name: "COSMIC", category: "COSMIC", rarity: "RARE" },
+  { name: "VOIDWALKER", category: "COSMIC", rarity: "LEGENDARY" },
+  { name: "UFOSIGNAL", category: "COSMIC", rarity: "RARE" },
+  { name: "SOLARIS", category: "COSMIC", rarity: "LEGENDARY" },
+  { name: "CELESTIAL", category: "COSMIC", rarity: "EPIC" },
+  { name: "GENESIS", category: "COSMIC", rarity: "LEGENDARY" },
+  { name: "LEAFSPIRIT", category: "NATURE", rarity: "COMMON" },
+  { name: "GALEFORCE", category: "NATURE", rarity: "RARE" },
+  { name: "BLOOMFAE", category: "NATURE", rarity: "EPIC" },
+  { name: "PALMSHAMAN", category: "NATURE", rarity: "RARE" },
+  { name: "TEMPEST", category: "NATURE", rarity: "EPIC" },
+  { name: "MISTCLOUD", category: "NATURE", rarity: "COMMON" },
+  { name: "SUNSHARD", category: "NATURE", rarity: "RARE" },
+  { name: "CYBERCORE", category: "TECH", rarity: "RARE" },
+  { name: "NETBOT", category: "TECH", rarity: "COMMON" },
+  { name: "DATASTREAM", category: "TECH", rarity: "RARE" },
+  { name: "BROADCAST", category: "TECH", rarity: "COMMON" },
+  { name: "DNAWEAVER", category: "TECH", rarity: "EPIC" },
+  { name: "MAGNETAR", category: "TECH", rarity: "EPIC" },
+  { name: "NEUROMIND", category: "TECH", rarity: "LEGENDARY" },
+  { name: "ATOMSPARK", category: "TECH", rarity: "RARE" },
+  { name: "SOULBLADE", category: "SPECIAL", rarity: "LEGENDARY" },
+  { name: "HEARTBOND", category: "SPECIAL", rarity: "EPIC" },
+  { name: "HEXCORE", category: "SPECIAL", rarity: "EPIC" },
+  { name: "GEMSTONE", category: "SPECIAL", rarity: "RARE" },
+  { name: "STARMARK", category: "SPECIAL", rarity: "RARE" },
+  { name: "EYEOFTRUTH", category: "SPECIAL", rarity: "LEGENDARY" },
+  { name: "ORACLE", category: "SPECIAL", rarity: "LEGENDARY" },
+  { name: "ANCHOR", category: "SPECIAL", rarity: "COMMON" },
 ];
 
 const naviSkills = [
@@ -114,10 +115,38 @@ const CATEGORIES: SkinCategory[] = ["ELEMENTAL", "CLASS", "MYTHIC", "COSMIC", "N
 const currentNaviLevel = 8;
 
 export default function NaviPage() {
+  const { user } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<SkinCategory | "ALL">("ALL");
   const [equippedSkin, setEquippedSkin] = useState("NETOP");
   const [searchQuery, setSearchQuery] = useState("");
   const [previewSkin, setPreviewSkin] = useState<NaviSkin | null>(null);
+  const [unlockedSkins, setUnlockedSkins] = useState<Set<string>>(new Set(["NETOP"]));
+  const [unlockConditions, setUnlockConditions] = useState<Record<string, { unlock_type: string; unlock_value: number; description: string }>>({});
+
+  useEffect(() => {
+    if (!user) return;
+    // Fetch unlocked skins
+    supabase
+      .from("user_unlocked_skins")
+      .select("skin_name")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        if (data) setUnlockedSkins(new Set(data.map((r: any) => r.skin_name)));
+      });
+    // Fetch unlock conditions
+    supabase
+      .from("skin_unlock_conditions")
+      .select("skin_name, unlock_type, unlock_value, description")
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, any> = {};
+          data.forEach((r: any) => { map[r.skin_name] = r; });
+          setUnlockConditions(map);
+        }
+      });
+  }, [user]);
+
+  const isSkinUnlocked = (name: string) => unlockedSkins.has(name);
 
   const filteredSkins = ALL_SKINS.filter((s) => {
     const matchesCategory = selectedCategory === "ALL" || s.category === selectedCategory;
@@ -125,7 +154,7 @@ export default function NaviPage() {
     return matchesCategory && matchesSearch;
   });
 
-  const unlockedCount = ALL_SKINS.filter((s) => s.unlocked).length;
+  const unlockedCount = ALL_SKINS.filter((s) => isSkinUnlocked(s.name)).length;
   const equippedSkinData = ALL_SKINS.find((s) => s.name === equippedSkin);
 
   return (
@@ -153,7 +182,7 @@ export default function NaviPage() {
                   previewSkin.rarity === "RARE" ? "text-primary" : "text-muted-foreground"
                 }`}>{previewSkin.rarity}</span>
               </div>
-              {previewSkin.unlocked && (
+              {isSkinUnlocked(previewSkin.name) && (
                 <Button
                   size="sm"
                   onClick={() => { setEquippedSkin(previewSkin.name); setPreviewSkin(null); }}
@@ -162,10 +191,18 @@ export default function NaviPage() {
                   EQUIP SKIN
                 </Button>
               )}
-              {!previewSkin.unlocked && (
-                <p className="text-xs font-mono text-muted-foreground flex items-center gap-1">
-                  <Lock size={10} /> LOCKED
-                </p>
+              {!isSkinUnlocked(previewSkin.name) && (
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                    <Lock size={10} /> LOCKED
+                  </p>
+                  {unlockConditions[previewSkin.name] && (
+                    <p className="text-[10px] font-mono text-primary flex items-center gap-1">
+                      <Trophy size={10} />
+                      {unlockConditions[previewSkin.name].description}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -251,7 +288,7 @@ export default function NaviPage() {
                 <img
                   src={getSkinUrl(skin.name)}
                   alt={skin.name}
-                  className={`w-full h-full object-contain ${!skin.unlocked ? "opacity-40 grayscale" : "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]"}`}
+                  className={`w-full h-full object-contain ${!isSkinUnlocked(skin.name) ? "opacity-40 grayscale" : "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]"}`}
                   loading="lazy"
                 />
               </div>

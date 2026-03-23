@@ -44,7 +44,9 @@ export default function NaviPage() {
         </div>
         <h2 className="font-display text-lg text-primary font-bold text-glow-cyan">NAVI.EXE</h2>
         <p className="text-muted-foreground text-xs font-mono">LVL {currentNaviLevel} // {currentForm.name} FORM</p>
-        <ProgressBar value={currentNaviLevel} max={10} variant="cyan" label="NEXT EVOLUTION" size="sm" className="w-48 mt-2" />
+        <div className="w-48 mt-2">
+          <ProgressBar value={currentNaviLevel} max={10} variant="cyan" label="NEXT EVOLUTION" size="sm" />
+        </div>
       </motion.div>
 
       {/* Evolution Forms */}

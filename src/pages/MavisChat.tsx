@@ -5,6 +5,7 @@ import { Send, Bot, User, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/useProfile";
 import { getOrCreateConversation, loadMessages, saveMessage, type ChatMessage } from "@/lib/chatService";
 
 interface DisplayMessage {
@@ -18,10 +19,12 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
 async function streamChat({
   messages,
+  context,
   onDelta,
   onDone,
 }: {
   messages: { role: string; content: string }[];
+  context?: Record<string, any>;
   onDelta: (text: string) => void;
   onDone: () => void;
 }) {
@@ -31,7 +34,7 @@ async function streamChat({
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, context }),
   });
 
   if (!resp.ok) {
@@ -80,6 +83,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user } = useAuth();
+  const { profile } = useProfile();
   const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -159,6 +163,16 @@ export default function MavisChat() {
     try {
       await streamChat({
         messages: chatHistory,
+        context: {
+          navi_name: profile.navi_name,
+          display_name: profile.display_name,
+          navi_level: profile.navi_level,
+          navi_personality: profile.navi_personality,
+          xp_total: profile.xp_total,
+          current_streak: profile.current_streak,
+          longest_streak: profile.longest_streak,
+          user_navi_description: profile.user_navi_description,
+        },
         onDelta: (chunk) => {
           assistantContent += chunk;
           const content = assistantContent;

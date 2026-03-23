@@ -106,11 +106,12 @@ const ALL_SKINS: NaviSkin[] = [
 ];
 
 const NAVI_PERSONALITIES = [
-  { id: "ANALYTICAL", label: "Analytical", desc: "Logical, data-driven, precise" },
-  { id: "CHEERFUL", label: "Cheerful", desc: "Upbeat, encouraging, warm" },
-  { id: "STERN", label: "Stern", desc: "Disciplined, no-nonsense, tough love" },
-  { id: "PLAYFUL", label: "Playful", desc: "Witty, humorous, light-hearted" },
-  { id: "MYSTERIOUS", label: "Mysterious", desc: "Cryptic, wise, enigmatic" },
+  { id: "GUARDIAN", label: "Guardian", desc: "Loyal, encouraging, steady" },
+  { id: "HYPE", label: "Hype", desc: "Energetic, hyped, high-voltage" },
+  { id: "COMPANION", label: "Companion", desc: "Soft, empathetic, heart-first" },
+  { id: "ROGUE", label: "Rogue", desc: "Witty, sarcastic, sharp (Lv3+)", unlockLevel: 3 },
+  { id: "SHADOW", label: "Shadow", desc: "Mysterious, cryptic, precise (Lv5+)", unlockLevel: 5 },
+  { id: "SAGE", label: "Sage", desc: "Analytical, strategic, tactical (Lv8+)", unlockLevel: 8 },
 ];
 
 const NAVI_SKILLS_BY_LEVEL: { name: string; unlockLevel: number; max: number; desc: string }[] = [
@@ -256,21 +257,30 @@ export default function NaviPage() {
       {/* Personality Selector */}
       <HudCard title="PERSONALITY" icon={<Shield size={14} />} glow className="mb-4">
         <p className="text-[10px] font-mono text-muted-foreground mb-3">SELECT NAVI PERSONALITY TYPE</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-          {NAVI_PERSONALITIES.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => updateProfile({ navi_personality: p.id })}
-              className={`rounded border p-3 text-left transition-all ${
-                profile.navi_personality === p.id
-                  ? "border-primary/50 bg-primary/10 glow-subtle"
-                  : "border-border bg-muted/20 hover:border-primary/30"
-              }`}
-            >
-              <p className="text-xs font-display font-bold">{p.label}</p>
-              <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{p.desc}</p>
-            </button>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          {NAVI_PERSONALITIES.map((p) => {
+            const locked = (p as any).unlockLevel && profile.navi_level < (p as any).unlockLevel;
+            return (
+              <button
+                key={p.id}
+                onClick={() => !locked && updateProfile({ navi_personality: p.id })}
+                disabled={locked}
+                className={`rounded border p-3 text-left transition-all ${
+                  locked
+                    ? "border-border bg-muted/10 opacity-40 cursor-not-allowed"
+                    : profile.navi_personality === p.id
+                    ? "border-primary/50 bg-primary/10 glow-subtle"
+                    : "border-border bg-muted/20 hover:border-primary/30"
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  {locked && <Lock size={10} className="text-muted-foreground" />}
+                  <p className="text-xs font-display font-bold">{p.label}</p>
+                </div>
+                <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{p.desc}</p>
+              </button>
+            );
+          })}
         </div>
       </HudCard>
 

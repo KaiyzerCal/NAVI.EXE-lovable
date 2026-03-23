@@ -80,12 +80,18 @@ export type Database = {
           bond_trust: number
           character_class: string | null
           created_at: string
+          current_streak: number
           display_name: string | null
           equipped_skin: string
           id: string
+          last_active: string | null
+          longest_streak: number
           mbti_type: string | null
           navi_level: number
+          navi_name: string
           navi_personality: string
+          user_navi_description: string | null
+          xp_total: number
         }
         Insert: {
           bond_affection?: number
@@ -93,12 +99,18 @@ export type Database = {
           bond_trust?: number
           character_class?: string | null
           created_at?: string
+          current_streak?: number
           display_name?: string | null
           equipped_skin?: string
           id: string
+          last_active?: string | null
+          longest_streak?: number
           mbti_type?: string | null
           navi_level?: number
+          navi_name?: string
           navi_personality?: string
+          user_navi_description?: string | null
+          xp_total?: number
         }
         Update: {
           bond_affection?: number
@@ -106,12 +118,18 @@ export type Database = {
           bond_trust?: number
           character_class?: string | null
           created_at?: string
+          current_streak?: number
           display_name?: string | null
           equipped_skin?: string
           id?: string
+          last_active?: string | null
+          longest_streak?: number
           mbti_type?: string | null
           navi_level?: number
+          navi_name?: string
           navi_personality?: string
+          user_navi_description?: string | null
+          xp_total?: number
         }
         Relationships: []
       }

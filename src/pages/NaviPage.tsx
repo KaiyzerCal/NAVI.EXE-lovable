@@ -205,7 +205,7 @@ export default function NaviPage() {
               {isSkinUnlocked(previewSkin.name) && (
                 <Button
                   size="sm"
-                  onClick={() => { setEquippedSkin(previewSkin.name); setPreviewSkin(null); }}
+                  onClick={() => handleEquipSkin(previewSkin.name)}
                   className="font-mono text-xs"
                 >
                   EQUIP SKIN

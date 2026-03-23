@@ -1,10 +1,11 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, MessageSquare, User, Swords, BookOpen, 
-  BarChart3, Settings, Compass, ChevronLeft, ChevronRight 
+  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut 
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },

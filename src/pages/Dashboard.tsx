@@ -2,7 +2,9 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Swords, Star, BookOpen, Activity, TrendingUp, Zap } from "lucide-react";
+import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi } from "lucide-react";
+import { useProfile } from "@/hooks/useProfile";
+import { useNavigate } from "react-router-dom";
 
 const fadeIn = {
   initial: { opacity: 0, y: 12 },
@@ -10,10 +12,27 @@ const fadeIn = {
   transition: { duration: 0.3 },
 };
 
+const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/navi-skins`;
+
 export default function Dashboard() {
+  const { profile } = useProfile();
+  const navigate = useNavigate();
+  const skinUrl = `${STORAGE_BASE}/${profile.equipped_skin.toLowerCase()}.png`;
+
   return (
     <div>
-      <PageHeader title="DASHBOARD" subtitle="// SYSTEM OVERVIEW" />
+      <PageHeader title="DASHBOARD" subtitle="// SYSTEM OVERVIEW">
+        <button
+          onClick={() => navigate("/mavis")}
+          className="w-12 h-12 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center relative cursor-pointer hover:border-primary/60 transition-all group glow-subtle"
+          title="Chat with Navi"
+        >
+          <img src={skinUrl} alt="NAVI" className="w-9 h-9 object-contain group-hover:scale-110 transition-transform" />
+          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-neon-green border-2 border-background flex items-center justify-center">
+            <Wifi size={7} className="text-background" />
+          </div>
+        </button>
+      </PageHeader>
 
       {/* Status Banner */}
       <motion.div {...fadeIn} className="bg-card border border-primary/20 rounded p-4 mb-6 border-glow">

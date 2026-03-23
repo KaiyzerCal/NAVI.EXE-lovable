@@ -83,6 +83,21 @@ export default function AppSidebar() {
         })}
       </nav>
 
+      {/* Sign out */}
+      <button
+        onClick={signOut}
+        className="mx-2 mb-1 px-3 py-2.5 rounded text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-3 border border-transparent"
+      >
+        <LogOut size={18} className="shrink-0" />
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap font-body">
+              Sign Out
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </button>
+
       {/* Collapse toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}

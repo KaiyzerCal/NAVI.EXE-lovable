@@ -262,7 +262,7 @@ export default function MavisChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Message MAVIS..."
+          placeholder="Message NAVI..."
           disabled={isLoading}
           className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50"
         />

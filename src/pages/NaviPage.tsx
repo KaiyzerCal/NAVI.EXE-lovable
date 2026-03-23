@@ -115,10 +115,38 @@ const CATEGORIES: SkinCategory[] = ["ELEMENTAL", "CLASS", "MYTHIC", "COSMIC", "N
 const currentNaviLevel = 8;
 
 export default function NaviPage() {
+  const { user } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<SkinCategory | "ALL">("ALL");
   const [equippedSkin, setEquippedSkin] = useState("NETOP");
   const [searchQuery, setSearchQuery] = useState("");
   const [previewSkin, setPreviewSkin] = useState<NaviSkin | null>(null);
+  const [unlockedSkins, setUnlockedSkins] = useState<Set<string>>(new Set(["NETOP"]));
+  const [unlockConditions, setUnlockConditions] = useState<Record<string, { unlock_type: string; unlock_value: number; description: string }>>({});
+
+  useEffect(() => {
+    if (!user) return;
+    // Fetch unlocked skins
+    supabase
+      .from("user_unlocked_skins")
+      .select("skin_name")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        if (data) setUnlockedSkins(new Set(data.map((r: any) => r.skin_name)));
+      });
+    // Fetch unlock conditions
+    supabase
+      .from("skin_unlock_conditions")
+      .select("skin_name, unlock_type, unlock_value, description")
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, any> = {};
+          data.forEach((r: any) => { map[r.skin_name] = r; });
+          setUnlockConditions(map);
+        }
+      });
+  }, [user]);
+
+  const isSkinUnlocked = (name: string) => unlockedSkins.has(name);
 
   const filteredSkins = ALL_SKINS.filter((s) => {
     const matchesCategory = selectedCategory === "ALL" || s.category === selectedCategory;
@@ -126,7 +154,7 @@ export default function NaviPage() {
     return matchesCategory && matchesSearch;
   });
 
-  const unlockedCount = ALL_SKINS.filter((s) => s.unlocked).length;
+  const unlockedCount = ALL_SKINS.filter((s) => isSkinUnlocked(s.name)).length;
   const equippedSkinData = ALL_SKINS.find((s) => s.name === equippedSkin);
 
   return (

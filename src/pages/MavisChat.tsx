@@ -5,6 +5,7 @@ import { Send, Bot, User, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/useProfile";
 import { getOrCreateConversation, loadMessages, saveMessage, type ChatMessage } from "@/lib/chatService";
 
 interface DisplayMessage {

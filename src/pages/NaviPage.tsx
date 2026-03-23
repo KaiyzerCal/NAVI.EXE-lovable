@@ -288,7 +288,7 @@ export default function NaviPage() {
                 <img
                   src={getSkinUrl(skin.name)}
                   alt={skin.name}
-                  className={`w-full h-full object-contain ${!skin.unlocked ? "opacity-40 grayscale" : "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]"}`}
+                  className={`w-full h-full object-contain ${!isSkinUnlocked(skin.name) ? "opacity-40 grayscale" : "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]"}`}
                   loading="lazy"
                 />
               </div>

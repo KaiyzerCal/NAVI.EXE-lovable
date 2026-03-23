@@ -272,7 +272,7 @@ export default function NaviPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[320px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[600px] overflow-y-auto pr-1">
           {filteredSkins.map((skin) => (
             <button
               key={skin.name}

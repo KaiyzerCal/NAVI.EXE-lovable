@@ -193,7 +193,7 @@ export default function MavisChat() {
     } catch (e: any) {
       setIsLoading(false);
       toast({
-        title: "MAVIS Error",
+        title: "NAVI Error",
         description: e.message || "Failed to get response",
         variant: "destructive",
       });

@@ -19,10 +19,12 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
 async function streamChat({
   messages,
+  context,
   onDelta,
   onDone,
 }: {
   messages: { role: string; content: string }[];
+  context?: Record<string, any>;
   onDelta: (text: string) => void;
   onDone: () => void;
 }) {
@@ -32,7 +34,7 @@ async function streamChat({
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, context }),
   });
 
   if (!resp.ok) {

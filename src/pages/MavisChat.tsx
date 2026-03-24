@@ -291,39 +291,7 @@ export default function MavisChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative">
-          <motion.div
-            className="w-10 h-10 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center"
-            animate={isLoading ? {
-              boxShadow: [
-                "0 0 8px 2px hsl(var(--primary) / 0.3)",
-                "0 0 20px 6px hsl(var(--primary) / 0.6)",
-                "0 0 8px 2px hsl(var(--primary) / 0.3)",
-              ],
-              scale: [1, 1.08, 1],
-            } : {
-              boxShadow: "0 0 6px 1px hsl(var(--primary) / 0.15)",
-              scale: 1,
-            }}
-            transition={isLoading ? { duration: 1.4, repeat: Infinity, ease: "easeInOut" } : { duration: 0.4 }}
-          >
-            <Bot size={18} className="text-primary" />
-          </motion.div>
-          {isLoading && (
-            <motion.div
-              className="absolute inset-0 rounded-full border-2 border-primary/40"
-              initial={{ scale: 1, opacity: 0.6 }}
-              animate={{ scale: 1.6, opacity: 0 }}
-              transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
-            />
-          )}
-        </div>
-        <div>
-          <h2 className="font-display text-sm font-bold text-foreground leading-none">{profile.navi_name || "NAVI"} AI</h2>
-          <p className="text-[10px] font-mono text-muted-foreground">{isLoading ? "// TRANSMITTING..." : "// NEURAL LINK ACTIVE"}</p>
-        </div>
-      </div>
+      <PageHeader title={`${profile.navi_name || "NAVI"} AI`} subtitle="// NEURAL LINK ACTIVE" />
 
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
         {/* Empty state with suggestion chips */}
@@ -395,23 +363,55 @@ export default function MavisChat() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="border border-border rounded bg-card flex items-center gap-2 p-2 border-glow">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder={`Talk to ${profile.navi_name}...`}
-          disabled={isLoading}
-          className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50"
-        />
-        <button
-          onClick={() => sendMessage()}
-          disabled={!input.trim() || isLoading}
-          className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30"
-        >
-          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-        </button>
+      <div className="flex items-center gap-2 p-2">
+        {/* Glowing orb */}
+        <div className="relative shrink-0">
+          <motion.div
+            className="w-9 h-9 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center"
+            animate={isLoading ? {
+              boxShadow: [
+                "0 0 8px 2px hsl(var(--primary) / 0.3)",
+                "0 0 22px 8px hsl(var(--primary) / 0.6)",
+                "0 0 8px 2px hsl(var(--primary) / 0.3)",
+              ],
+              scale: [1, 1.1, 1],
+            } : {
+              boxShadow: "0 0 5px 1px hsl(var(--primary) / 0.12)",
+              scale: 1,
+            }}
+            transition={isLoading ? { duration: 1.4, repeat: Infinity, ease: "easeInOut" } : { duration: 0.4 }}
+          >
+            <Bot size={16} className="text-primary" />
+          </motion.div>
+          {isLoading && (
+            <motion.div
+              className="absolute inset-0 rounded-full border-2 border-primary/40"
+              initial={{ scale: 1, opacity: 0.6 }}
+              animate={{ scale: 1.8, opacity: 0 }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
+            />
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="flex-1 border border-border rounded bg-card flex items-center gap-2 p-2 border-glow">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            placeholder={`Talk to ${profile.navi_name}...`}
+            disabled={isLoading}
+            className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50"
+          />
+          <button
+            onClick={() => sendMessage()}
+            disabled={!input.trim() || isLoading}
+            className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30"
+          >
+            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          </button>
+        </div>
       </div>
     </div>
   );

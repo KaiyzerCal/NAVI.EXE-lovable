@@ -178,6 +178,7 @@ export default function NaviPage() {
   const unlockedCount = ALL_SKINS.filter((s) => isSkinUnlocked(s.name)).length;
   const naviLevel = profile.navi_level;
   const unlockedNaviSkills = NAVI_SKILLS_BY_LEVEL.filter((s) => s.unlockLevel <= naviLevel);
+  const EquippedNaviChar = getNaviCharacter(equippedSkin);
 
   return (
     <div>

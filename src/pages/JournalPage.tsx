@@ -1,8 +1,10 @@
 import PageHeader from "@/components/PageHeader";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Calendar, Edit2, Trash2, Save, X, Eye } from "lucide-react";
+import { Plus, Calendar, Edit2, Trash2, Save, X, Eye, Loader2 } from "lucide-react";
 import { useOwner } from "@/hooks/useOwner";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -10,17 +12,10 @@ interface JournalEntry {
   id: string;
   title: string;
   content: string;
-  date: Date;
+  created_at: string;
   tags: string[];
-  xpEarned: number;
+  xp_earned: number;
 }
-
-const initialEntries: JournalEntry[] = [
-  { id: "1", title: "Morning Reflection", content: "Good start to the day. Focus session went well — completed 3 pomodoros on the side project. Need to improve evening routine.", date: new Date(2026, 2, 21), tags: ["reflection", "focus"], xpEarned: 10 },
-  { id: "2", title: "Breakthrough on API Design", content: "Finally figured out the auth flow for the backend. Key insight: keep the token refresh logic server-side.", date: new Date(2026, 2, 20), tags: ["coding", "insight"], xpEarned: 25 },
-  { id: "3", title: "Fitness Check-in", content: "Hit a new PR on deadlifts. Recovery is improving. Sleep score was 85 last night.", date: new Date(2026, 2, 19), tags: ["fitness", "health"], xpEarned: 10 },
-  { id: "4", title: "Weekly Review", content: "Completed 5/7 daily quests this week. Epic quest at 30%. Need to allocate more time to reading.", date: new Date(2026, 2, 18), tags: ["review", "planning"], xpEarned: 50 },
-];
 
 const tagColors: Record<string, string> = {
   reflection: "bg-neon-cyan/10 text-neon-cyan",
@@ -34,25 +29,58 @@ const tagColors: Record<string, string> = {
 };
 
 export default function JournalPage() {
+  const { user } = useAuth();
   const isOwner = useOwner();
-  const [entries, setEntries] = useState<JournalEntry[]>(initialEntries);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newEntry, setNewEntry] = useState({ title: "", content: "", tags: "" });
 
-  const addEntry = () => {
-    if (!newEntry.title.trim()) return;
-    setEntries((prev) => [
-      { id: Date.now().toString(), title: newEntry.title, content: newEntry.content, date: new Date(), tags: newEntry.tags.split(",").map((t) => t.trim()).filter(Boolean), xpEarned: 10 },
-      ...prev,
-    ]);
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("journal_entries")
+      .select("id, title, content, created_at, tags, xp_earned")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setEntries(data as JournalEntry[]);
+        setLoading(false);
+      });
+  }, [user]);
+
+  const addEntry = async () => {
+    if (!newEntry.title.trim() || !user) return;
+    const tags = newEntry.tags.split(",").map((t) => t.trim()).filter(Boolean);
+    const { data } = await supabase
+      .from("journal_entries")
+      .insert({ user_id: user.id, title: newEntry.title, content: newEntry.content, tags, xp_earned: 10 } as any)
+      .select("id, title, content, created_at, tags, xp_earned")
+      .single();
+    if (data) setEntries((prev) => [data as JournalEntry, ...prev]);
     setNewEntry({ title: "", content: "", tags: "" });
     setShowAdd(false);
   };
 
-  const deleteEntry = (id: string) => setEntries((prev) => prev.filter((e) => e.id !== id));
-  const updateEntry = (id: string, updates: Partial<JournalEntry>) => setEntries((prev) => prev.map((e) => e.id === id ? { ...e, ...updates } : e));
+  const deleteEntry = async (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    await supabase.from("journal_entries").delete().eq("id", id);
+  };
+
+  const updateEntry = async (id: string, updates: Partial<JournalEntry>) => {
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, ...updates } : e));
+    await supabase.from("journal_entries").update(updates as any).eq("id", id);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-primary" size={24} />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -72,7 +100,6 @@ export default function JournalPage() {
         </div>
       </PageHeader>
 
-      {/* Add Entry Form */}
       {showAdd && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-primary/20 rounded p-4 mb-4">
           <div className="space-y-3 mb-3">
@@ -90,6 +117,12 @@ export default function JournalPage() {
             <Button size="sm" variant="outline" onClick={() => setShowAdd(false)} className="text-xs font-mono"><X size={10} className="mr-1" /> CANCEL</Button>
           </div>
         </motion.div>
+      )}
+
+      {entries.length === 0 && !showAdd && (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="text-sm font-mono">No journal entries yet. Start writing to log your journey.</p>
+        </div>
       )}
 
       <div className="space-y-3">
@@ -116,7 +149,7 @@ export default function JournalPage() {
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3 className="font-display text-sm font-semibold text-foreground">{entry.title}</h3>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-mono text-neon-green">+{entry.xpEarned} XP</span>
+                    <span className="text-xs font-mono text-neon-green">+{entry.xp_earned} XP</span>
                     {editMode && (
                       <>
                         <button onClick={() => setEditingId(entry.id)} className="text-muted-foreground hover:text-primary"><Edit2 size={12} /></button>
@@ -136,7 +169,7 @@ export default function JournalPage() {
                   </div>
                   <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
                     <Calendar size={10} />
-                    {entry.date.toLocaleDateString()}
+                    {new Date(entry.created_at).toLocaleDateString()}
                   </span>
                 </div>
               </>

@@ -295,9 +295,18 @@ export default function MavisChat() {
         <PageHeader title={`${profile.navi_name || "NAVI"} AI`} subtitle="// NEURAL LINK ACTIVE" />
         {messages.length > 0 && (
           <button
-            onClick={() => {
+            onClick={async () => {
               setMessages([]);
-              toast({ title: "Thread cleared", description: "Chat view cleared. Your conversation history is still saved." });
+              if (user) {
+                // Create a brand new conversation so old messages don't reload
+                const { data: newConv } = await supabase
+                  .from("chat_conversations")
+                  .insert({ user_id: user.id, title: "NAVI Session" })
+                  .select("id")
+                  .single();
+                if (newConv) setConversationId(newConv.id);
+              }
+              toast({ title: "Thread cleared", description: "New thread started. Previous conversations are remembered by the system." });
             }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-mono text-muted-foreground hover:text-destructive border border-border hover:border-destructive/30 transition-colors"
             title="Clear visible thread (data stays saved)"

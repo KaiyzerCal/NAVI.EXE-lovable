@@ -3,10 +3,12 @@ import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import MbtiQuiz, { MBTI_CLASS_MAP } from "@/components/MbtiQuiz";
 import { motion } from "framer-motion";
-import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Edit2, Trophy, Save, X } from "lucide-react";
-import { useState } from "react";
+import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Edit2, Trophy, Save, X, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { useOwner } from "@/hooks/useOwner";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -14,7 +16,7 @@ const tabs = ["PROFILE", "SKILLS", "ACHIEVEMENTS"] as const;
 
 interface Stat { name: string; value: number; icon: React.ReactNode; }
 interface Skill { id: string; name: string; level: number; max: number; variant: "cyan" | "purple" | "green" | "amber"; desc: string; }
-interface Achievement { id: string; name: string; desc: string; unlocked: boolean; xp: number; }
+interface Achievement { id: string; name: string; description: string; unlocked: boolean; xp: number; }
 
 const defaultStats: Stat[] = [
   { name: "STR", value: 14, icon: <Sword size={12} /> },
@@ -33,30 +35,40 @@ const defaultOperatorSkills: Skill[] = [
   { id: "6", name: "Discipline", level: 9, max: 15, variant: "purple", desc: "Routine adherence" },
 ];
 
-const defaultAchievements: Achievement[] = [
-  { id: "1", name: "First Steps", desc: "Complete your first quest", unlocked: true, xp: 50 },
-  { id: "2", name: "Week Warrior", desc: "Maintain a 7-day streak", unlocked: true, xp: 100 },
-  { id: "3", name: "Centurion", desc: "Complete 100 quests", unlocked: false, xp: 500 },
-  { id: "4", name: "Knowledge Seeker", desc: "Read 1000 pages total", unlocked: false, xp: 300 },
-  { id: "5", name: "Iron Will", desc: "30-day streak", unlocked: false, xp: 1000 },
-  { id: "6", name: "Full Sync", desc: "Reach 100% bond with your Navi", unlocked: false, xp: 2000 },
-  { id: "7", name: "Epic Slayer", desc: "Complete an Epic quest", unlocked: true, xp: 250 },
-  { id: "8", name: "Journal Master", desc: "Write 50 journal entries", unlocked: false, xp: 200 },
-];
-
 export default function CharacterPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("PROFILE");
   const { profile, updateProfile } = useProfile();
   const isOwner = useOwner();
   const [editMode, setEditMode] = useState(false);
   const [stats, setStats] = useState<Stat[]>(defaultStats);
   const [operatorSkills, setOperatorSkills] = useState<Skill[]>(defaultOperatorSkills);
-  const [achievements, setAchievements] = useState<Achievement[]>(defaultAchievements);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [achievementsLoading, setAchievementsLoading] = useState(true);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [showAddSkill, setShowAddSkill] = useState(false);
   const [showAddAchievement, setShowAddAchievement] = useState(false);
   const [newSkill, setNewSkill] = useState({ name: "", desc: "", max: 10 });
   const [newAchievement, setNewAchievement] = useState({ name: "", desc: "", xp: 100 });
+
+  // Load achievements from DB
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("achievements")
+      .select("id, name, description, unlocked, xp")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) setAchievements(data as Achievement[]);
+        else setAchievements([
+          { id: "default-1", name: "First Steps", description: "Complete your first quest", unlocked: false, xp: 50 },
+          { id: "default-2", name: "Week Warrior", description: "Maintain a 7-day streak", unlocked: false, xp: 100 },
+          { id: "default-3", name: "Full Sync", description: "Reach 100% bond with your Navi", unlocked: false, xp: 2000 },
+        ]);
+        setAchievementsLoading(false);
+      });
+  }, [user]);
 
   const characterClass = profile.character_class || "Unknown";
   const mbtiType = profile.mbti_type || null;
@@ -82,11 +94,33 @@ export default function CharacterPage() {
     setShowAddSkill(false);
   };
 
-  const addAchievement = () => {
-    if (!newAchievement.name.trim()) return;
-    setAchievements((prev) => [...prev, { id: Date.now().toString(), ...newAchievement, unlocked: false }]);
+  const addAchievement = async () => {
+    if (!newAchievement.name.trim() || !user) return;
+    const { data } = await supabase
+      .from("achievements")
+      .insert({ user_id: user.id, name: newAchievement.name, description: newAchievement.desc, xp: newAchievement.xp, unlocked: false } as any)
+      .select("id, name, description, unlocked, xp")
+      .single();
+    if (data) setAchievements((prev) => [...prev, data as Achievement]);
     setNewAchievement({ name: "", desc: "", xp: 100 });
     setShowAddAchievement(false);
+  };
+
+  const toggleAchievement = async (id: string) => {
+    const a = achievements.find((ac) => ac.id === id);
+    if (!a) return;
+    const unlocked = !a.unlocked;
+    setAchievements((prev) => prev.map((ac) => ac.id === id ? { ...ac, unlocked } : ac));
+    if (!id.startsWith("default-")) {
+      await supabase.from("achievements").update({ unlocked } as any).eq("id", id);
+    }
+  };
+
+  const deleteAchievement = async (id: string) => {
+    setAchievements((prev) => prev.filter((ac) => ac.id !== id));
+    if (!id.startsWith("default-")) {
+      await supabase.from("achievements").delete().eq("id", id);
+    }
   };
 
   return (
@@ -295,30 +329,34 @@ export default function CharacterPage() {
                 )}
               </div>
             )}
-            <div className="space-y-2">
-              {achievements.map((a) => (
-                <div key={a.id} className={`flex items-center gap-3 p-3 rounded border transition-colors ${a.unlocked ? "border-neon-green/20 bg-neon-green/5" : "border-border bg-muted/10 opacity-50"}`}>
-                  <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${a.unlocked ? "bg-neon-green/20 text-neon-green" : "bg-muted text-muted-foreground"}`}>
-                    <Trophy size={14} />
+            {achievementsLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary" size={20} /></div>
+            ) : (
+              <div className="space-y-2">
+                {achievements.map((a) => (
+                  <div key={a.id} className={`flex items-center gap-3 p-3 rounded border transition-colors ${a.unlocked ? "border-neon-green/20 bg-neon-green/5" : "border-border bg-muted/10 opacity-50"}`}>
+                    <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${a.unlocked ? "bg-neon-green/20 text-neon-green" : "bg-muted text-muted-foreground"}`}>
+                      <Trophy size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-display font-semibold">{a.name}</p>
+                      <p className="text-[10px] font-mono text-muted-foreground">{a.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-mono text-neon-green">+{a.xp} XP</span>
+                      {editMode && (
+                        <>
+                          <button onClick={() => toggleAchievement(a.id)} className="text-[10px] font-mono text-muted-foreground hover:text-primary border border-border rounded px-1.5 py-0.5">
+                            {a.unlocked ? "LOCK" : "UNLOCK"}
+                          </button>
+                          <button onClick={() => deleteAchievement(a.id)} className="text-muted-foreground hover:text-destructive"><Trash2 size={10} /></button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-display font-semibold">{a.name}</p>
-                    <p className="text-[10px] font-mono text-muted-foreground">{a.desc}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-mono text-neon-green">+{a.xp} XP</span>
-                    {editMode && (
-                      <>
-                        <button onClick={() => setAchievements((prev) => prev.map((ac) => ac.id === a.id ? { ...ac, unlocked: !ac.unlocked } : ac))} className="text-[10px] font-mono text-muted-foreground hover:text-primary border border-border rounded px-1.5 py-0.5">
-                          {a.unlocked ? "LOCK" : "UNLOCK"}
-                        </button>
-                        <button onClick={() => setAchievements((prev) => prev.filter((ac) => ac.id !== a.id))} className="text-muted-foreground hover:text-destructive"><Trash2 size={10} /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </HudCard>
         </div>
       )}

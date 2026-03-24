@@ -69,7 +69,7 @@ export default function Dashboard() {
             NAVI.EXE
           </h2>
           <p className="text-xs font-mono text-muted-foreground mt-1">
-            LVL {profile.navi_level}/50 // {profile.navi_personality} // SKIN: {profile.equipped_skin}
+            LVL {profile.navi_level}/100 // {profile.navi_personality} // SKIN: {profile.equipped_skin}
           </p>
 
           {/* Partner Bond Bar */}

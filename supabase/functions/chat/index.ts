@@ -7,18 +7,29 @@ const corsHeaders = {
 };
 
 const LEVEL_TITLES: Record<number, string> = {
-  1: "Boot Sequence", 2: "Initialized", 3: "Linked", 4: "Active",
-  5: "Synchronized", 6: "Attuned", 7: "Resonant", 8: "Awakened",
-  9: "Ascendant", 10: "FULL SYNC",
+  1: "Boot Sequence", 5: "Initialized", 10: "Linked", 15: "Active",
+  20: "Synchronized", 25: "Attuned", 30: "Resonant", 35: "Awakened",
+  40: "Ascendant", 45: "Transcendent", 50: "Apex", 55: "Overclocked",
+  60: "Ethereal", 65: "Mythic", 70: "Legendary", 75: "Cosmic",
+  80: "Primordial", 85: "Infinite", 90: "Omniscient", 95: "Singularity",
+  100: "FULL SYNC",
 };
 
-const LEVEL_XP = [0, 100, 250, 500, 900, 1400, 2000, 2800, 3800, 5000];
+function getLevelTitle(level: number): string {
+  const thresholds = Object.keys(LEVEL_TITLES).map(Number).sort((a, b) => b - a);
+  for (const t of thresholds) { if (level >= t) return LEVEL_TITLES[t]; }
+  return "Boot Sequence";
+}
+
+function getXpForLevel(level: number): number {
+  return Math.floor(50 * level * level + 50 * level);
+}
 
 function buildSystemPrompt(ctx: any): string {
   const level = ctx.navi_level ?? 1;
-  const title = LEVEL_TITLES[Math.min(level, 10)] ?? "Boot Sequence";
+  const title = getLevelTitle(level);
   const xpTotal = ctx.xp_total ?? 0;
-  const nextLevelXp = LEVEL_XP[Math.min(level, 9)] ?? 5000;
+  const nextLevelXp = getXpForLevel(level + 1);
   const xpToNext = Math.max(0, nextLevelXp - xpTotal);
   const naviName = ctx.navi_name ?? "NAVI";
   const userName = ctx.display_name ?? "Operator";

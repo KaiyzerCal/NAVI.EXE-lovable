@@ -6,7 +6,9 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
+import { supabase } from "@/integrations/supabase/client";
 import { getOrCreateConversation, loadMessages, saveMessage, type ChatMessage } from "@/lib/chatService";
+import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 
 interface DisplayMessage {
   id: string;
@@ -16,6 +18,13 @@ interface DisplayMessage {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+
+const SUGGESTIONS = [
+  { emoji: "📊", label: "Analyze my progress", prompt: "Analyze my progress and tell me where I stand" },
+  { emoji: "🌬️", label: "I need support", prompt: "I'm feeling overwhelmed and could use some support" },
+  { emoji: "⚡", label: "Motivate me", prompt: "Help me stay motivated today" },
+  { emoji: "🎯", label: "Daily guidance", prompt: "What should I focus on today?" },
+];
 
 async function streamChat({
   messages,
@@ -74,33 +83,43 @@ async function streamChat({
   onDone();
 }
 
-const INITIAL_MESSAGE: DisplayMessage = {
-  id: "initial",
-  role: "assistant",
-  content: "Systems online, Operator. NAVI AI initialized. How can I assist you today?",
-  timestamp: new Date(),
-};
-
 export default function MavisChat() {
   const { user } = useAuth();
-  const { profile } = useProfile();
-  const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
+  const { profile, updateProfile } = useProfile();
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
+  const [memoryBlocks, setMemoryBlocks] = useState<string>("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load conversation on mount
+  // Load conversation + memories on mount
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
 
     (async () => {
       try {
-        const convId = await getOrCreateConversation(user.id);
+        // Load conversation and memories in parallel
+        const [convId, memResult] = await Promise.all([
+          getOrCreateConversation(user.id),
+          supabase
+            .from("navi_core_memory")
+            .select("memory_type, content, importance")
+            .eq("user_id", user.id)
+            .order("importance", { ascending: false })
+            .limit(50),
+        ]);
+
         if (cancelled) return;
         setConversationId(convId);
+
+        // Build memory context
+        if (memResult.data && memResult.data.length > 0) {
+          const blocks = compressMemories(memResult.data as any);
+          setMemoryBlocks(buildMemoryContext(blocks));
+        }
 
         const dbMessages = await loadMessages(convId);
         if (cancelled) return;
@@ -129,17 +148,17 @@ export default function MavisChat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading || !user || !conversationId) return;
+  const sendMessage = useCallback(async (overrideInput?: string) => {
+    const text = (overrideInput || input).trim();
+    if (!text || isLoading || !user || !conversationId) return;
 
-    const userContent = input.trim();
     setInput("");
     setIsLoading(true);
 
     // Save user message to DB
     let userMsgId: string;
     try {
-      userMsgId = await saveMessage(conversationId, user.id, "user", userContent);
+      userMsgId = await saveMessage(conversationId, user.id, "user", text);
     } catch {
       toast({ title: "Error", description: "Failed to save message", variant: "destructive" });
       setIsLoading(false);
@@ -149,11 +168,44 @@ export default function MavisChat() {
     const userMsg: DisplayMessage = {
       id: userMsgId,
       role: "user",
-      content: userContent,
+      content: text,
       timestamp: new Date(),
     };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
+
+    // Extract memories from user message (async, non-blocking)
+    const extracted = extractMemoriesFromMessage(text);
+    if (extracted.length > 0) {
+      const inserts = extracted.map((m) => ({
+        user_id: user.id,
+        memory_type: m.category,
+        content: m.detail,
+        importance: m.importance,
+      }));
+      supabase.from("navi_core_memory").insert(inserts).then(() => {
+        // Refresh memory context
+        supabase
+          .from("navi_core_memory")
+          .select("memory_type, content, importance")
+          .eq("user_id", user.id)
+          .order("importance", { ascending: false })
+          .limit(50)
+          .then(({ data }) => {
+            if (data) {
+              const blocks = compressMemories(data as any);
+              setMemoryBlocks(buildMemoryContext(blocks));
+            }
+          });
+      });
+    }
+
+    // Build recent conversation context (last 15 messages)
+    const recentContext = updatedMessages
+      .filter((m) => m.id !== "initial")
+      .slice(-15)
+      .map((m, i) => `[${i + 1}] ${m.role === "user" ? "User" : profile.navi_name}: ${m.content.substring(0, 200)}${m.content.length > 200 ? "..." : ""}`)
+      .join("\n");
 
     let assistantContent = "";
     const chatHistory = updatedMessages
@@ -172,6 +224,11 @@ export default function MavisChat() {
           current_streak: profile.current_streak,
           longest_streak: profile.longest_streak,
           user_navi_description: profile.user_navi_description,
+          bond_affection: profile.bond_affection,
+          bond_trust: profile.bond_trust,
+          bond_loyalty: profile.bond_loyalty,
+          recent_context: recentContext,
+          memory_context: memoryBlocks,
         },
         onDelta: (chunk) => {
           assistantContent += chunk;
@@ -201,6 +258,15 @@ export default function MavisChat() {
           } catch (err) {
             console.error("Failed to save assistant message:", err);
           }
+
+          // Increment bond (non-blocking)
+          const newAffection = Math.min(100, profile.bond_affection + 1);
+          const newTrust = Math.min(100, profile.bond_trust + (messages.length > 10 ? 1 : 0));
+          updateProfile({
+            bond_affection: newAffection,
+            bond_trust: newTrust,
+          });
+
           setIsLoading(false);
         },
       });
@@ -212,13 +278,13 @@ export default function MavisChat() {
         variant: "destructive",
       });
     }
-  }, [input, isLoading, user, conversationId, messages]);
+  }, [input, isLoading, user, conversationId, messages, profile, memoryBlocks, updateProfile]);
 
   if (dbLoading) {
     return (
       <div className="flex flex-col h-[calc(100vh-2rem)] items-center justify-center">
         <Loader2 className="animate-spin text-primary" size={24} />
-        <p className="text-xs font-mono text-muted-foreground mt-2">Loading neural link...</p>
+        <p className="text-xs font-mono text-muted-foreground mt-2">Establishing neural link...</p>
       </div>
     );
   }
@@ -228,6 +294,33 @@ export default function MavisChat() {
       <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE" />
 
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
+        {/* Empty state with suggestion chips */}
+        {messages.length === 0 && !isLoading && (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4 py-12">
+            <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mb-6">
+              <Bot size={28} className="text-primary" />
+            </div>
+            <h3 className="font-display text-xl text-primary font-bold mb-2">
+              Welcome back, {profile.display_name || "Operator"}.
+            </h3>
+            <p className="text-sm text-muted-foreground mb-8 max-w-xs">
+              I'm {profile.navi_name}. I have access to your progress, memories, and goals. What are we working on?
+            </p>
+            <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s.prompt}
+                  onClick={() => sendMessage(s.prompt)}
+                  className="bg-card hover:bg-primary/5 border border-border hover:border-primary/30 rounded-lg px-4 py-3 text-sm text-foreground font-medium transition-colors text-left"
+                >
+                  <span className="mr-1">{s.emoji}</span> {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Message list */}
         {messages.map((msg) => (
           <motion.div
             key={msg.id}
@@ -276,12 +369,12 @@ export default function MavisChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Message NAVI..."
+          placeholder={`Talk to ${profile.navi_name}...`}
           disabled={isLoading}
           className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50"
         />
         <button
-          onClick={sendMessage}
+          onClick={() => sendMessage()}
           disabled={!input.trim() || isLoading}
           className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30"
         >

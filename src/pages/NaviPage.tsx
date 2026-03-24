@@ -273,7 +273,7 @@ export default function NaviPage() {
           </div>
         </button>
         <h2 className="font-display text-lg text-primary font-bold text-glow-cyan">NAVI.EXE</h2>
-        <p className="text-muted-foreground text-xs font-mono">LVL {naviLevel}/50 // SKIN: {equippedSkin}</p>
+        <p className="text-muted-foreground text-xs font-mono">LVL {naviLevel}/100 // SKIN: {equippedSkin}</p>
         <div className="w-48 mt-2">
           <ProgressBar value={naviLevel} max={50} variant="cyan" label="NAVI LEVEL" size="sm" />
         </div>

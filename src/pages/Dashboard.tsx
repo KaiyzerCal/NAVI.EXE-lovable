@@ -44,13 +44,19 @@ export default function Dashboard() {
             style={{ boxShadow: "0 0 60px hsl(185 100% 50% / 0.15), 0 0 120px hsl(185 100% 50% / 0.05)" }}
             title="Chat with your Navi"
           >
-            <motion.img
-              src={skinUrl}
-              alt="NAVI companion"
-              className="w-40 h-40 md:w-48 md:h-48 object-contain drop-shadow-[0_0_24px_hsl(185,100%,50%,0.4)]"
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            />
+            {NaviCharComponent ? (
+              <Suspense fallback={<div className="w-40 h-40 md:w-48 md:h-48" />}>
+                <NaviCharComponent size={192} animated />
+              </Suspense>
+            ) : (
+              <motion.img
+                src={skinUrl}
+                alt="NAVI companion"
+                className="w-40 h-40 md:w-48 md:h-48 object-contain drop-shadow-[0_0_24px_hsl(185,100%,50%,0.4)]"
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              />
+            )}
             <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-neon-green border-2 border-background flex items-center justify-center">
               <Wifi size={11} className="text-background" />
             </div>

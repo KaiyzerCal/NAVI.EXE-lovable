@@ -3,7 +3,8 @@ import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
 import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { getNaviCharacter } from "@/components/navi-characters";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -177,6 +178,7 @@ export default function NaviPage() {
   const unlockedCount = ALL_SKINS.filter((s) => isSkinUnlocked(s.name)).length;
   const naviLevel = profile.navi_level;
   const unlockedNaviSkills = NAVI_SKILLS_BY_LEVEL.filter((s) => s.unlockLevel <= naviLevel);
+  const EquippedNaviChar = getNaviCharacter(equippedSkin);
 
   return (
     <div>
@@ -232,11 +234,17 @@ export default function NaviPage() {
           className="w-40 h-40 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
           title="Open Navi AI Chat"
         >
-          <img
-            src={getSkinUrl(equippedSkin)}
-            alt="NAVI companion"
-            className="w-32 h-32 object-contain drop-shadow-[0_0_12px_hsl(185,100%,50%,0.4)] group-hover:scale-105 transition-transform"
-          />
+          {EquippedNaviChar ? (
+            <Suspense fallback={<div className="w-32 h-32" />}>
+              <EquippedNaviChar size={128} animated />
+            </Suspense>
+          ) : (
+            <img
+              src={getSkinUrl(equippedSkin)}
+              alt="NAVI companion"
+              className="w-32 h-32 object-contain drop-shadow-[0_0_12px_hsl(185,100%,50%,0.4)] group-hover:scale-105 transition-transform"
+            />
+          )}
           <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-green border-2 border-background flex items-center justify-center">
             <Wifi size={10} className="text-background" />
           </div>

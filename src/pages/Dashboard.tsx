@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart } from "lucide-react";
 import { useProfile } from "@/hooks/useProfile";
 import { useNavigate } from "react-router-dom";
+import { Suspense } from "react";
+import { getNaviCharacter } from "@/components/navi-characters";
 
 const fadeIn = {
   initial: { opacity: 0, y: 12 },
@@ -18,6 +20,7 @@ export default function Dashboard() {
   const { profile } = useProfile();
   const navigate = useNavigate();
   const skinUrl = `${STORAGE_BASE}/${profile.equipped_skin.toLowerCase()}.png`;
+  const NaviCharComponent = getNaviCharacter(profile.equipped_skin);
   const bondAvg = Math.round((profile.bond_affection + profile.bond_trust + profile.bond_loyalty) / 3);
 
   return (
@@ -41,13 +44,19 @@ export default function Dashboard() {
             style={{ boxShadow: "0 0 60px hsl(185 100% 50% / 0.15), 0 0 120px hsl(185 100% 50% / 0.05)" }}
             title="Chat with your Navi"
           >
-            <motion.img
-              src={skinUrl}
-              alt="NAVI companion"
-              className="w-40 h-40 md:w-48 md:h-48 object-contain drop-shadow-[0_0_24px_hsl(185,100%,50%,0.4)]"
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            />
+            {NaviCharComponent ? (
+              <Suspense fallback={<div className="w-40 h-40 md:w-48 md:h-48" />}>
+                <NaviCharComponent size={192} animated />
+              </Suspense>
+            ) : (
+              <motion.img
+                src={skinUrl}
+                alt="NAVI companion"
+                className="w-40 h-40 md:w-48 md:h-48 object-contain drop-shadow-[0_0_24px_hsl(185,100%,50%,0.4)]"
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              />
+            )}
             <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-neon-green border-2 border-background flex items-center justify-center">
               <Wifi size={11} className="text-background" />
             </div>

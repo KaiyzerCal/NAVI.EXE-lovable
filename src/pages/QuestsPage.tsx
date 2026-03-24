@@ -1,12 +1,15 @@
 import PageHeader from "@/components/PageHeader";
 import ProgressBar from "@/components/ProgressBar";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Plus, Check, Trash2, Edit2, X, Save } from "lucide-react";
+import { Plus, Check, Trash2, Edit2, X, Save, Loader2 } from "lucide-react";
 import { useOwner } from "@/hooks/useOwner";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 interface Quest {
   id: string;
@@ -14,19 +17,9 @@ interface Quest {
   type: "Daily" | "Weekly" | "Epic";
   progress: number;
   total: number;
-  xpReward: number;
+  xp_reward: number;
   completed: boolean;
 }
-
-const initialQuests: Quest[] = [
-  { id: "1", name: "Morning Routine Protocol", type: "Daily", progress: 5, total: 7, xpReward: 50, completed: false },
-  { id: "2", name: "Read 30 Pages", type: "Daily", progress: 30, total: 30, xpReward: 30, completed: true },
-  { id: "3", name: "Complete Side Project MVP", type: "Epic", progress: 3, total: 10, xpReward: 500, completed: false },
-  { id: "4", name: "Workout Session", type: "Daily", progress: 0, total: 1, xpReward: 40, completed: false },
-  { id: "5", name: "Meditate 10 Minutes", type: "Daily", progress: 1, total: 1, xpReward: 20, completed: true },
-  { id: "6", name: "Weekly Review", type: "Weekly", progress: 0, total: 1, xpReward: 100, completed: false },
-  { id: "7", name: "Learn New Framework", type: "Epic", progress: 7, total: 20, xpReward: 300, completed: false },
-];
 
 const typeColors = {
   Daily: "bg-neon-amber/10 text-neon-amber",
@@ -35,13 +28,28 @@ const typeColors = {
 };
 
 export default function QuestsPage() {
-  const [quests, setQuests] = useState<Quest[]>(initialQuests);
+  const { user } = useAuth();
+  const [quests, setQuests] = useState<Quest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const isOwner = useOwner();
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [newQuest, setNewQuest] = useState({ name: "", type: "Daily" as Quest["type"], total: 1, xpReward: 50 });
+  const [newQuest, setNewQuest] = useState({ name: "", type: "Daily" as Quest["type"], total: 1, xp_reward: 50 });
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("quests")
+      .select("id, name, type, progress, total, xp_reward, completed")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setQuests(data as Quest[]);
+        setLoading(false);
+      });
+  }, [user]);
 
   const filtered = quests.filter((q) => {
     if (filter === "active") return !q.completed;
@@ -49,26 +57,44 @@ export default function QuestsPage() {
     return true;
   });
 
-  const toggleQuest = (id: string) => {
-    setQuests((prev) =>
-      prev.map((q) =>
-        q.id === id ? { ...q, completed: !q.completed, progress: !q.completed ? q.total : 0 } : q
-      )
-    );
+  const toggleQuest = async (id: string) => {
+    const quest = quests.find((q) => q.id === id);
+    if (!quest) return;
+    const completed = !quest.completed;
+    const progress = completed ? quest.total : 0;
+    setQuests((prev) => prev.map((q) => q.id === id ? { ...q, completed, progress } : q));
+    await supabase.from("quests").update({ completed, progress } as any).eq("id", id);
   };
 
-  const addQuest = () => {
-    if (!newQuest.name.trim()) return;
-    setQuests((prev) => [...prev, { ...newQuest, id: Date.now().toString(), progress: 0, completed: false }]);
-    setNewQuest({ name: "", type: "Daily", total: 1, xpReward: 50 });
+  const addQuest = async () => {
+    if (!newQuest.name.trim() || !user) return;
+    const { data } = await supabase
+      .from("quests")
+      .insert({ user_id: user.id, name: newQuest.name, type: newQuest.type, total: newQuest.total, xp_reward: newQuest.xp_reward, progress: 0, completed: false } as any)
+      .select("id, name, type, progress, total, xp_reward, completed")
+      .single();
+    if (data) setQuests((prev) => [data as Quest, ...prev]);
+    setNewQuest({ name: "", type: "Daily", total: 1, xp_reward: 50 });
     setShowAdd(false);
   };
 
-  const deleteQuest = (id: string) => setQuests((prev) => prev.filter((q) => q.id !== id));
-
-  const updateQuest = (id: string, updates: Partial<Quest>) => {
-    setQuests((prev) => prev.map((q) => q.id === id ? { ...q, ...updates } : q));
+  const deleteQuest = async (id: string) => {
+    setQuests((prev) => prev.filter((q) => q.id !== id));
+    await supabase.from("quests").delete().eq("id", id);
   };
+
+  const updateQuest = async (id: string, updates: Partial<Quest>) => {
+    setQuests((prev) => prev.map((q) => q.id === id ? { ...q, ...updates } : q));
+    await supabase.from("quests").update(updates as any).eq("id", id);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-primary" size={24} />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -88,7 +114,6 @@ export default function QuestsPage() {
         </div>
       </PageHeader>
 
-      {/* Add Quest Form */}
       {showAdd && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-primary/20 rounded p-4 mb-4">
           <div className="grid grid-cols-2 gap-3 mb-3">
@@ -99,7 +124,7 @@ export default function QuestsPage() {
               <option value="Epic">Epic</option>
             </select>
             <Input type="number" placeholder="Steps" value={newQuest.total} onChange={(e) => setNewQuest((p) => ({ ...p, total: parseInt(e.target.value) || 1 }))} className="h-8 text-xs" />
-            <Input type="number" placeholder="XP Reward" value={newQuest.xpReward} onChange={(e) => setNewQuest((p) => ({ ...p, xpReward: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" />
+            <Input type="number" placeholder="XP Reward" value={newQuest.xp_reward} onChange={(e) => setNewQuest((p) => ({ ...p, xp_reward: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" />
           </div>
           <div className="flex gap-2">
             <Button size="sm" onClick={addQuest} className="text-xs font-mono"><Save size={10} className="mr-1" /> ADD</Button>
@@ -108,7 +133,6 @@ export default function QuestsPage() {
         </motion.div>
       )}
 
-      {/* Filters */}
       <div className="flex gap-2 mb-6">
         {(["all", "active", "completed"] as const).map((f) => (
           <button
@@ -125,7 +149,12 @@ export default function QuestsPage() {
         ))}
       </div>
 
-      {/* Quest List */}
+      {quests.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="text-sm font-mono">No quests yet. Create your first quest to begin.</p>
+        </div>
+      )}
+
       <div className="space-y-2">
         {filtered.map((quest, i) => (
           <motion.div
@@ -179,7 +208,7 @@ export default function QuestsPage() {
             </div>
             <div className="text-right shrink-0 flex items-center gap-2">
               <div>
-                <p className="text-xs font-mono text-neon-green">+{quest.xpReward} XP</p>
+                <p className="text-xs font-mono text-neon-green">+{quest.xp_reward} XP</p>
                 <p className="text-[10px] font-mono text-muted-foreground">
                   {quest.progress}/{quest.total}
                 </p>

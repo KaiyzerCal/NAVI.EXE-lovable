@@ -275,7 +275,7 @@ export default function NaviPage() {
         <h2 className="font-display text-lg text-primary font-bold text-glow-cyan">NAVI.EXE</h2>
         <p className="text-muted-foreground text-xs font-mono">LVL {naviLevel}/100 // SKIN: {equippedSkin}</p>
         <div className="w-48 mt-2">
-          <ProgressBar value={naviLevel} max={50} variant="cyan" label="NAVI LEVEL" size="sm" />
+          <ProgressBar value={naviLevel} max={100} variant="cyan" label="NAVI LEVEL" size="sm" />
         </div>
         <p className="text-[10px] font-mono text-muted-foreground mt-1 cursor-pointer hover:text-primary" onClick={() => navigate("/mavis")}>
           ▶ TAP TO CHAT WITH NAVI

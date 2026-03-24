@@ -27,9 +27,9 @@ function getXpForLevel(level: number): number {
 
 function buildSystemPrompt(ctx: any): string {
   const level = ctx.navi_level ?? 1;
-  const title = LEVEL_TITLES[Math.min(level, 10)] ?? "Boot Sequence";
+  const title = getLevelTitle(level);
   const xpTotal = ctx.xp_total ?? 0;
-  const nextLevelXp = LEVEL_XP[Math.min(level, 9)] ?? 5000;
+  const nextLevelXp = getXpForLevel(level + 1);
   const xpToNext = Math.max(0, nextLevelXp - xpTotal);
   const naviName = ctx.navi_name ?? "NAVI";
   const userName = ctx.display_name ?? "Operator";

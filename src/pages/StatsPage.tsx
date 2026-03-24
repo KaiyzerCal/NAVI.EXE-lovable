@@ -86,7 +86,7 @@ export default function StatsPage() {
               { name: "First Quest", desc: "Complete your first quest", unlocked: true },
               { name: "Week Warrior", desc: "7-day streak", unlocked: true },
               { name: "Century", desc: "Complete 100 quests", unlocked: true },
-              { name: "Grandmaster", desc: "Reach level 50", unlocked: false },
+              { name: "Grandmaster", desc: "Reach level 100", unlocked: false },
               { name: "Polymath", desc: "Max out 5 skills", unlocked: false },
             ].map((a) => (
               <div key={a.name} className={`flex items-center gap-3 py-1 ${!a.unlocked ? "opacity-40" : ""}`}>

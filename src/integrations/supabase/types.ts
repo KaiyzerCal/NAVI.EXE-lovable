@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          unlocked: boolean
+          user_id: string
+          xp: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          unlocked?: boolean
+          user_id: string
+          xp?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          unlocked?: boolean
+          user_id?: string
+          xp?: number
+        }
+        Relationships: []
+      }
       chat_conversations: {
         Row: {
           created_at: string
@@ -72,6 +102,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      journal_entries: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+          xp_earned: number
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
+          xp_earned?: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+          xp_earned?: number
+        }
+        Relationships: []
       }
       navi_core_memory: {
         Row: {
@@ -160,6 +223,45 @@ export type Database = {
           navi_personality?: string
           user_navi_description?: string | null
           xp_total?: number
+        }
+        Relationships: []
+      }
+      quests: {
+        Row: {
+          completed: boolean
+          created_at: string
+          id: string
+          name: string
+          progress: number
+          total: number
+          type: string
+          updated_at: string
+          user_id: string
+          xp_reward: number
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          progress?: number
+          total?: number
+          type?: string
+          updated_at?: string
+          user_id: string
+          xp_reward?: number
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          progress?: number
+          total?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+          xp_reward?: number
         }
         Relationships: []
       }

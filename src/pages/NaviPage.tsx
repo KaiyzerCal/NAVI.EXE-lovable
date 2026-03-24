@@ -251,7 +251,7 @@ export default function NaviPage() {
       >
         <button
           onClick={() => navigate("/mavis")}
-          className="w-40 h-40 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
+          className="w-40 h-40 rounded-full bg-transparent border-2 border-primary/20 flex items-center justify-center mb-4 relative overflow-hidden cursor-pointer hover:border-primary/50 transition-all group"
           title="Open Navi AI Chat"
         >
           {EquippedNaviChar ? (

@@ -32,9 +32,8 @@ export default function Dashboard() {
         transition={{ duration: 0.5 }}
         className="relative mb-6 rounded-lg overflow-hidden border border-primary/20 border-glow"
       >
-        {/* Background glow effect */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-card to-background" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
+        {/* Transparent backdrop — navi lives in the system */}
+        <div className="absolute inset-0 bg-transparent" />
 
         <div className="relative flex flex-col items-center py-10 px-6">
           {/* Navi Avatar — large, clickable */}

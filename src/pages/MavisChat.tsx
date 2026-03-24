@@ -291,7 +291,21 @@ export default function MavisChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title={`${profile.navi_name || "NAVI"} AI`} subtitle="// NEURAL LINK ACTIVE" />
+      <div className="flex items-center justify-between mb-4">
+        <PageHeader title={`${profile.navi_name || "NAVI"} AI`} subtitle="// NEURAL LINK ACTIVE" />
+        {messages.length > 0 && (
+          <button
+            onClick={() => {
+              setMessages([]);
+              toast({ title: "Thread cleared", description: "Chat view cleared. Your conversation history is still saved." });
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-mono text-muted-foreground hover:text-destructive border border-border hover:border-destructive/30 transition-colors"
+            title="Clear visible thread (data stays saved)"
+          >
+            <Trash2 size={10} /> CLEAR VIEW
+          </button>
+        )}
+      </div>
 
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
         {/* Empty state with suggestion chips */}

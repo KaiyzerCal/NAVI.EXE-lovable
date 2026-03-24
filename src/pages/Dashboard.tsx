@@ -40,8 +40,7 @@ export default function Dashboard() {
           {/* Navi Avatar — large, clickable */}
           <button
             onClick={() => navigate("/mavis")}
-            className="relative w-48 h-48 md:w-56 md:h-56 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-all group mb-5"
-            style={{ boxShadow: "0 0 60px hsl(185 100% 50% / 0.15), 0 0 120px hsl(185 100% 50% / 0.05)" }}
+            className="relative w-48 h-48 md:w-56 md:h-56 rounded-full bg-transparent border-2 border-primary/15 flex items-center justify-center cursor-pointer hover:border-primary/40 transition-all group mb-5"
             title="Chat with your Navi"
           >
             {NaviCharComponent ? (

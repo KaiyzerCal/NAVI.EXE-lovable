@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart } from "lucide-react";
 import { useProfile } from "@/hooks/useProfile";
 import { useNavigate } from "react-router-dom";
+import { Suspense } from "react";
+import { getNaviCharacter } from "@/components/navi-characters";
 
 const fadeIn = {
   initial: { opacity: 0, y: 12 },

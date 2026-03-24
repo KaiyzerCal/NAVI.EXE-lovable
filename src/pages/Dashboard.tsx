@@ -32,16 +32,14 @@ export default function Dashboard() {
         transition={{ duration: 0.5 }}
         className="relative mb-6 rounded-lg overflow-hidden border border-primary/20 border-glow"
       >
-        {/* Background glow effect */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-card to-background" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
+        {/* Transparent backdrop — navi lives in the system */}
+        <div className="absolute inset-0 bg-transparent" />
 
         <div className="relative flex flex-col items-center py-10 px-6">
           {/* Navi Avatar — large, clickable */}
           <button
             onClick={() => navigate("/mavis")}
-            className="relative w-48 h-48 md:w-56 md:h-56 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-all group mb-5"
-            style={{ boxShadow: "0 0 60px hsl(185 100% 50% / 0.15), 0 0 120px hsl(185 100% 50% / 0.05)" }}
+            className="relative w-48 h-48 md:w-56 md:h-56 rounded-full bg-transparent border-2 border-primary/15 flex items-center justify-center cursor-pointer hover:border-primary/40 transition-all group mb-5"
             title="Chat with your Navi"
           >
             {NaviCharComponent ? (

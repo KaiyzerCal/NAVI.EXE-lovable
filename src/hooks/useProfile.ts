@@ -18,6 +18,7 @@ export interface ProfileData {
   longest_streak: number;
   user_navi_description: string | null;
   last_active: string | null;
+  subclass: string | null;
 }
 
 const defaults: ProfileData = {
@@ -36,6 +37,7 @@ const defaults: ProfileData = {
   longest_streak: 0,
   user_navi_description: null,
   last_active: null,
+  subclass: null,
 };
 
 export function useProfile() {

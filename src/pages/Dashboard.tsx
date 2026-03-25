@@ -44,6 +44,8 @@ export default function Dashboard() {
   const [achievementCount, setAchievementCount] = useState(0);
   const [skillsCount, setSkillsCount] = useState(0);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [buffCount, setBuffCount] = useState(0);
+  const [debuffCount, setDebuffCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -53,7 +55,8 @@ export default function Dashboard() {
       supabase.from("achievements").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("unlocked", true),
       supabase.from("skills" as any).select("id", { count: "exact", head: true }).eq("user_id", user.id),
       supabase.from("activity_log" as any).select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-    ]).then(([questsRes, journalRes, achieveRes, skillsRes, activityRes]) => {
+      supabase.from("buffs" as any).select("effect_type, expires_at").eq("user_id", user.id),
+    ]).then(([questsRes, journalRes, achieveRes, skillsRes, activityRes, buffsRes]) => {
       const allQuests = questsRes.data || [];
       const active = allQuests.filter((q: any) => !q.completed);
       setActiveQuests(active.slice(0, 4) as any);
@@ -62,6 +65,10 @@ export default function Dashboard() {
       setAchievementCount(achieveRes.count || 0);
       setSkillsCount(skillsRes.count || 0);
       setRecentActivity((activityRes.data || []) as unknown as ActivityItem[]);
+
+      const activeEffects = ((buffsRes.data || []) as any[]).filter((b: any) => !b.expires_at || new Date(b.expires_at).getTime() > Date.now());
+      setBuffCount(activeEffects.filter((b: any) => b.effect_type === "buff").length);
+      setDebuffCount(activeEffects.filter((b: any) => b.effect_type === "debuff").length);
     });
   }, [user]);
 
@@ -142,7 +149,10 @@ export default function Dashboard() {
                 <span className="text-[10px] font-mono bg-secondary/10 text-secondary px-1.5 py-0.5 rounded">{profile.mbti_type}</span>
               )}
               {profile.character_class && (
-                <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">{profile.character_class}</span>
+                <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                  {profile.character_class}
+                  {profile.subclass ? ` // ${profile.subclass}` : ""}
+                </span>
               )}
             </div>
             <ProgressBar value={xpCurrent} max={xpNeeded} variant="cyan" label={`${profile.xp_total} XP TOTAL`} size="md" />
@@ -169,6 +179,28 @@ export default function Dashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* Active Effects Widget */}
+      {(buffCount > 0 || debuffCount > 0) && (
+        <motion.div {...fadeIn} className="mb-6">
+          <HudCard title="ACTIVE EFFECTS" icon={<Zap size={14} />}>
+            <div className="flex gap-4">
+              {buffCount > 0 && (
+                <div className="flex items-center gap-1">
+                  <Zap size={12} className="text-neon-green" />
+                  <span className="text-xs font-mono text-neon-green">{buffCount} Buff{buffCount !== 1 ? "s" : ""}</span>
+                </div>
+              )}
+              {debuffCount > 0 && (
+                <div className="flex items-center gap-1">
+                  <Zap size={12} className="text-destructive" />
+                  <span className="text-xs font-mono text-destructive">{debuffCount} Debuff{debuffCount !== 1 ? "s" : ""}</span>
+                </div>
+              )}
+            </div>
+          </HudCard>
+        </motion.div>
+      )}
 
       {/* Bottom Grid */}
       <div className="grid lg:grid-cols-2 gap-4">

@@ -119,7 +119,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       break;
     }
     case "update_profile": {
-      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak"];
+      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass"];
       const updates: any = {};
       for (const key of allowed) {
         if (params[key] !== undefined) updates[key] = params[key];
@@ -156,6 +156,71 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       if (params.entry_id) {
         await supabase.from("journal_entries").delete().eq("id", params.entry_id).eq("user_id", userId);
         await logActivity(userId, "journal_deleted", `Journal entry deleted`, 0);
+      }
+      break;
+    }
+    // Equipment actions
+    case "create_equipment": {
+      await supabase.from("equipment" as any).insert({
+        user_id: userId,
+        name: params.name || "New Item",
+        description: params.description || "",
+        slot: params.slot || "accessory",
+        rarity: params.rarity || "common",
+        stat_bonuses: params.stat_bonuses || {},
+        obtained_from: params.obtained_from || "manual",
+      });
+      await logActivity(userId, "equipment_created", `Equipment created: ${params.name}`, 0);
+      break;
+    }
+    case "equip_item": {
+      if (params.item_id) {
+        const { data: item } = await supabase.from("equipment" as any).select("slot, name").eq("id", params.item_id).single();
+        if (item) {
+          // Unequip current item in same slot
+          await supabase.from("equipment" as any).update({ is_equipped: false }).eq("user_id", userId).eq("slot", (item as any).slot).eq("is_equipped", true);
+          await supabase.from("equipment" as any).update({ is_equipped: true }).eq("id", params.item_id);
+          await logActivity(userId, "item_equipped", `Equipped: ${(item as any).name}`, 0);
+        }
+      } else if (params.name) {
+        const { data: item } = await supabase.from("equipment" as any).select("id, slot, name").eq("user_id", userId).ilike("name", params.name).single();
+        if (item) {
+          await supabase.from("equipment" as any).update({ is_equipped: false }).eq("user_id", userId).eq("slot", (item as any).slot).eq("is_equipped", true);
+          await supabase.from("equipment" as any).update({ is_equipped: true }).eq("id", (item as any).id);
+          await logActivity(userId, "item_equipped", `Equipped: ${(item as any).name}`, 0);
+        }
+      }
+      break;
+    }
+    case "unequip_item": {
+      if (params.item_id) {
+        await supabase.from("equipment" as any).update({ is_equipped: false }).eq("id", params.item_id);
+      } else if (params.name) {
+        await supabase.from("equipment" as any).update({ is_equipped: false }).eq("user_id", userId).ilike("name", params.name);
+      }
+      break;
+    }
+    case "create_buff": {
+      const expiresAt = params.duration_hours ? new Date(Date.now() + params.duration_hours * 3600000).toISOString() : null;
+      await supabase.from("buffs" as any).insert({
+        user_id: userId,
+        name: params.name || "Buff",
+        description: params.description || "",
+        effect_type: params.effect_type || "buff",
+        stat_affected: params.stat_affected || "",
+        modifier_value: params.modifier_value || 0,
+        duration_hours: params.duration_hours || null,
+        source: params.source || "navi",
+        expires_at: expiresAt,
+      });
+      await logActivity(userId, params.effect_type === "debuff" ? "debuff_applied" : "buff_applied", `${params.effect_type === "debuff" ? "Debuff" : "Buff"}: ${params.name}`, 0);
+      break;
+    }
+    case "remove_buff": {
+      if (params.buff_id) {
+        await supabase.from("buffs" as any).delete().eq("id", params.buff_id).eq("user_id", userId);
+      } else if (params.name) {
+        await supabase.from("buffs" as any).delete().eq("user_id", userId).ilike("name", params.name);
       }
       break;
     }

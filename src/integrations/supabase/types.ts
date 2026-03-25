@@ -224,9 +224,11 @@ export type Database = {
       }
       journal_entries: {
         Row: {
+          category: string
           content: string
           created_at: string
           id: string
+          importance: string
           tags: string[]
           title: string
           updated_at: string
@@ -234,9 +236,11 @@ export type Database = {
           xp_earned: number
         }
         Insert: {
+          category?: string
           content?: string
           created_at?: string
           id?: string
+          importance?: string
           tags?: string[]
           title: string
           updated_at?: string
@@ -244,9 +248,11 @@ export type Database = {
           xp_earned?: number
         }
         Update: {
+          category?: string
           content?: string
           created_at?: string
           id?: string
+          importance?: string
           tags?: string[]
           title?: string
           updated_at?: string
@@ -395,6 +401,7 @@ export type Database = {
           debuff_penalty_id: string | null
           equipment_reward_id: string | null
           id: string
+          linked_skill_id: string | null
           loot_description: string
           name: string
           progress: number
@@ -411,6 +418,7 @@ export type Database = {
           debuff_penalty_id?: string | null
           equipment_reward_id?: string | null
           id?: string
+          linked_skill_id?: string | null
           loot_description?: string
           name: string
           progress?: number
@@ -427,6 +435,7 @@ export type Database = {
           debuff_penalty_id?: string | null
           equipment_reward_id?: string | null
           id?: string
+          linked_skill_id?: string | null
           loot_description?: string
           name?: string
           progress?: number
@@ -456,6 +465,13 @@ export type Database = {
             columns: ["equipment_reward_id"]
             isOneToOne: false
             referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quests_linked_skill_id_fkey"
+            columns: ["linked_skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
             referencedColumns: ["id"]
           },
         ]

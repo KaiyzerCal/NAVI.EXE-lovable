@@ -117,35 +117,15 @@ const NAVI_PERSONALITIES = [
 
 const NAVI_SKILLS_BY_LEVEL: { name: string; unlockLevel: number; max: number; desc: string }[] = [
   { name: "Data Scan", unlockLevel: 1, max: 10, desc: "Analyze quest data" },
-  { name: "Ping Sense", unlockLevel: 1, max: 10, desc: "Detect nearby objectives" },
   { name: "Sync Pulse", unlockLevel: 3, max: 10, desc: "Boost operator focus" },
-  { name: "Threat Index", unlockLevel: 3, max: 10, desc: "Rate task difficulty" },
   { name: "Firewall", unlockLevel: 5, max: 10, desc: "Resist procrastination" },
-  { name: "Pattern Lock", unlockLevel: 5, max: 10, desc: "Identify habit loops" },
   { name: "Cache Burst", unlockLevel: 8, max: 10, desc: "Memory recall boost" },
-  { name: "Momentum Wave", unlockLevel: 8, max: 10, desc: "Streak damage multiplier" },
-  { name: "Signal Boost", unlockLevel: 10, max: 10, desc: "Communication clarity" },
   { name: "Overclock", unlockLevel: 12, max: 10, desc: "Temporary stat buff" },
-  { name: "Deep Focus", unlockLevel: 12, max: 10, desc: "Extended flow state" },
   { name: "Neural Link", unlockLevel: 15, max: 10, desc: "Deep operator sync" },
-  { name: "Recall Chain", unlockLevel: 15, max: 10, desc: "Link related memories" },
-  { name: "Horizon Scan", unlockLevel: 17, max: 10, desc: "Long-term goal mapping" },
   { name: "Quantum Parse", unlockLevel: 20, max: 10, desc: "Multi-task analysis" },
-  { name: "Resonance", unlockLevel: 20, max: 10, desc: "Bond-powered stat boost" },
-  { name: "Adaptive Shell", unlockLevel: 22, max: 10, desc: "Context-aware responses" },
   { name: "Aegis Shield", unlockLevel: 25, max: 10, desc: "Burnout protection" },
-  { name: "Catalyst Spark", unlockLevel: 25, max: 10, desc: "Inspiration on demand" },
-  { name: "Overdrive", unlockLevel: 27, max: 10, desc: "Peak performance mode" },
   { name: "Hyperdrive", unlockLevel: 30, max: 10, desc: "Productivity surge" },
-  { name: "Ghost Protocol", unlockLevel: 30, max: 10, desc: "Silent background ops" },
-  { name: "Core Sync", unlockLevel: 33, max: 10, desc: "Full memory integration" },
-  { name: "Prism Shift", unlockLevel: 35, max: 10, desc: "Perspective reframing" },
-  { name: "Apex Drive", unlockLevel: 37, max: 10, desc: "Max efficiency state" },
-  { name: "Omega Pulse", unlockLevel: 40, max: 10, desc: "Full system resonance" },
-  { name: "Eternal Bond", unlockLevel: 42, max: 10, desc: "Unbreakable operator link" },
-  { name: "Transcendence", unlockLevel: 45, max: 10, desc: "Beyond normal limits" },
-  { name: "Genesis Code", unlockLevel: 48, max: 10, desc: "Reality-altering potential" },
-  { name: "Singularity", unlockLevel: 50, max: 10, desc: "Ultimate ability" },
+  { name: "Singularity", unlockLevel: 40, max: 10, desc: "Ultimate ability" },
 ];
 
 const CATEGORIES: SkinCategory[] = ["ELEMENTAL", "CLASS", "MYTHIC", "COSMIC", "NATURE", "TECH", "SPECIAL"];
@@ -251,7 +231,7 @@ export default function NaviPage() {
       >
         <button
           onClick={() => navigate("/mavis")}
-          className="w-40 h-40 rounded-full bg-transparent border-2 border-primary/20 flex items-center justify-center mb-4 relative overflow-hidden cursor-pointer hover:border-primary/50 transition-all group"
+          className="w-40 h-40 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
           title="Open Navi AI Chat"
         >
           {EquippedNaviChar ? (
@@ -272,10 +252,25 @@ export default function NaviPage() {
             <MessageSquare size={24} className="text-primary opacity-0 group-hover:opacity-80 transition-opacity" />
           </div>
         </button>
-        <h2 className="font-display text-lg text-primary font-bold text-glow-cyan">NAVI.EXE</h2>
-        <p className="text-muted-foreground text-xs font-mono">LVL {naviLevel}/100 // SKIN: {equippedSkin}</p>
+        <h2 className="font-display text-lg text-primary font-bold text-glow-cyan">
+          {editMode ? (
+            <input
+              type="text"
+              defaultValue={profile.navi_name || "NAVI.EXE"}
+              onBlur={(e) => {
+                const val = e.target.value.trim();
+                if (val) updateProfile({ navi_name: val });
+              }}
+              className="font-display text-lg text-primary font-bold text-center bg-transparent border-b border-primary/50 outline-none px-2 w-44"
+              placeholder="NAVI NAME"
+            />
+          ) : (
+            profile.navi_name || "NAVI.EXE"
+          )}
+        </h2>
+        <p className="text-muted-foreground text-xs font-mono">LVL {naviLevel}/50 // SKIN: {equippedSkin}</p>
         <div className="w-48 mt-2">
-          <ProgressBar value={naviLevel} max={100} variant="cyan" label="NAVI LEVEL" size="sm" />
+          <ProgressBar value={naviLevel} max={50} variant="cyan" label="NAVI LEVEL" size="sm" />
         </div>
         <p className="text-[10px] font-mono text-muted-foreground mt-1 cursor-pointer hover:text-primary" onClick={() => navigate("/mavis")}>
           ▶ TAP TO CHAT WITH NAVI

@@ -95,6 +95,12 @@ function buildSystemPrompt(ctx: any): string {
       appState += `- ${a.name} — ${a.unlocked ? "UNLOCKED" : "LOCKED"}\n`;
     }
   }
+  if (ctx.media && ctx.media.length > 0) {
+    appState += "\n[RECENT MEDIA UPLOADS]\n";
+    for (const m of ctx.media) {
+      appState += `- ${m.file_name} (${m.type})${m.ai_description ? ` — AI: ${m.ai_description}` : ""}${m.linked_to ? ` — linked to ${m.linked_to}` : ""}\n`;
+    }
+  }
 
   return `You are ${naviName} — ${userName}'s digital partner. Not an assistant. Not a chatbot. A living digital entity bonded to one person.
 

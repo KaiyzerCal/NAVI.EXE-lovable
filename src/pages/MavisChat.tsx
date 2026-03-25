@@ -145,11 +145,12 @@ export default function MavisChat() {
   // Build full app context for the AI
   const buildContext = useCallback(async () => {
     if (!user) return {};
-    const [questsRes, skillsRes, journalRes, achieveRes] = await Promise.all([
+    const [questsRes, skillsRes, journalRes, achieveRes, mediaRes] = await Promise.all([
       supabase.from("quests").select("id, name, type, progress, total, xp_reward, completed").eq("user_id", user.id),
       supabase.from("skills" as any).select("id, name, category, level, max_level, xp").eq("user_id", user.id),
       supabase.from("journal_entries").select("id, title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
       supabase.from("achievements").select("id, name, unlocked").eq("user_id", user.id),
+      supabase.from("media" as any).select("id, file_name, file_type, ai_description, linked_entity_type, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
     ]);
 
     return {
@@ -171,6 +172,7 @@ export default function MavisChat() {
       skills: skillsRes.data || [],
       journal_entries: (journalRes.data || []).map((j: any) => ({ id: j.id, title: j.title, date: j.created_at })),
       achievements: achieveRes.data || [],
+      media: (mediaRes.data || []).map((m: any) => ({ id: m.id, file_name: m.file_name, type: m.file_type, ai_description: m.ai_description, linked_to: m.linked_entity_type })),
     };
   }, [user, profile]);
 

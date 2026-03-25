@@ -19,6 +19,12 @@ export interface ProfileData {
   user_navi_description: string | null;
   last_active: string | null;
   subclass: string | null;
+  notification_settings: {
+    questReminders: boolean;
+    streakWarnings: boolean;
+    xpMilestones: boolean;
+    dailySummary: boolean;
+  };
 }
 
 const defaults: ProfileData = {
@@ -38,6 +44,12 @@ const defaults: ProfileData = {
   user_navi_description: null,
   last_active: null,
   subclass: null,
+  notification_settings: {
+    questReminders: true,
+    streakWarnings: true,
+    xpMilestones: false,
+    dailySummary: true,
+  },
 };
 
 export function useProfile() {

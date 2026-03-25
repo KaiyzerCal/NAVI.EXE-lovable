@@ -80,7 +80,7 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState(profile.display_name || "");
   const [characterClass, setCharacterClass] = useState(profile.character_class || "");
 
-  const [notifications, setNotifications] = useState({
+  const [notifications, setNotifications] = useState(profile.notification_settings || {
     questReminders: true,
     streakWarnings: true,
     xpMilestones: false,
@@ -104,7 +104,11 @@ export default function SettingsPage() {
   };
 
   const toggleNotif = (key: keyof typeof notifications) => {
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+    setNotifications((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      updateProfile({ notification_settings: next } as any);
+      return next;
+    });
   };
 
   return (

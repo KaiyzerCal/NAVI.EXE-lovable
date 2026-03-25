@@ -347,6 +347,7 @@ export type Database = {
           navi_level: number
           navi_name: string
           navi_personality: string
+          notification_settings: Json
           subclass: string | null
           user_navi_description: string | null
           xp_total: number
@@ -367,6 +368,7 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          notification_settings?: Json
           subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number
@@ -387,6 +389,7 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          notification_settings?: Json
           subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number

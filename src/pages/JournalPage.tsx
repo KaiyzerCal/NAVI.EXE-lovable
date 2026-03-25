@@ -64,7 +64,7 @@ export default function JournalPage() {
       supabase.from("media" as any).select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]).then(([entriesRes, mediaRes]) => {
       if (entriesRes.data) setEntries(entriesRes.data as JournalEntry[]);
-      const media = (mediaRes.data || []) as MediaFile[];
+      const media = ((mediaRes.data || []) as unknown) as MediaFile[];
       setAllMedia(media);
       // Group media by linked journal entry
       const grouped: Record<string, MediaFile[]> = {};

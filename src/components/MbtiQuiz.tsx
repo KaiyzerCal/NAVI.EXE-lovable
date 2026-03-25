@@ -4,270 +4,280 @@ import { Button } from "@/components/ui/button";
 import HudCard from "@/components/HudCard";
 import { Brain } from "lucide-react";
 
+// Character class IS the MBTI type itself. The desc explains it.
 export const MBTI_CLASS_MAP: Record<string, { class: string; desc: string }> = {
-  INTJ: { class: "Technomancer",  desc: "Strategic mastermind who bends systems to their will" },
-  INTP: { class: "Alchemist",     desc: "Curious thinker who transmutes knowledge into power" },
-  ENTJ: { class: "Commander",     desc: "Born leader who conquers through sheer force of will" },
-  ENTP: { class: "Trickster",     desc: "Inventive disruptor who thrives on creative chaos" },
-  INFJ: { class: "Oracle",        desc: "Visionary who perceives hidden truths and guides others" },
-  INFP: { class: "Dreamweaver",   desc: "Idealist who shapes reality through imagination" },
-  ENFJ: { class: "Paladin",       desc: "Charismatic champion who inspires and protects" },
-  ENFP: { class: "Bard",          desc: "Enthusiastic storyteller who energizes all around them" },
-  ISTJ: { class: "Sentinel",      desc: "Disciplined guardian of order and tradition" },
-  ISFJ: { class: "Guardian",      desc: "Devoted protector who shields with quiet strength" },
-  ESTJ: { class: "Warlord",       desc: "Decisive organizer who leads with authority" },
-  ESFJ: { class: "Diplomat",      desc: "Harmonizer who unites allies through empathy" },
-  ISTP: { class: "Rogue",         desc: "Cool-headed operative who masters tools and tactics" },
-  ISFP: { class: "Ranger",        desc: "Free spirit attuned to the world's subtle beauty" },
-  ESTP: { class: "Berserker",     desc: "Bold risk-taker who charges into action" },
-  ESFP: { class: "Dancer",        desc: "Vibrant performer who lives in the moment" },
+  INTJ: { class: "INTJ", desc: "The Architect — Strategic mastermind who bends systems to their will" },
+  INTP: { class: "INTP", desc: "The Logician — Curious thinker who transmutes knowledge into power" },
+  ENTJ: { class: "ENTJ", desc: "The Commander — Born leader who conquers through force of will" },
+  ENTP: { class: "ENTP", desc: "The Debater — Inventive disruptor who thrives on creative chaos" },
+  INFJ: { class: "INFJ", desc: "The Advocate — Visionary who perceives hidden truths" },
+  INFP: { class: "INFP", desc: "The Mediator — Idealist who shapes reality through imagination" },
+  ENFJ: { class: "ENFJ", desc: "The Protagonist — Charismatic champion who inspires others" },
+  ENFP: { class: "ENFP", desc: "The Campaigner — Enthusiastic storyteller who energizes all" },
+  ISTJ: { class: "ISTJ", desc: "The Logistician — Disciplined guardian of order and tradition" },
+  ISFJ: { class: "ISFJ", desc: "The Defender — Devoted protector with quiet strength" },
+  ESTJ: { class: "ESTJ", desc: "The Executive — Decisive organizer who leads with authority" },
+  ESFJ: { class: "ESFJ", desc: "The Consul — Harmonizer who unites through empathy" },
+  ISTP: { class: "ISTP", desc: "The Virtuoso — Cool-headed operative who masters tools" },
+  ISFP: { class: "ISFP", desc: "The Adventurer — Free spirit attuned to subtle beauty" },
+  ESTP: { class: "ESTP", desc: "The Entrepreneur — Bold risk-taker who charges into action" },
+  ESFP: { class: "ESFP", desc: "The Entertainer — Vibrant performer who lives in the moment" },
 };
 
-// Sub-classes map real-world careers/paths onto each character class.
-// Each sub-class reflects something the operator actually does or aspires to.
+// Sub-classes map real-world careers/paths onto each MBTI type
 export const SUB_CLASSES: Record<string, { name: string; realWorld: string; bonus: string }[]> = {
-  Technomancer: [
-    { name: "Software Engineer",   realWorld: "Builds the systems that run the world",             bonus: "+15% Coding XP" },
-    { name: "Data Scientist",      realWorld: "Finds signal in noise, patterns in chaos",          bonus: "+15% Analysis XP" },
-    { name: "Systems Architect",   realWorld: "Designs blueprints others build from",             bonus: "+10% Planning XP" },
+  INTJ: [
+    { name: "Software Engineer", realWorld: "Builds the systems that run the world", bonus: "+15% Coding XP" },
+    { name: "Data Scientist", realWorld: "Finds signal in noise, patterns in chaos", bonus: "+15% Analysis XP" },
+    { name: "Systems Architect", realWorld: "Designs blueprints others build from", bonus: "+10% Planning XP" },
   ],
-  Alchemist: [
-    { name: "Research Scientist",  realWorld: "Transmutes questions into discovery",               bonus: "+15% Research XP" },
-    { name: "Engineer",            realWorld: "Solves hard problems with elegant systems",         bonus: "+10% Technical XP" },
-    { name: "Philosopher",         realWorld: "Distills the complex into pure insight",            bonus: "+15% Wisdom XP" },
+  INTP: [
+    { name: "Research Scientist", realWorld: "Transmutes questions into discovery", bonus: "+15% Research XP" },
+    { name: "Engineer", realWorld: "Solves hard problems with elegant systems", bonus: "+10% Technical XP" },
+    { name: "Philosopher", realWorld: "Distills the complex into pure insight", bonus: "+15% Wisdom XP" },
   ],
-  Commander: [
-    { name: "Entrepreneur",        realWorld: "Builds businesses from vision and willpower",      bonus: "+15% Leadership XP" },
-    { name: "Product Manager",     realWorld: "Turns strategy into shipped products",             bonus: "+10% Strategy XP" },
-    { name: "Military Officer",    realWorld: "Leads under pressure with precision",              bonus: "+15% Discipline XP" },
+  ENTJ: [
+    { name: "Entrepreneur", realWorld: "Builds businesses from vision and willpower", bonus: "+15% Leadership XP" },
+    { name: "Product Manager", realWorld: "Turns strategy into shipped products", bonus: "+10% Strategy XP" },
+    { name: "Military Officer", realWorld: "Leads under pressure with precision", bonus: "+15% Discipline XP" },
   ],
-  Trickster: [
-    { name: "Startup Founder",     realWorld: "Disrupts industries others won't challenge",       bonus: "+15% Innovation XP" },
-    { name: "Lawyer",              realWorld: "Finds the argument no one else sees",              bonus: "+10% Persuasion XP" },
-    { name: "Creative Director",   realWorld: "Bends rules to make something unforgettable",      bonus: "+15% Creative XP" },
+  ENTP: [
+    { name: "Startup Founder", realWorld: "Disrupts industries others won't challenge", bonus: "+15% Innovation XP" },
+    { name: "Lawyer", realWorld: "Finds the argument no one else sees", bonus: "+10% Persuasion XP" },
+    { name: "Creative Director", realWorld: "Bends rules to make something unforgettable", bonus: "+15% Creative XP" },
   ],
-  Oracle: [
-    { name: "Therapist",           realWorld: "Guides others through what they can't see",        bonus: "+15% Empathy XP" },
-    { name: "Writer",              realWorld: "Translates the ineffable into words",              bonus: "+15% Creative XP" },
-    { name: "Researcher",          realWorld: "Reveals hidden truths through systematic inquiry", bonus: "+10% Focus XP" },
+  INFJ: [
+    { name: "Therapist", realWorld: "Guides others through what they can't see", bonus: "+15% Empathy XP" },
+    { name: "Writer", realWorld: "Translates the ineffable into words", bonus: "+15% Creative XP" },
+    { name: "Researcher", realWorld: "Reveals hidden truths through systematic inquiry", bonus: "+10% Focus XP" },
   ],
-  Dreamweaver: [
-    { name: "Artist",              realWorld: "Shapes the world through creative vision",         bonus: "+15% Creative XP" },
-    { name: "Counselor",           realWorld: "Holds space for others to become themselves",      bonus: "+15% Empathy XP" },
-    { name: "Author",              realWorld: "Builds worlds others live inside",                 bonus: "+10% Storytelling XP" },
+  INFP: [
+    { name: "Artist", realWorld: "Shapes the world through creative vision", bonus: "+15% Creative XP" },
+    { name: "Counselor", realWorld: "Holds space for others to become themselves", bonus: "+15% Empathy XP" },
+    { name: "Author", realWorld: "Builds worlds others live inside", bonus: "+10% Storytelling XP" },
   ],
-  Paladin: [
-    { name: "Teacher",             realWorld: "Shapes the next generation with intention",        bonus: "+15% Influence XP" },
-    { name: "Non-profit Director", realWorld: "Fights for causes larger than the self",           bonus: "+15% Leadership XP" },
-    { name: "Coach",               realWorld: "Unlocks potential in others daily",                bonus: "+10% Encouragement XP" },
+  ENFJ: [
+    { name: "Teacher", realWorld: "Shapes the next generation with intention", bonus: "+15% Influence XP" },
+    { name: "Non-Profit Leader", realWorld: "Turns compassion into systemic impact", bonus: "+10% Community XP" },
+    { name: "Coach", realWorld: "Unlocks potential others didn't know they had", bonus: "+15% Mentoring XP" },
   ],
-  Bard: [
-    { name: "Content Creator",     realWorld: "Builds audiences through authentic storytelling",  bonus: "+15% Creative XP" },
-    { name: "Marketing Director",  realWorld: "Moves people with narrative and vision",           bonus: "+10% Influence XP" },
-    { name: "Musician",            realWorld: "Channels emotion into universal language",         bonus: "+15% Expression XP" },
+  ENFP: [
+    { name: "Content Creator", realWorld: "Turns enthusiasm into audience connection", bonus: "+15% Creative XP" },
+    { name: "Marketing Strategist", realWorld: "Translates passion into reach", bonus: "+10% Outreach XP" },
+    { name: "Event Producer", realWorld: "Creates experiences people remember", bonus: "+15% Social XP" },
   ],
-  Sentinel: [
-    { name: "Accountant",          realWorld: "Keeps the truth in numbers, order in chaos",       bonus: "+15% Discipline XP" },
-    { name: "Operations Manager",  realWorld: "Ensures the system runs without failure",          bonus: "+10% Efficiency XP" },
-    { name: "Law Enforcement",     realWorld: "Upholds structure so others can thrive",           bonus: "+15% Consistency XP" },
+  ISTJ: [
+    { name: "Accountant", realWorld: "Brings precision and integrity to complex systems", bonus: "+15% Accuracy XP" },
+    { name: "Project Manager", realWorld: "Keeps the train on the tracks", bonus: "+10% Discipline XP" },
+    { name: "Compliance Officer", realWorld: "Ensures systems run clean", bonus: "+15% Order XP" },
   ],
-  Guardian: [
-    { name: "Nurse / Doctor",      realWorld: "Protects life with quiet, steadfast dedication",   bonus: "+15% Care XP" },
-    { name: "Social Worker",       realWorld: "Shields the vulnerable with relentless support",   bonus: "+15% Empathy XP" },
-    { name: "Project Coordinator", realWorld: "Keeps teams stable when everything is uncertain",  bonus: "+10% Organization XP" },
+  ISFJ: [
+    { name: "Nurse", realWorld: "Cares with skill and unwavering dedication", bonus: "+15% Empathy XP" },
+    { name: "Librarian", realWorld: "Curates knowledge for those who seek it", bonus: "+10% Knowledge XP" },
+    { name: "Social Worker", realWorld: "Protects the vulnerable with steady resolve", bonus: "+15% Service XP" },
   ],
-  Warlord: [
-    { name: "Executive",           realWorld: "Makes decisive calls that move entire organizations", bonus: "+15% Authority XP" },
-    { name: "General Contractor",  realWorld: "Commands complex builds from blueprint to done",   bonus: "+10% Execution XP" },
-    { name: "Sports Coach",        realWorld: "Turns a group of individuals into a winning team", bonus: "+15% Strategy XP" },
+  ESTJ: [
+    { name: "Operations Manager", realWorld: "Turns chaos into clockwork", bonus: "+15% Efficiency XP" },
+    { name: "Military Leader", realWorld: "Commands with clarity and conviction", bonus: "+10% Authority XP" },
+    { name: "Executive", realWorld: "Drives results through structure", bonus: "+15% Leadership XP" },
   ],
-  Diplomat: [
-    { name: "HR Director",         realWorld: "Holds the culture and people together",            bonus: "+15% Harmony XP" },
-    { name: "Event Planner",       realWorld: "Creates experiences that unite people",            bonus: "+10% Coordination XP" },
-    { name: "Public Relations",    realWorld: "Shapes how the world sees the story",              bonus: "+15% Communication XP" },
+  ESFJ: [
+    { name: "HR Director", realWorld: "Builds cultures where people thrive", bonus: "+15% Community XP" },
+    { name: "Event Planner", realWorld: "Creates gatherings that bring people together", bonus: "+10% Social XP" },
+    { name: "Customer Success", realWorld: "Ensures every person feels valued", bonus: "+15% Service XP" },
   ],
-  Rogue: [
-    { name: "Mechanic / Technician", realWorld: "Masters tools others can't even touch",         bonus: "+15% Hands-on XP" },
-    { name: "Special Ops",         realWorld: "Precise execution under extreme pressure",         bonus: "+15% Discipline XP" },
-    { name: "Security Researcher", realWorld: "Finds the exploit no one else notices",            bonus: "+10% Problem-solving XP" },
+  ISTP: [
+    { name: "Mechanic", realWorld: "Understands how things work at every level", bonus: "+15% Technical XP" },
+    { name: "Forensic Analyst", realWorld: "Reads evidence others overlook", bonus: "+10% Analysis XP" },
+    { name: "Pilot", realWorld: "Masters complex systems under pressure", bonus: "+15% Precision XP" },
   ],
-  Ranger: [
-    { name: "Photographer",        realWorld: "Captures beauty others walk past",                bonus: "+15% Observation XP" },
-    { name: "Naturalist",          realWorld: "Lives in harmony with the world's hidden rhythms", bonus: "+10% Awareness XP" },
-    { name: "Physical Therapist",  realWorld: "Restores bodies through patient, precise care",    bonus: "+15% Care XP" },
+  ISFP: [
+    { name: "Graphic Designer", realWorld: "Turns feeling into visual language", bonus: "+15% Creative XP" },
+    { name: "Musician", realWorld: "Communicates what words cannot", bonus: "+10% Expression XP" },
+    { name: "Veterinarian", realWorld: "Heals with gentle intuition", bonus: "+15% Empathy XP" },
   ],
-  Berserker: [
-    { name: "Athlete",             realWorld: "Pushes the body and mind past every limit",        bonus: "+15% Fitness XP" },
-    { name: "Sales Director",      realWorld: "Charges into every room and wins",                bonus: "+10% Drive XP" },
-    { name: "First Responder",     realWorld: "Runs toward the crisis everyone else flees",       bonus: "+15% Courage XP" },
+  ESTP: [
+    { name: "Sales Director", realWorld: "Closes deals others can't even start", bonus: "+15% Persuasion XP" },
+    { name: "Firefighter", realWorld: "Acts decisively when others freeze", bonus: "+10% Courage XP" },
+    { name: "Athlete", realWorld: "Pushes limits through relentless action", bonus: "+15% Endurance XP" },
   ],
-  Dancer: [
-    { name: "Performer",           realWorld: "Lives fully in every moment on stage",             bonus: "+15% Expression XP" },
-    { name: "Hospitality Manager", realWorld: "Makes every guest feel like the only one",         bonus: "+10% Presence XP" },
-    { name: "Brand Ambassador",    realWorld: "Embodies the energy that attracts others",         bonus: "+15% Charisma XP" },
+  ESFP: [
+    { name: "Performer", realWorld: "Commands attention and lifts spirits", bonus: "+15% Charisma XP" },
+    { name: "Tour Guide", realWorld: "Makes every experience unforgettable", bonus: "+10% Social XP" },
+    { name: "Chef", realWorld: "Turns raw ingredients into moments of joy", bonus: "+15% Creative XP" },
   ],
 };
 
-// 8 questions — 2 per MBTI dimension — for more accurate typing
-const questions = [
-  // E/I
+// Navi combat classes — separate from operator MBTI type
+export const NAVI_COMBAT_CLASSES = [
+  { name: "Sorcerer", desc: "Wields digital arcana and system-level spells", bonus: "+10% Magic XP" },
+  { name: "Warrior", desc: "Frontline combatant with raw offensive power", bonus: "+10% Strength XP" },
+  { name: "Alchemist", desc: "Transmutes data into potions and buffs", bonus: "+10% Crafting XP" },
+  { name: "Healer", desc: "Restores HP and clears status debuffs", bonus: "+10% Recovery XP" },
+  { name: "Ranger", desc: "Precision strikes and environmental awareness", bonus: "+10% Accuracy XP" },
+  { name: "Assassin", desc: "Stealth operations and critical-hit specialist", bonus: "+10% Stealth XP" },
+  { name: "Paladin", desc: "Balanced defense and holy-type offense", bonus: "+10% Defense XP" },
+  { name: "Necromancer", desc: "Summons echoes of past data and memories", bonus: "+10% Summoning XP" },
+  { name: "Bard", desc: "Buffs through rhythm, morale, and resonance", bonus: "+10% Support XP" },
+  { name: "Berserker", desc: "Overwhelming power at the cost of control", bonus: "+10% Fury XP" },
+];
+
+interface Props {
+  onComplete: (mbti: string, charClass: string) => void;
+}
+
+const QUESTIONS = [
   {
-    dimension: "EI",
-    question: "After a long, demanding mission — how do you recover?",
-    options: [
-      { label: "Alone. I need quiet time to process and recharge.", value: "I" },
-      { label: "With others. People and conversation restore me.", value: "E" },
+    q: "When faced with a complex problem, you prefer to:",
+    a: [
+      { text: "Analyze it systematically, breaking it into parts", axis: "T" },
+      { text: "Consider how it affects the people involved first", axis: "F" },
     ],
   },
   {
-    dimension: "EI",
-    question: "In a group strategy session, you tend to...",
-    options: [
-      { label: "Think it through internally before speaking.", value: "I" },
-      { label: "Think out loud — talking helps me figure it out.", value: "E" },
-    ],
-  },
-  // S/N
-  {
-    dimension: "SN",
-    question: "When analyzing a new quest, you focus on...",
-    options: [
-      { label: "Concrete facts, proven methods, and what's worked before.", value: "S" },
-      { label: "Patterns, possibilities, and what could be discovered.", value: "N" },
+    q: "At a social event, you tend to:",
+    a: [
+      { text: "Engage with many different people energetically", axis: "E" },
+      { text: "Have deeper conversations with a select few", axis: "I" },
     ],
   },
   {
-    dimension: "SN",
-    question: "You trust information more when it is...",
-    options: [
-      { label: "Grounded in real, observable evidence.", value: "S" },
-      { label: "Part of a bigger pattern or theory.", value: "N" },
-    ],
-  },
-  // T/F
-  {
-    dimension: "TF",
-    question: "When making a hard call, you default to...",
-    options: [
-      { label: "Logic and objective analysis, even if it's uncomfortable.", value: "T" },
-      { label: "Values and impact on people, even if the math is messier.", value: "F" },
+    q: "When planning a project, you prefer:",
+    a: [
+      { text: "A detailed plan with clear milestones", axis: "J" },
+      { text: "A flexible approach that adapts as you go", axis: "P" },
     ],
   },
   {
-    dimension: "TF",
-    question: "A teammate underperforms. Your first response is...",
-    options: [
-      { label: "Identify the root cause and fix the system.", value: "T" },
-      { label: "Check in — find out what they're going through.", value: "F" },
-    ],
-  },
-  // J/P
-  {
-    dimension: "JP",
-    question: "Your ideal approach to a long-term quest is...",
-    options: [
-      { label: "Structured plan with clear milestones and deadlines.", value: "J" },
-      { label: "Flexible — adapt as I learn more, stay open to pivots.", value: "P" },
+    q: "You trust more in:",
+    a: [
+      { text: "Concrete facts and proven experience", axis: "S" },
+      { text: "Patterns, possibilities, and intuition", axis: "N" },
     ],
   },
   {
-    dimension: "JP",
-    question: "How do you feel when plans change at the last minute?",
-    options: [
-      { label: "Disrupted — I prefer knowing what to expect.", value: "J" },
-      { label: "Fine, even energized — new variables are interesting.", value: "P" },
+    q: "After a long day, you recharge by:",
+    a: [
+      { text: "Going out with friends or to an event", axis: "E" },
+      { text: "Spending quiet time alone with your thoughts", axis: "I" },
+    ],
+  },
+  {
+    q: "When making decisions, you value:",
+    a: [
+      { text: "Logic and consistency above all", axis: "T" },
+      { text: "Harmony and personal values", axis: "F" },
+    ],
+  },
+  {
+    q: "You are more drawn to:",
+    a: [
+      { text: "What is real and present right now", axis: "S" },
+      { text: "What could be in the future", axis: "N" },
+    ],
+  },
+  {
+    q: "Your workspace is typically:",
+    a: [
+      { text: "Organized and structured", axis: "J" },
+      { text: "Flexible with creative chaos", axis: "P" },
+    ],
+  },
+  {
+    q: "In conversations, you prefer to:",
+    a: [
+      { text: "Think out loud and brainstorm with others", axis: "E" },
+      { text: "Reflect internally before sharing your thoughts", axis: "I" },
+    ],
+  },
+  {
+    q: "When learning something new, you prefer:",
+    a: [
+      { text: "Step-by-step practical instructions", axis: "S" },
+      { text: "Understanding the big picture and theory first", axis: "N" },
+    ],
+  },
+  {
+    q: "In a team conflict, you prioritize:",
+    a: [
+      { text: "Finding the objectively correct solution", axis: "T" },
+      { text: "Making sure everyone feels heard", axis: "F" },
+    ],
+  },
+  {
+    q: "You prefer your schedule to be:",
+    a: [
+      { text: "Planned and predictable", axis: "J" },
+      { text: "Open-ended with room for spontaneity", axis: "P" },
     ],
   },
 ];
 
-// Tally answers: pick the dominant letter per dimension
-function tallyMBTI(answers: string[]): string {
-  const counts: Record<string, number> = { E: 0, I: 0, S: 0, N: 0, T: 0, F: 0, J: 0, P: 0 };
-  for (const a of answers) counts[a] = (counts[a] || 0) + 1;
-  const ei = (counts["E"] || 0) >= (counts["I"] || 0) ? "E" : "I";
-  const sn = (counts["S"] || 0) >= (counts["N"] || 0) ? "S" : "N";
-  const tf = (counts["T"] || 0) >= (counts["F"] || 0) ? "T" : "F";
-  const jp = (counts["J"] || 0) >= (counts["P"] || 0) ? "J" : "P";
-  return `${ei}${sn}${tf}${jp}`;
-}
-
-interface MbtiQuizProps {
-  onComplete: (mbtiType: string, characterClass: string) => void;
-}
-
-export default function MbtiQuiz({ onComplete }: MbtiQuizProps) {
+export default function MbtiQuiz({ onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
 
-  const handleAnswer = (value: string) => {
-    const newAnswers = [...answers, value];
+  const handleAnswer = (axis: string) => {
+    const newAnswers = [...answers, axis];
     setAnswers(newAnswers);
 
-    if (step < questions.length - 1) {
+    if (step < QUESTIONS.length - 1) {
       setStep(step + 1);
     } else {
-      const mbti = tallyMBTI(newAnswers);
-      const result = MBTI_CLASS_MAP[mbti] || MBTI_CLASS_MAP["INTJ"];
-      onComplete(mbti, result.class);
+      // Calculate MBTI
+      const count = (letter: string) => newAnswers.filter((a) => a === letter).length;
+      const mbti = [
+        count("E") >= count("I") ? "E" : "I",
+        count("S") >= count("N") ? "S" : "N",
+        count("T") >= count("F") ? "T" : "F",
+        count("J") >= count("P") ? "J" : "P",
+      ].join("");
+
+      const classInfo = MBTI_CLASS_MAP[mbti];
+      // Character class = MBTI type itself
+      onComplete(mbti, classInfo?.class || mbti);
     }
   };
 
-  const goBack = () => {
-    if (step > 0) {
-      setStep(step - 1);
-      setAnswers((prev) => prev.slice(0, -1));
-    }
-  };
-
-  const q = questions[step];
-  const progress = Math.round((step / questions.length) * 100);
+  const current = QUESTIONS[step];
 
   return (
-    <HudCard title="PERSONALITY CALIBRATION" icon={<Brain size={14} />} glow>
-      {/* Progress bar */}
-      <div className="mb-4">
-        <div className="flex justify-between items-center mb-1">
-          <p className="text-[10px] font-mono text-muted-foreground">
-            QUESTION {step + 1} OF {questions.length} // DIMENSION: {q.dimension}
-          </p>
-          <p className="text-[10px] font-mono text-primary">{progress}%</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <HudCard title="OPERATOR CALIBRATION" icon={<Brain size={14} />} glow>
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[10px] font-mono text-muted-foreground">
+              QUESTION {step + 1}/{QUESTIONS.length}
+            </span>
+            <span className="text-[10px] font-mono text-primary">
+              {Math.round(((step + 1) / QUESTIONS.length) * 100)}%
+            </span>
+          </div>
+          <div className="w-full h-1 bg-muted rounded overflow-hidden">
+            <motion.div
+              className="h-full bg-primary"
+              initial={{ width: 0 }}
+              animate={{ width: `${((step + 1) / QUESTIONS.length) * 100}%` }}
+              transition={{ duration: 0.3 }}
+            />
+          </div>
         </div>
-        <div className="h-1 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
 
-      <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-        <p className="text-sm font-body mb-5 leading-relaxed">{q.question}</p>
+        <p className="text-sm font-body mb-4">{current.q}</p>
+
         <div className="space-y-2">
-          {q.options.map((opt) => (
+          {current.a.map((answer, i) => (
             <Button
-              key={opt.value}
+              key={i}
               variant="outline"
-              className="w-full justify-start text-left h-auto py-3 px-4 text-sm font-body border-border hover:border-primary/40 hover:bg-primary/5"
-              onClick={() => handleAnswer(opt.value)}
+              className="w-full justify-start text-left text-sm font-body h-auto py-3 hover:border-primary/50 hover:bg-primary/5"
+              onClick={() => handleAnswer(answer.axis)}
             >
-              {opt.label}
+              {answer.text}
             </Button>
           ))}
         </div>
-      </motion.div>
-
-      {step > 0 && (
-        <button
-          onClick={goBack}
-          className="mt-4 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
-        >
-          ← BACK
-        </button>
-      )}
-    </HudCard>
+      </HudCard>
+    </motion.div>
   );
 }
-
-
-
-

@@ -289,6 +289,19 @@ export default function MavisChat() {
       </div>
 
       <div className="border border-border rounded bg-card flex items-center gap-2 p-2 border-glow">
+        {/* Glowing Navi orb */}
+        <div className="relative w-8 h-8 shrink-0 flex items-center justify-center">
+          <motion.div
+            className="absolute inset-0 rounded-full bg-primary/20"
+            animate={isLoading ? { scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] } : { scale: 1, opacity: 0.15 }}
+            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}}
+          />
+          <motion.div
+            className="w-4 h-4 rounded-full bg-primary"
+            animate={isLoading ? { scale: [0.8, 1.1, 0.8], boxShadow: ["0 0 8px hsl(var(--primary))", "0 0 20px hsl(var(--primary))", "0 0 8px hsl(var(--primary))"] } : { scale: 1, boxShadow: "0 0 6px hsl(var(--primary) / 0.4)" }}
+            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}}
+          />
+        </div>
         <input
           type="text"
           value={input}

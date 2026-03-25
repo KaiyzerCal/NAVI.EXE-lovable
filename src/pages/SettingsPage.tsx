@@ -1,134 +1,219 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Settings, User, Bell, Shield, Database } from "lucide-react";
-import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Settings, User, Bell, Database, Shield, Check } from "lucide-react";
+import { useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
-import { Switch } from "@/components/ui/switch";
+import { toast } from "@/hooks/use-toast";
 
-const OPERATOR_CLASSES = [
-  "Technomancer", "Warrior", "Scholar", "Alchemist",
-  "Shadowblade", "Artificer", "Strategist", "Sentinel",
-  "Chronomancer", "Beastmaster", "Enchanter", "Vanguard",
-];
+const ENCOURAGEMENT_OPTIONS = ["Low", "Moderate", "High"] as const;
+const STYLE_OPTIONS = ["Casual", "Direct", "Poetic", "Technical"] as const;
+const HUMOR_OPTIONS = ["None", "Low", "Moderate", "High"] as const;
+const FORMALITY_OPTIONS = ["Chill", "Balanced", "Professional"] as const;
 
-const NAVI_PERSONALITIES = [
-  { value: "ANALYTICAL", label: "Analytical", desc: "Logic-driven, precise" },
-  { value: "GUARDIAN", label: "Guardian", desc: "Protective, steady" },
-  { value: "HYPE", label: "Hype", desc: "High energy, motivating" },
-  { value: "SHADOW", label: "Shadow", desc: "Mysterious, deliberate" },
-  { value: "ROGUE", label: "Rogue", desc: "Sharp wit, clever" },
-  { value: "SAGE", label: "Sage", desc: "Tactical, optimizing" },
-  { value: "COMPANION", label: "Companion", desc: "Empathetic, warm" },
-  { value: "CHALLENGER", label: "Challenger", desc: "Pushes limits, competitive" },
-  { value: "ARCHITECT", label: "Architect", desc: "Systems thinker, builder" },
-  { value: "WILDCARD", label: "Wildcard", desc: "Unpredictable, creative" },
-];
+type EncouragementLevel = typeof ENCOURAGEMENT_OPTIONS[number];
+type StyleLevel = typeof STYLE_OPTIONS[number];
+type HumorLevel = typeof HUMOR_OPTIONS[number];
+type FormalityLevel = typeof FORMALITY_OPTIONS[number];
 
-const ENCOURAGEMENT_LEVELS = ["Minimal", "Low", "Moderate", "High", "Maximum"];
-const COMM_STYLES = ["Blunt", "Direct", "Balanced", "Gentle", "Poetic"];
-const HUMOR_LEVELS = ["None", "Dry", "Moderate", "High", "Chaotic"];
-const FORMALITY_LEVELS = ["Casual", "Relaxed", "Balanced", "Professional", "Formal"];
+interface NaviPersonalitySettings {
+  encouragement: EncouragementLevel;
+  style: StyleLevel;
+  humor: HumorLevel;
+  formality: FormalityLevel;
+}
+
+function OptionRow<T extends string>({
+  label,
+  description,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  options: readonly T[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div>
+        <p className="text-sm font-body">{label}</p>
+        <p className="text-[10px] font-mono text-muted-foreground">{description}</p>
+      </div>
+      <div className="flex gap-1.5 flex-wrap">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            className={`px-3 py-1.5 rounded text-xs font-mono transition-all flex items-center gap-1.5 ${
+              value === opt
+                ? "bg-primary/10 text-primary border border-primary/40"
+                : "bg-muted border border-border text-muted-foreground hover:border-primary/20 hover:text-foreground"
+            }`}
+          >
+            {value === opt && <Check size={10} />}
+            {opt.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { profile, updateProfile } = useProfile();
-  const [name, setName] = useState("");
+
+  // Parse persisted navi_personality JSON or use defaults
+  const parsePersonality = (): NaviPersonalitySettings => {
+    try {
+      const raw = profile.navi_personality;
+      if (raw && raw.startsWith("{")) {
+        return JSON.parse(raw);
+      }
+    } catch {}
+    return { encouragement: "High", style: "Direct", humor: "Moderate", formality: "Balanced" };
+  };
+
+  const [personality, setPersonality] = useState<NaviPersonalitySettings>(parsePersonality);
+  const [saving, setSaving] = useState(false);
+  const [displayName, setDisplayName] = useState(profile.display_name || "");
+
+  // Auto-save personality changes immediately
+  const updatePersonality = async (updates: Partial<NaviPersonalitySettings>) => {
+    const next = { ...personality, ...updates };
+    setPersonality(next);
+    // Store as JSON string so chatService can read all fields
+    await updateProfile({ navi_personality: JSON.stringify(next) });
+  };
+
+  const saveProfile = async () => {
+    setSaving(true);
+    try {
+      await updateProfile({ display_name: displayName });
+      toast({ title: "Profile saved", description: "Operator name updated." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const [notifications, setNotifications] = useState({
     questReminders: true,
     streakWarnings: true,
     xpMilestones: false,
     dailySummary: true,
-    levelUps: true,
-    bondEvents: false,
   });
 
-  useEffect(() => {
-    if (profile.display_name) setName(profile.display_name);
-  }, [profile.display_name]);
-
-  const selectClass = "w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors";
-  const miniSelect = "bg-muted border border-border rounded px-2 py-1 text-xs font-mono text-foreground outline-none";
+  const toggleNotif = (key: keyof typeof notifications) => {
+    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   return (
     <div>
       <PageHeader title="SETTINGS" subtitle="// SYSTEM CONFIG" />
+
       <div className="space-y-4">
+        {/* Profile */}
         <HudCard title="PROFILE" icon={<User size={14} />}>
           <div className="space-y-3">
             <div>
               <label className="text-xs font-mono text-muted-foreground block mb-1">OPERATOR NAME</label>
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => updateProfile({ display_name: name })}
-                className={selectClass}
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors"
               />
             </div>
             <div>
               <label className="text-xs font-mono text-muted-foreground block mb-1">CLASS</label>
-              <select
-                value={profile.character_class || ""}
-                onChange={(e) => updateProfile({ character_class: e.target.value })}
-                className={selectClass}
-              >
-                <option value="">Select Class...</option>
-                {OPERATOR_CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-        </HudCard>
-
-        <HudCard title="NAVI PERSONALITY" icon={<Shield size={14} />}>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-mono text-muted-foreground block mb-1">PERSONALITY MODE</label>
-              <select
-                value={profile.navi_personality}
-                onChange={(e) => updateProfile({ navi_personality: e.target.value })}
-                className={selectClass}
-              >
-                {NAVI_PERSONALITIES.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label} — {p.desc}</option>
-                ))}
-              </select>
-            </div>
-            {[
-              { label: "Encouragement", options: ENCOURAGEMENT_LEVELS },
-              { label: "Communication Style", options: COMM_STYLES },
-              { label: "Humor", options: HUMOR_LEVELS },
-              { label: "Formality", options: FORMALITY_LEVELS },
-            ].map((s) => (
-              <div key={s.label} className="flex items-center justify-between">
-                <span className="text-sm font-body">{s.label}</span>
-                <select className={miniSelect}>
-                  {s.options.map((o) => <option key={o}>{o}</option>)}
-                </select>
+              <div className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-muted-foreground">
+                {profile.character_class || "Not assigned — take the MBTI quiz on the Character page"}
               </div>
-            ))}
+            </div>
+            <button
+              onClick={saveProfile}
+              disabled={saving}
+              className="px-4 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors disabled:opacity-50"
+            >
+              {saving ? "SAVING..." : "SAVE PROFILE"}
+            </button>
           </div>
         </HudCard>
 
+        {/* Navi Personality — fully persisted */}
+        <HudCard title="NAVI PERSONALITY" icon={<Shield size={14} />} glow>
+          <p className="text-[10px] font-mono text-muted-foreground mb-4">
+            CHANGES SAVE AUTOMATICALLY AND PERSIST ACROSS SESSIONS
+          </p>
+          <div className="space-y-5">
+            <OptionRow
+              label="Encouragement Level"
+              description="How much your Navi cheers you on"
+              options={ENCOURAGEMENT_OPTIONS}
+              value={personality.encouragement}
+              onChange={(v) => updatePersonality({ encouragement: v })}
+            />
+            <OptionRow
+              label="Communication Style"
+              description="How your Navi frames its messages"
+              options={STYLE_OPTIONS}
+              value={personality.style}
+              onChange={(v) => updatePersonality({ style: v })}
+            />
+            <OptionRow
+              label="Humor"
+              description="How much wit and lightness your Navi brings"
+              options={HUMOR_OPTIONS}
+              value={personality.humor}
+              onChange={(v) => updatePersonality({ humor: v })}
+            />
+            <OptionRow
+              label="Formality"
+              description="Tone register — casual ally vs professional partner"
+              options={FORMALITY_OPTIONS}
+              value={personality.formality}
+              onChange={(v) => updatePersonality({ formality: v })}
+            />
+          </div>
+          <div className="mt-4 pt-3 border-t border-border">
+            <p className="text-[10px] font-mono text-muted-foreground">
+              CURRENT PROFILE: Encouragement={personality.encouragement} · Style={personality.style} · Humor={personality.humor} · Formality={personality.formality}
+            </p>
+          </div>
+        </HudCard>
+
+        {/* Notifications */}
         <HudCard title="NOTIFICATIONS" icon={<Bell size={14} />}>
           <div className="space-y-3">
-            {([
-              { key: "questReminders", label: "Quest Reminders" },
-              { key: "streakWarnings", label: "Streak Warnings" },
-              { key: "xpMilestones", label: "XP Milestones" },
-              { key: "dailySummary", label: "Daily Summary" },
-              { key: "levelUps", label: "Level Ups" },
-              { key: "bondEvents", label: "Bond Events" },
-            ] as const).map((n) => (
-              <div key={n.key} className="flex items-center justify-between">
-                <span className="text-sm font-body">{n.label}</span>
-                <Switch
-                  checked={notifications[n.key]}
-                  onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, [n.key]: checked }))}
-                />
-              </div>
-            ))}
+            {(Object.entries(notifications) as [keyof typeof notifications, boolean][]).map(([key, enabled]) => {
+              const labels: Record<keyof typeof notifications, string> = {
+                questReminders: "Quest Reminders",
+                streakWarnings: "Streak Warnings",
+                xpMilestones: "XP Milestones",
+                dailySummary: "Daily Summary",
+              };
+              return (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm font-body">{labels[key]}</span>
+                  <button
+                    onClick={() => toggleNotif(key)}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${enabled ? "bg-primary/30" : "bg-muted"}`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full absolute top-0.5 transition-all ${
+                        enabled ? "right-0.5 bg-primary" : "left-0.5 bg-muted-foreground"
+                      }`}
+                    />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </HudCard>
 
+        {/* Data */}
         <HudCard title="DATA" icon={<Database size={14} />}>
           <div className="flex gap-2">
             <button className="px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors">

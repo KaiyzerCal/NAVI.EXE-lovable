@@ -302,6 +302,7 @@ export default function MavisChat() {
           onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Message NAVI..."
           disabled={isLoading}
           className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50" />
+        <VoiceInput onTranscript={(text) => setInput(text)} disabled={isLoading} />
         <button onClick={sendMessage} disabled={!input.trim() || isLoading}
           className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30">
           {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}

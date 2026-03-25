@@ -22,11 +22,12 @@ function getXpForLevel(level: number): number {
   return Math.floor(50 * level * level + 50 * level);
 }
 
-interface DashboardStats {
-  activeQuests: number;
-  journalEntries: number;
-  achievements: number;
-  quests: { name: string; progress: number; total: number; type: string }[];
+interface ActivityItem {
+  id: string;
+  event_type: string;
+  description: string;
+  xp_amount: number;
+  created_at: string;
 }
 
 export default function Dashboard() {
@@ -37,7 +38,12 @@ export default function Dashboard() {
   const NaviCharComponent = getNaviCharacter(profile.equipped_skin);
   const bondAvg = Math.round((profile.bond_affection + profile.bond_trust + profile.bond_loyalty) / 3);
 
-  const [stats, setStats] = useState<DashboardStats>({ activeQuests: 0, journalEntries: 0, achievements: 0, quests: [] });
+  const [activeQuests, setActiveQuests] = useState<{ name: string; progress: number; total: number; type: string }[]>([]);
+  const [questCount, setQuestCount] = useState(0);
+  const [journalCount, setJournalCount] = useState(0);
+  const [achievementCount, setAchievementCount] = useState(0);
+  const [skillsCount, setSkillsCount] = useState(0);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -45,19 +51,20 @@ export default function Dashboard() {
       supabase.from("quests").select("name, progress, total, type, completed").eq("user_id", user.id),
       supabase.from("journal_entries").select("id", { count: "exact", head: true }).eq("user_id", user.id),
       supabase.from("achievements").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("unlocked", true),
-    ]).then(([questsRes, journalRes, achieveRes]) => {
+      supabase.from("skills" as any).select("id", { count: "exact", head: true }).eq("user_id", user.id),
+      supabase.from("activity_log" as any).select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+    ]).then(([questsRes, journalRes, achieveRes, skillsRes, activityRes]) => {
       const allQuests = questsRes.data || [];
-      const active = allQuests.filter((q) => !q.completed);
-      setStats({
-        activeQuests: active.length,
-        journalEntries: journalRes.count || 0,
-        achievements: achieveRes.count || 0,
-        quests: active.slice(0, 4),
-      });
+      const active = allQuests.filter((q: any) => !q.completed);
+      setActiveQuests(active.slice(0, 4) as any);
+      setQuestCount(active.length);
+      setJournalCount(journalRes.count || 0);
+      setAchievementCount(achieveRes.count || 0);
+      setSkillsCount(skillsRes.count || 0);
+      setRecentActivity((activityRes.data || []) as unknown as ActivityItem[]);
     });
   }, [user]);
 
-  // Compute level from xp_total
   let operatorLevel = 1;
   while (operatorLevel < 100 && profile.xp_total >= getXpForLevel(operatorLevel)) operatorLevel++;
   const xpCurrent = profile.xp_total - (operatorLevel > 1 ? getXpForLevel(operatorLevel - 1) : 0);
@@ -147,12 +154,12 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* Stats Grid — live data */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "ACTIVE QUESTS", value: String(stats.activeQuests), icon: <Swords size={16} />, color: "text-neon-amber" },
-          { label: "ACHIEVEMENTS", value: String(stats.achievements), icon: <Star size={16} />, color: "text-neon-purple" },
-          { label: "JOURNAL ENTRIES", value: String(stats.journalEntries), icon: <BookOpen size={16} />, color: "text-neon-green" },
+          { label: "ACTIVE QUESTS", value: String(questCount), icon: <Swords size={16} />, color: "text-neon-amber" },
+          { label: "SKILLS", value: String(skillsCount), icon: <Star size={16} />, color: "text-neon-purple" },
+          { label: "JOURNAL ENTRIES", value: String(journalCount), icon: <BookOpen size={16} />, color: "text-neon-green" },
           { label: "STREAK", value: `${profile.current_streak}d`, icon: <Activity size={16} />, color: "text-neon-cyan" },
         ].map((stat, i) => (
           <motion.div key={stat.label} {...fadeIn} transition={{ delay: i * 0.05 }}>
@@ -163,15 +170,15 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Bottom Grid — live quests */}
+      {/* Bottom Grid */}
       <div className="grid lg:grid-cols-2 gap-4">
         <motion.div {...fadeIn} transition={{ delay: 0.2 }}>
           <HudCard title="ACTIVE QUESTS" icon={<Swords size={14} />} glow>
             <div className="space-y-3">
-              {stats.quests.length === 0 ? (
+              {activeQuests.length === 0 ? (
                 <p className="text-xs font-mono text-muted-foreground">No active quests. Start one from the Quests tab.</p>
               ) : (
-                stats.quests.map((quest) => (
+                activeQuests.map((quest) => (
                   <div key={quest.name} className="flex items-center gap-3">
                     <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                       quest.type === "Epic" ? "bg-neon-purple/10 text-neon-purple" : "bg-neon-amber/10 text-neon-amber"
@@ -191,28 +198,18 @@ export default function Dashboard() {
         </motion.div>
 
         <motion.div {...fadeIn} transition={{ delay: 0.25 }}>
-          <HudCard title="OPERATOR STATUS" icon={<TrendingUp size={14} />} glow>
+          <HudCard title="RECENT ACTIVITY" icon={<TrendingUp size={14} />} glow>
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-mono">
-                <span className="text-muted-foreground">Total XP</span>
-                <span className="text-neon-green">{profile.xp_total}</span>
-              </div>
-              <div className="flex justify-between text-xs font-mono">
-                <span className="text-muted-foreground">Current Streak</span>
-                <span className="text-neon-cyan">{profile.current_streak} days</span>
-              </div>
-              <div className="flex justify-between text-xs font-mono">
-                <span className="text-muted-foreground">Longest Streak</span>
-                <span className="text-neon-amber">{profile.longest_streak} days</span>
-              </div>
-              <div className="flex justify-between text-xs font-mono">
-                <span className="text-muted-foreground">Navi Bond</span>
-                <span className="text-secondary">{bondAvg}%</span>
-              </div>
-              <div className="flex justify-between text-xs font-mono">
-                <span className="text-muted-foreground">Navi Level</span>
-                <span className="text-primary">{profile.navi_level}/100</span>
-              </div>
+              {recentActivity.length === 0 ? (
+                <p className="text-xs font-mono text-muted-foreground">No recent activity yet.</p>
+              ) : (
+                recentActivity.slice(0, 6).map((item) => (
+                  <div key={item.id} className="flex justify-between text-xs font-mono">
+                    <span className="text-muted-foreground truncate mr-2">{item.description}</span>
+                    {item.xp_amount > 0 && <span className="text-neon-green shrink-0">+{item.xp_amount} XP</span>}
+                  </div>
+                ))
+              )}
             </div>
           </HudCard>
         </motion.div>

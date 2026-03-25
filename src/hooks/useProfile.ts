@@ -44,6 +44,12 @@ const defaults: ProfileData = {
   user_navi_description: null,
   last_active: null,
   subclass: null,
+  notification_settings: {
+    questReminders: true,
+    streakWarnings: true,
+    xpMilestones: false,
+    dailySummary: true,
+  },
 };
 
 export function useProfile() {

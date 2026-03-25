@@ -96,7 +96,6 @@ export default function MavisChat() {
 
   const clearThread = useCallback(async () => {
     if (!user) return;
-    // Create a new conversation for a fresh thread
     const { data: newConv } = await supabase
       .from("chat_conversations")
       .insert({ user_id: user.id, title: "NAVI Session" })
@@ -142,7 +141,6 @@ export default function MavisChat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Build full app context for the AI
   const buildContext = useCallback(async () => {
     if (!user) return {};
     const [questsRes, skillsRes, journalRes, achieveRes, mediaRes, equipRes, buffsRes] = await Promise.all([
@@ -224,7 +222,6 @@ export default function MavisChat() {
           });
         },
         onDone: async () => {
-          // Parse and execute any actions
           const { cleanText, actions } = parseActions(assistantContent);
           const displayContent = cleanText || assistantContent;
 
@@ -255,7 +252,7 @@ export default function MavisChat() {
 
   if (dbLoading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-2rem)] items-center justify-center">
+      <div className="flex flex-col h-[calc(100dvh-4rem)] items-center justify-center">
         <Loader2 className="animate-spin text-primary" size={24} />
         <p className="text-xs font-mono text-muted-foreground mt-2">Loading neural link...</p>
       </div>
@@ -263,30 +260,32 @@ export default function MavisChat() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
-        <button onClick={clearThread}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors">
-          <Trash2 size={12} /> CLEAR THREAD
-        </button>
-      </PageHeader>
+    <div className="flex flex-col h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)]">
+      <div className="shrink-0">
+        <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
+          <button onClick={clearThread}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors">
+            <Trash2 size={12} /> CLEAR
+          </button>
+        </PageHeader>
+      </div>
 
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
+      <div className="flex-1 overflow-y-auto space-y-3 mb-2 pr-1 min-h-0">
         {messages.map((msg) => (
           <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-            <div className={`w-8 h-8 rounded shrink-0 flex items-center justify-center ${
+            <div className={`w-7 h-7 rounded shrink-0 flex items-center justify-center ${
               msg.role === "assistant" ? "bg-primary/10 border border-primary/30" : "bg-secondary/10 border border-secondary/30"
             }`}>
-              {msg.role === "assistant" ? <Bot size={14} className="text-primary" /> : <User size={14} className="text-secondary" />}
+              {msg.role === "assistant" ? <Bot size={12} className="text-primary" /> : <User size={12} className="text-secondary" />}
             </div>
-            <div className={`max-w-[75%] rounded px-3 py-2 ${
+            <div className={`max-w-[80%] rounded px-3 py-2 ${
               msg.role === "assistant" ? "bg-card border border-border" : "bg-secondary/10 border border-secondary/20"
             }`}>
               <div className={`text-sm prose prose-invert prose-sm max-w-none ${msg.role === "assistant" ? "font-mono" : "font-body"}`}>
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
-              <p className="text-[10px] font-mono text-muted-foreground mt-1">
+              <p className="text-[9px] font-mono text-muted-foreground mt-1">
                 {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
@@ -295,23 +294,46 @@ export default function MavisChat() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="border border-border rounded bg-card flex items-center gap-2 p-2 border-glow">
-        <div className="relative w-8 h-8 shrink-0 flex items-center justify-center">
-          <motion.div className="absolute inset-0 rounded-full bg-primary/20"
-            animate={isLoading ? { scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] } : { scale: 1, opacity: 0.15 }}
-            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}} />
-          <motion.div className="w-4 h-4 rounded-full bg-primary"
-            animate={isLoading ? { scale: [0.8, 1.1, 0.8], boxShadow: ["0 0 8px hsl(var(--primary))", "0 0 20px hsl(var(--primary))", "0 0 8px hsl(var(--primary))"] }
-              : { scale: 1, boxShadow: "0 0 6px hsl(var(--primary) / 0.4)" }}
-            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}} />
+      {/* Input bar - always visible at bottom */}
+      <div className="shrink-0 border border-border rounded bg-card flex items-center gap-2 p-2 border-glow">
+        {/* Enhanced Navi Orb */}
+        <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
+          {/* Outer ring */}
+          <motion.div
+            className="absolute inset-0 rounded-full border border-primary/30"
+            animate={isLoading
+              ? { scale: [1, 1.3, 1], opacity: [0.2, 0.5, 0.2], borderColor: ["hsl(var(--primary) / 0.3)", "hsl(var(--primary) / 0.7)", "hsl(var(--primary) / 0.3)"] }
+              : { scale: 1, opacity: 0.2 }}
+            transition={isLoading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
+          />
+          {/* Middle glow ring */}
+          <motion.div
+            className="absolute inset-1 rounded-full bg-primary/10"
+            animate={isLoading
+              ? { scale: [1, 1.2, 1], opacity: [0.15, 0.4, 0.15] }
+              : { scale: 1, opacity: 0.1 }}
+            transition={isLoading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.15 } : {}}
+          />
+          {/* Core orb with gradient */}
+          <motion.div
+            className="w-4 h-4 rounded-full"
+            style={{ background: "radial-gradient(circle at 35% 35%, hsl(var(--primary)), hsl(var(--secondary)))" }}
+            animate={isLoading
+              ? { scale: [0.85, 1.15, 0.85], boxShadow: ["0 0 6px 2px hsl(var(--primary) / 0.3)", "0 0 16px 4px hsl(var(--primary) / 0.6)", "0 0 6px 2px hsl(var(--primary) / 0.3)"] }
+              : { scale: 1, boxShadow: "0 0 8px 2px hsl(var(--primary) / 0.25)" }}
+            transition={isLoading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
+          />
+          {/* Highlight dot */}
+          <div className="absolute w-1.5 h-1.5 rounded-full bg-white/60 top-[38%] left-[38%] blur-[0.5px]" />
         </div>
+
         <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Message NAVI..."
           disabled={isLoading}
-          className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50" />
+          className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-1 disabled:opacity-50 min-w-0" />
         <VoiceInput onTranscript={(text) => setInput(text)} disabled={isLoading} />
         <button onClick={sendMessage} disabled={!input.trim() || isLoading}
-          className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30">
+          className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30 shrink-0">
           {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
         </button>
       </div>

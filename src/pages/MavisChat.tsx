@@ -7,6 +7,8 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
 import { getOrCreateConversation, loadMessages, saveMessage, type ChatMessage } from "@/lib/chatService";
+import { parseActions, executeAction } from "@/lib/naviActions";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DisplayMessage {
   id: string;
@@ -91,25 +93,31 @@ export default function MavisChat() {
   const [dbLoading, setDbLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const clearThread = useCallback(() => {
+  const clearThread = useCallback(async () => {
+    if (!user) return;
+    // Create a new conversation for a fresh thread
+    const { data: newConv } = await supabase
+      .from("chat_conversations")
+      .insert({ user_id: user.id, title: "NAVI Session" })
+      .select("id")
+      .single();
+    if (newConv) {
+      setConversationId(newConv.id);
+    }
     setMessages([INITIAL_MESSAGE]);
     toast({ title: "Thread cleared", description: "Neural link refreshed." });
-  }, []);
+  }, [user]);
 
-  // Load conversation on mount
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-
     (async () => {
       try {
         const convId = await getOrCreateConversation(user.id);
         if (cancelled) return;
         setConversationId(convId);
-
         const dbMessages = await loadMessages(convId);
         if (cancelled) return;
-
         if (dbMessages.length > 0) {
           setMessages(
             dbMessages.map((m) => ({
@@ -126,13 +134,44 @@ export default function MavisChat() {
         if (!cancelled) setDbLoading(false);
       }
     })();
-
     return () => { cancelled = true; };
   }, [user]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Build full app context for the AI
+  const buildContext = useCallback(async () => {
+    if (!user) return {};
+    const [questsRes, skillsRes, journalRes, achieveRes] = await Promise.all([
+      supabase.from("quests").select("id, name, type, progress, total, xp_reward, completed").eq("user_id", user.id),
+      supabase.from("skills" as any).select("id, name, category, level, max_level, xp").eq("user_id", user.id),
+      supabase.from("journal_entries").select("id, title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+      supabase.from("achievements").select("id, name, unlocked").eq("user_id", user.id),
+    ]);
+
+    return {
+      navi_name: profile.navi_name,
+      display_name: profile.display_name,
+      navi_level: profile.navi_level,
+      navi_personality: profile.navi_personality,
+      xp_total: profile.xp_total,
+      current_streak: profile.current_streak,
+      longest_streak: profile.longest_streak,
+      user_navi_description: profile.user_navi_description,
+      bond_affection: profile.bond_affection,
+      bond_trust: profile.bond_trust,
+      bond_loyalty: profile.bond_loyalty,
+      character_class: profile.character_class,
+      mbti_type: profile.mbti_type,
+      equipped_skin: profile.equipped_skin,
+      quests: questsRes.data || [],
+      skills: skillsRes.data || [],
+      journal_entries: (journalRes.data || []).map((j: any) => ({ id: j.id, title: j.title, date: j.created_at })),
+      achievements: achieveRes.data || [],
+    };
+  }, [user, profile]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || !user || !conversationId) return;
@@ -141,7 +180,6 @@ export default function MavisChat() {
     setInput("");
     setIsLoading(true);
 
-    // Save user message to DB
     let userMsgId: string;
     try {
       userMsgId = await saveMessage(conversationId, user.id, "user", userContent);
@@ -151,12 +189,7 @@ export default function MavisChat() {
       return;
     }
 
-    const userMsg: DisplayMessage = {
-      id: userMsgId,
-      role: "user",
-      content: userContent,
-      timestamp: new Date(),
-    };
+    const userMsg: DisplayMessage = { id: userMsgId, role: "user", content: userContent, timestamp: new Date() };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
 
@@ -165,43 +198,40 @@ export default function MavisChat() {
       .filter((m) => m.id !== "initial")
       .map((m) => ({ role: m.role, content: m.content }));
 
+    const context = await buildContext();
+
     try {
       await streamChat({
         messages: chatHistory,
-        context: {
-          navi_name: profile.navi_name,
-          display_name: profile.display_name,
-          navi_level: profile.navi_level,
-          navi_personality: profile.navi_personality,
-          xp_total: profile.xp_total,
-          current_streak: profile.current_streak,
-          longest_streak: profile.longest_streak,
-          user_navi_description: profile.user_navi_description,
-        },
+        context,
         onDelta: (chunk) => {
           assistantContent += chunk;
           const content = assistantContent;
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant" && last.id === "streaming") {
-              return prev.map((m, i) =>
-                i === prev.length - 1 ? { ...m, content } : m
-              );
+              return prev.map((m, i) => i === prev.length - 1 ? { ...m, content } : m);
             }
-            return [
-              ...prev,
-              { id: "streaming", role: "assistant", content, timestamp: new Date() },
-            ];
+            return [...prev, { id: "streaming", role: "assistant", content, timestamp: new Date() }];
           });
         },
         onDone: async () => {
-          // Save assistant message to DB
+          // Parse and execute any actions
+          const { cleanText, actions } = parseActions(assistantContent);
+          const displayContent = cleanText || assistantContent;
+
+          for (const action of actions) {
+            try {
+              await executeAction(user.id, action);
+            } catch (err) {
+              console.error("Action execution failed:", err);
+            }
+          }
+
           try {
-            const assistantId = await saveMessage(conversationId, user.id, "assistant", assistantContent);
+            const assistantId = await saveMessage(conversationId, user.id, "assistant", displayContent);
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === "streaming" ? { ...m, id: assistantId } : m
-              )
+              prev.map((m) => m.id === "streaming" ? { ...m, id: assistantId, content: displayContent } : m)
             );
           } catch (err) {
             console.error("Failed to save assistant message:", err);
@@ -211,13 +241,9 @@ export default function MavisChat() {
       });
     } catch (e: any) {
       setIsLoading(false);
-      toast({
-        title: "NAVI Error",
-        description: e.message || "Failed to get response",
-        variant: "destructive",
-      });
+      toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, conversationId, messages]);
+  }, [input, isLoading, user, conversationId, messages, buildContext]);
 
   if (dbLoading) {
     return (
@@ -231,56 +257,29 @@ export default function MavisChat() {
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
       <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
-        <button
-          onClick={clearThread}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
-        >
-          <Trash2 size={12} />
-          CLEAR THREAD
+        <button onClick={clearThread}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors">
+          <Trash2 size={12} /> CLEAR THREAD
         </button>
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
         {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-          >
-            <div
-              className={`w-8 h-8 rounded shrink-0 flex items-center justify-center ${
-                msg.role === "assistant"
-                  ? "bg-primary/10 border border-primary/30"
-                  : "bg-secondary/10 border border-secondary/30"
-              }`}
-            >
-              {msg.role === "assistant" ? (
-                <Bot size={14} className="text-primary" />
-              ) : (
-                <User size={14} className="text-secondary" />
-              )}
+          <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+            <div className={`w-8 h-8 rounded shrink-0 flex items-center justify-center ${
+              msg.role === "assistant" ? "bg-primary/10 border border-primary/30" : "bg-secondary/10 border border-secondary/30"
+            }`}>
+              {msg.role === "assistant" ? <Bot size={14} className="text-primary" /> : <User size={14} className="text-secondary" />}
             </div>
-            <div
-              className={`max-w-[75%] rounded px-3 py-2 ${
-                msg.role === "assistant"
-                  ? "bg-card border border-border"
-                  : "bg-secondary/10 border border-secondary/20"
-              }`}
-            >
-              {/* NAVI chat uses Share Tech Mono; user messages use Rajdhani */}
-              <div
-                className={`text-sm prose prose-invert prose-sm max-w-none ${
-                  msg.role === "assistant" ? "font-mono" : "font-body"
-                }`}
-              >
+            <div className={`max-w-[75%] rounded px-3 py-2 ${
+              msg.role === "assistant" ? "bg-card border border-border" : "bg-secondary/10 border border-secondary/20"
+            }`}>
+              <div className={`text-sm prose prose-invert prose-sm max-w-none ${msg.role === "assistant" ? "font-mono" : "font-body"}`}>
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
               <p className="text-[10px] font-mono text-muted-foreground mt-1">
-                {msg.timestamp.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
           </motion.div>
@@ -289,33 +288,21 @@ export default function MavisChat() {
       </div>
 
       <div className="border border-border rounded bg-card flex items-center gap-2 p-2 border-glow">
-        {/* Glowing Navi orb */}
         <div className="relative w-8 h-8 shrink-0 flex items-center justify-center">
-          <motion.div
-            className="absolute inset-0 rounded-full bg-primary/20"
+          <motion.div className="absolute inset-0 rounded-full bg-primary/20"
             animate={isLoading ? { scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] } : { scale: 1, opacity: 0.15 }}
-            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}}
-          />
-          <motion.div
-            className="w-4 h-4 rounded-full bg-primary"
-            animate={isLoading ? { scale: [0.8, 1.1, 0.8], boxShadow: ["0 0 8px hsl(var(--primary))", "0 0 20px hsl(var(--primary))", "0 0 8px hsl(var(--primary))"] } : { scale: 1, boxShadow: "0 0 6px hsl(var(--primary) / 0.4)" }}
-            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}}
-          />
+            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}} />
+          <motion.div className="w-4 h-4 rounded-full bg-primary"
+            animate={isLoading ? { scale: [0.8, 1.1, 0.8], boxShadow: ["0 0 8px hsl(var(--primary))", "0 0 20px hsl(var(--primary))", "0 0 8px hsl(var(--primary))"] }
+              : { scale: 1, boxShadow: "0 0 6px hsl(var(--primary) / 0.4)" }}
+            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}} />
         </div>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Message NAVI..."
+        <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Message NAVI..."
           disabled={isLoading}
-          className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50"
-        />
-        <button
-          onClick={sendMessage}
-          disabled={!input.trim() || isLoading}
-          className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30"
-        >
+          className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-2 disabled:opacity-50" />
+        <button onClick={sendMessage} disabled={!input.trim() || isLoading}
+          className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30">
           {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
         </button>
       </div>

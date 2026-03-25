@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notification_settings jsonb NOT NULL DEFAULT '{"questReminders":true,"streakWarnings":true,"xpMilestones":false,"dailySummary":true}'::jsonb;

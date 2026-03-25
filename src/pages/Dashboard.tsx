@@ -61,7 +61,7 @@ export default function Dashboard() {
       setJournalCount(journalRes.count || 0);
       setAchievementCount(achieveRes.count || 0);
       setSkillsCount(skillsRes.count || 0);
-      setRecentActivity((activityRes.data || []) as ActivityItem[]);
+      setRecentActivity((activityRes.data || []) as unknown as ActivityItem[]);
     });
   }, [user]);
 

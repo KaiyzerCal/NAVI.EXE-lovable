@@ -105,7 +105,7 @@ export default function CharacterPage() {
     const { data } = await supabase.from("subskills" as any).insert({
       user_id: user.id, skill_id: skillId, name: subForm.name, description: subForm.description,
     }).select("*").single();
-    if (data) setSubskills((prev) => [...prev, data as Subskill]);
+    if (data) setSubskills((prev) => [...prev, data as unknown as Subskill]);
     setSubForm({ name: "", description: "" });
     setAddingSubTo(null);
   };

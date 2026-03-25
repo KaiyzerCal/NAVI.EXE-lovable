@@ -104,7 +104,11 @@ export default function SettingsPage() {
   };
 
   const toggleNotif = (key: keyof typeof notifications) => {
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+    setNotifications((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      updateProfile({ notification_settings: next } as any);
+      return next;
+    });
   };
 
   return (

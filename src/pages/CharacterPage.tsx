@@ -2,6 +2,8 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
+import EquipmentTab from "@/components/EquipmentTab";
+import { getSubclass } from "@/lib/subclassRules";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Edit2, Trash2, ChevronDown, ChevronUp, Save, X } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -12,15 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const tabs = ["PROFILE", "SKILLS"] as const;
-
-const baseStats = [
-  { name: "STR", value: 14, icon: <Sword size={12} /> },
-  { name: "INT", value: 22, icon: <Brain size={12} /> },
-  { name: "VIT", value: 16, icon: <Heart size={12} /> },
-  { name: "AGI", value: 18, icon: <Zap size={12} /> },
-  { name: "RES", value: 20, icon: <Shield size={12} /> },
-];
+const tabs = ["PROFILE", "SKILLS", "EQUIPMENT"] as const;
 
 interface Skill {
   id: string;
@@ -40,7 +34,27 @@ interface Subskill {
   level: number;
 }
 
+interface EquipmentItem {
+  stat_bonuses: Record<string, number>;
+  is_equipped: boolean;
+}
+
+interface ActiveBuff {
+  stat_affected: string;
+  modifier_value: number;
+  effect_type: string;
+  expires_at: string | null;
+}
+
 const VARIANTS = ["cyan", "purple", "green", "amber"] as const;
+
+const baseStatDefs = [
+  { name: "STR", base: 14, icon: <Sword size={12} /> },
+  { name: "INT", base: 22, icon: <Brain size={12} /> },
+  { name: "VIT", base: 16, icon: <Heart size={12} /> },
+  { name: "AGI", base: 18, icon: <Zap size={12} /> },
+  { name: "RES", base: 20, icon: <Shield size={12} /> },
+];
 
 export default function CharacterPage() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("PROFILE");
@@ -58,23 +72,49 @@ export default function CharacterPage() {
   const [subForm, setSubForm] = useState({ name: "", description: "" });
   const [addingSubTo, setAddingSubTo] = useState<string | null>(null);
 
+  // Equipment and buff bonuses for stat display
+  const [equipBonuses, setEquipBonuses] = useState<Record<string, number>>({});
+  const [buffBonuses, setBuffBonuses] = useState<Record<string, number>>({});
+
   const characterClass = profile.character_class || "Unknown";
   const mbtiType = profile.mbti_type || null;
   const classInfo = mbtiType ? MBTI_CLASS_MAP[mbtiType] : null;
+  const subclassInfo = getSubclass(characterClass, mbtiType);
 
   useEffect(() => {
     if (!user) return;
     Promise.all([
       supabase.from("skills" as any).select("*").eq("user_id", user.id).order("created_at"),
       supabase.from("subskills" as any).select("*").eq("user_id", user.id),
-    ]).then(([skillsRes, subsRes]) => {
+      supabase.from("equipment" as any).select("stat_bonuses, is_equipped").eq("user_id", user.id).eq("is_equipped", true),
+      supabase.from("buffs" as any).select("stat_affected, modifier_value, effect_type, expires_at").eq("user_id", user.id),
+    ]).then(([skillsRes, subsRes, eqRes, buffRes]) => {
       setSkills((skillsRes.data || []) as unknown as Skill[]);
       setSubskills((subsRes.data || []) as unknown as Subskill[]);
+
+      // Calculate equipment bonuses
+      const eqBonuses: Record<string, number> = {};
+      for (const item of (eqRes.data || []) as unknown as EquipmentItem[]) {
+        for (const [k, v] of Object.entries(item.stat_bonuses || {})) {
+          eqBonuses[k] = (eqBonuses[k] || 0) + (v as number);
+        }
+      }
+      setEquipBonuses(eqBonuses);
+
+      // Calculate buff bonuses
+      const bBonuses: Record<string, number> = {};
+      for (const b of (buffRes.data || []) as unknown as ActiveBuff[]) {
+        if (b.expires_at && new Date(b.expires_at).getTime() < Date.now()) continue;
+        const mult = b.effect_type === "debuff" ? -1 : 1;
+        bBonuses[b.stat_affected] = (bBonuses[b.stat_affected] || 0) + b.modifier_value * mult;
+      }
+      setBuffBonuses(bBonuses);
     });
   }, [user]);
 
-  const handleQuizComplete = (mbti: string, charClass: string) => {
-    updateProfile({ mbti_type: mbti, character_class: charClass });
+  const handleQuizComplete = async (mbti: string, charClass: string) => {
+    const sc = getSubclass(charClass, mbti);
+    await updateProfile({ mbti_type: mbti, character_class: charClass, subclass: sc?.subclass || null } as any);
   };
 
   const addSkill = async () => {
@@ -115,9 +155,11 @@ export default function CharacterPage() {
     await supabase.from("subskills" as any).delete().eq("id", id);
   };
 
-  const updateSubskill = async (id: string, updates: Partial<Subskill>) => {
-    setSubskills((prev) => prev.map((s) => s.id === id ? { ...s, ...updates } : s));
-    await supabase.from("subskills" as any).update(updates as any).eq("id", id);
+  const getEffectiveStat = (statName: string, base: number) => {
+    const key = statName.toLowerCase();
+    const eqBonus = equipBonuses[key] || equipBonuses[statName] || 0;
+    const buffBonus = buffBonuses[key] || buffBonuses[statName] || 0;
+    return base + eqBonus + buffBonus;
   };
 
   if (!mbtiType && !profile.character_class) {
@@ -148,19 +190,32 @@ export default function CharacterPage() {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
               <h2 className="font-display text-lg text-primary font-bold">{profile.display_name || "OPERATOR"}</h2>
-              <span className="text-xs font-mono bg-secondary/10 text-secondary px-2 py-0.5 rounded">{characterClass.toUpperCase()}</span>
+              <span className="text-xs font-mono bg-secondary/10 text-secondary px-2 py-0.5 rounded">
+                {characterClass.toUpperCase()}
+                {subclassInfo ? ` // ${subclassInfo.subclass}` : ""}
+              </span>
             </div>
             {mbtiType && (
               <p className="text-[10px] font-mono text-muted-foreground mb-1">MBTI: {mbtiType} // {classInfo?.desc || ""}</p>
+            )}
+            {subclassInfo && (
+              <p className="text-[10px] font-mono text-secondary/80 mb-1">Subclass: {subclassInfo.subclass} — {subclassInfo.desc}</p>
+            )}
+            {mbtiType && !subclassInfo && (
+              <p className="text-[10px] font-mono text-neon-amber/80 mb-1">Subclass: Undetermined — change class in Settings to unlock</p>
             )}
             <p className="text-xs font-mono text-muted-foreground mb-3">XP: {profile.xp_total.toLocaleString()}</p>
             <ProgressBar value={profile.xp_total % 1000} max={1000} variant="cyan" size="md" showValue={false} />
             {editMode && (
               <div className="mt-3 flex gap-2 items-center">
                 <Input className="h-7 text-xs w-40" placeholder="Character class..." defaultValue={characterClass}
-                  onBlur={(e) => updateProfile({ character_class: e.target.value })} />
+                  onBlur={(e) => {
+                    const newClass = e.target.value;
+                    const sc = getSubclass(newClass, mbtiType);
+                    updateProfile({ character_class: newClass, subclass: sc?.subclass || null } as any);
+                  }} />
                 <Button variant="outline" size="sm" className="text-[10px] font-mono"
-                  onClick={() => updateProfile({ mbti_type: null, character_class: null })}>RETAKE QUIZ</Button>
+                  onClick={() => updateProfile({ mbti_type: null, character_class: null, subclass: null } as any)}>RETAKE QUIZ</Button>
               </div>
             )}
           </div>
@@ -181,39 +236,50 @@ export default function CharacterPage() {
         <div className="grid md:grid-cols-2 gap-4">
           <HudCard title="BASE STATS" icon={<Shield size={14} />} glow>
             <div className="space-y-3">
-              {baseStats.map((stat) => (
-                <div key={stat.name} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-primary">{stat.icon}</div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-mono text-muted-foreground">{stat.name}</span>
-                      <span className="font-display text-sm font-bold text-foreground">{stat.value}</span>
+              {baseStatDefs.map((stat) => {
+                const effective = getEffectiveStat(stat.name, stat.base);
+                const bonus = effective - stat.base;
+                return (
+                  <div key={stat.name} className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-primary">{stat.icon}</div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-mono text-muted-foreground">{stat.name}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-display text-sm font-bold text-foreground">{effective}</span>
+                          {bonus !== 0 && (
+                            <span className={`text-[9px] font-mono ${bonus > 0 ? "text-neon-green" : "text-destructive"}`}>
+                              ({bonus > 0 ? "+" : ""}{bonus})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ProgressBar value={effective} max={30} variant="cyan" showValue={false} />
                     </div>
-                    <ProgressBar value={stat.value} max={30} variant="cyan" showValue={false} />
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </HudCard>
 
-          <HudCard title="EQUIPMENT" icon={<Star size={14} />} glow>
+          <HudCard title="CLASS INFO" icon={<Star size={14} />} glow>
             <div className="space-y-2">
-              {[
-                { slot: "CLASS", item: characterClass, rarity: "RARE" },
-                { slot: "BADGE", item: "Early Adopter", rarity: "EPIC" },
-                { slot: "PERK", item: "Night Owl (+10% XP after 10PM)", rarity: "UNCOMMON" },
-              ].map((eq) => (
-                <div key={eq.slot} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-                  <div>
-                    <p className="text-[10px] font-mono text-muted-foreground">{eq.slot}</p>
-                    <p className="text-sm font-body">{eq.item}</p>
-                  </div>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                    eq.rarity === "EPIC" ? "bg-secondary/10 text-secondary" :
-                    eq.rarity === "RARE" ? "bg-primary/10 text-primary" : "bg-neon-green/10 text-neon-green"
-                  }`}>{eq.rarity}</span>
+              <div className="py-1.5 border-b border-border">
+                <p className="text-[10px] font-mono text-muted-foreground">CLASS</p>
+                <p className="text-sm font-body">{characterClass}</p>
+              </div>
+              {mbtiType && (
+                <div className="py-1.5 border-b border-border">
+                  <p className="text-[10px] font-mono text-muted-foreground">MBTI TYPE</p>
+                  <p className="text-sm font-body">{mbtiType} — {classInfo?.desc}</p>
                 </div>
-              ))}
+              )}
+              {subclassInfo && (
+                <div className="py-1.5 border-b border-border">
+                  <p className="text-[10px] font-mono text-muted-foreground">SUBCLASS</p>
+                  <p className="text-sm font-body">{subclassInfo.subclass} — {subclassInfo.desc}</p>
+                </div>
+              )}
             </div>
             <div className="mt-4 pt-3 border-t border-border">
               <p className="text-[10px] font-mono text-muted-foreground mb-2">SUB-CLASS // EQUIP A REAL-WORLD PATH</p>
@@ -242,6 +308,8 @@ export default function CharacterPage() {
             </div>
           </HudCard>
         </div>
+      ) : activeTab === "EQUIPMENT" ? (
+        <EquipmentTab />
       ) : (
         <div>
           {/* Add Skill Button */}
@@ -305,6 +373,9 @@ export default function CharacterPage() {
                 const subs = subskills.filter((s) => s.skill_id === skill.id);
                 const isExpanded = expandedSkill === skill.id;
                 const isEditing = editingSkillId === skill.id;
+                const eqBonus = equipBonuses[skill.name.toLowerCase()] || 0;
+                const bBonus = buffBonuses[skill.name.toLowerCase()] || 0;
+                const totalBonus = eqBonus + bBonus;
 
                 return (
                   <motion.div key={skill.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -332,6 +403,11 @@ export default function CharacterPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-mono text-muted-foreground">LVL {skill.level}/{skill.max_level}</span>
+                            {totalBonus !== 0 && (
+                              <span className={`text-[9px] font-mono ${totalBonus > 0 ? "text-neon-green" : "text-destructive"}`}>
+                                ({totalBonus > 0 ? "+" : ""}{totalBonus})
+                              </span>
+                            )}
                             <button onClick={() => setEditingSkillId(skill.id)} className="text-muted-foreground hover:text-primary"><Edit2 size={12} /></button>
                             <button onClick={() => deleteSkill(skill.id)} className="text-muted-foreground hover:text-destructive"><Trash2 size={12} /></button>
                             <button onClick={() => setExpandedSkill(isExpanded ? null : skill.id)} className="text-muted-foreground hover:text-foreground">

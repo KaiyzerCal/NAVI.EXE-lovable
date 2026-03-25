@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import HudCard from "@/components/HudCard";
 import { Brain } from "lucide-react";
 
-// Character class IS the MBTI type itself. The desc explains it.
 export const MBTI_CLASS_MAP: Record<string, { class: string; desc: string }> = {
   INTJ: { class: "INTJ", desc: "The Architect — Strategic mastermind who bends systems to their will" },
   INTP: { class: "INTP", desc: "The Logician — Curious thinker who transmutes knowledge into power" },
@@ -24,7 +23,6 @@ export const MBTI_CLASS_MAP: Record<string, { class: string; desc: string }> = {
   ESFP: { class: "ESFP", desc: "The Entertainer — Vibrant performer who lives in the moment" },
 };
 
-// Sub-classes map real-world careers/paths onto each MBTI type
 export const SUB_CLASSES: Record<string, { name: string; realWorld: string; bonus: string }[]> = {
   INTJ: [
     { name: "Software Engineer", realWorld: "Builds the systems that run the world", bonus: "+15% Coding XP" },
@@ -108,7 +106,6 @@ export const SUB_CLASSES: Record<string, { name: string; realWorld: string; bonu
   ],
 };
 
-// Navi combat classes — separate from operator MBTI type
 export const NAVI_COMBAT_CLASSES = [
   { name: "Sorcerer", desc: "Wields digital arcana and system-level spells", bonus: "+10% Magic XP" },
   { name: "Warrior", desc: "Frontline combatant with raw offensive power", bonus: "+10% Strength XP" },
@@ -127,90 +124,26 @@ interface Props {
 }
 
 const QUESTIONS = [
-  {
-    q: "When faced with a complex problem, you prefer to:",
-    a: [
-      { text: "Analyze it systematically, breaking it into parts", axis: "T" },
-      { text: "Consider how it affects the people involved first", axis: "F" },
-    ],
-  },
-  {
-    q: "At a social event, you tend to:",
-    a: [
-      { text: "Engage with many different people energetically", axis: "E" },
-      { text: "Have deeper conversations with a select few", axis: "I" },
-    ],
-  },
-  {
-    q: "When planning a project, you prefer:",
-    a: [
-      { text: "A detailed plan with clear milestones", axis: "J" },
-      { text: "A flexible approach that adapts as you go", axis: "P" },
-    ],
-  },
-  {
-    q: "You trust more in:",
-    a: [
-      { text: "Concrete facts and proven experience", axis: "S" },
-      { text: "Patterns, possibilities, and intuition", axis: "N" },
-    ],
-  },
-  {
-    q: "After a long day, you recharge by:",
-    a: [
-      { text: "Going out with friends or to an event", axis: "E" },
-      { text: "Spending quiet time alone with your thoughts", axis: "I" },
-    ],
-  },
-  {
-    q: "When making decisions, you value:",
-    a: [
-      { text: "Logic and consistency above all", axis: "T" },
-      { text: "Harmony and personal values", axis: "F" },
-    ],
-  },
-  {
-    q: "You are more drawn to:",
-    a: [
-      { text: "What is real and present right now", axis: "S" },
-      { text: "What could be in the future", axis: "N" },
-    ],
-  },
-  {
-    q: "Your workspace is typically:",
-    a: [
-      { text: "Organized and structured", axis: "J" },
-      { text: "Flexible with creative chaos", axis: "P" },
-    ],
-  },
-  {
-    q: "In conversations, you prefer to:",
-    a: [
-      { text: "Think out loud and brainstorm with others", axis: "E" },
-      { text: "Reflect internally before sharing your thoughts", axis: "I" },
-    ],
-  },
-  {
-    q: "When learning something new, you prefer:",
-    a: [
-      { text: "Step-by-step practical instructions", axis: "S" },
-      { text: "Understanding the big picture and theory first", axis: "N" },
-    ],
-  },
-  {
-    q: "In a team conflict, you prioritize:",
-    a: [
-      { text: "Finding the objectively correct solution", axis: "T" },
-      { text: "Making sure everyone feels heard", axis: "F" },
-    ],
-  },
-  {
-    q: "You prefer your schedule to be:",
-    a: [
-      { text: "Planned and predictable", axis: "J" },
-      { text: "Open-ended with room for spontaneity", axis: "P" },
-    ],
-  },
+  // E/I x 4
+  { q: "At a social event, you tend to:", a: [{ text: "Engage with many different people energetically", axis: "E" }, { text: "Have deeper conversations with a select few", axis: "I" }] },
+  { q: "After a long day, you recharge by:", a: [{ text: "Going out with friends or to an event", axis: "E" }, { text: "Spending quiet time alone with your thoughts", axis: "I" }] },
+  { q: "In conversations, you prefer to:", a: [{ text: "Think out loud and brainstorm with others", axis: "E" }, { text: "Reflect internally before sharing your thoughts", axis: "I" }] },
+  { q: "When working on a project, you prefer:", a: [{ text: "Collaborating with a team in real time", axis: "E" }, { text: "Working independently and sharing results later", axis: "I" }] },
+  // S/N x 4
+  { q: "You trust more in:", a: [{ text: "Concrete facts and proven experience", axis: "S" }, { text: "Patterns, possibilities, and intuition", axis: "N" }] },
+  { q: "You are more drawn to:", a: [{ text: "What is real and present right now", axis: "S" }, { text: "What could be in the future", axis: "N" }] },
+  { q: "When learning something new, you prefer:", a: [{ text: "Step-by-step practical instructions", axis: "S" }, { text: "Understanding the big picture and theory first", axis: "N" }] },
+  { q: "You find more value in:", a: [{ text: "Practical, hands-on experience", axis: "S" }, { text: "Theoretical frameworks and abstract ideas", axis: "N" }] },
+  // T/F x 4
+  { q: "When faced with a complex problem, you prefer to:", a: [{ text: "Analyze it systematically, breaking it into parts", axis: "T" }, { text: "Consider how it affects the people involved first", axis: "F" }] },
+  { q: "When making decisions, you value:", a: [{ text: "Logic and consistency above all", axis: "T" }, { text: "Harmony and personal values", axis: "F" }] },
+  { q: "In a team conflict, you prioritize:", a: [{ text: "Finding the objectively correct solution", axis: "T" }, { text: "Making sure everyone feels heard", axis: "F" }] },
+  { q: "Criticism is best when it is:", a: [{ text: "Direct and honest, even if uncomfortable", axis: "T" }, { text: "Delivered with empathy and tact", axis: "F" }] },
+  // J/P x 4
+  { q: "When planning a project, you prefer:", a: [{ text: "A detailed plan with clear milestones", axis: "J" }, { text: "A flexible approach that adapts as you go", axis: "P" }] },
+  { q: "Your workspace is typically:", a: [{ text: "Organized and structured", axis: "J" }, { text: "Flexible with creative chaos", axis: "P" }] },
+  { q: "You prefer your schedule to be:", a: [{ text: "Planned and predictable", axis: "J" }, { text: "Open-ended with room for spontaneity", axis: "P" }] },
+  { q: "Deadlines make you:", a: [{ text: "More focused and productive", axis: "J" }, { text: "Feel constrained — you work best without them", axis: "P" }] },
 ];
 
 export default function MbtiQuiz({ onComplete }: Props) {
@@ -224,7 +157,6 @@ export default function MbtiQuiz({ onComplete }: Props) {
     if (step < QUESTIONS.length - 1) {
       setStep(step + 1);
     } else {
-      // Calculate MBTI
       const count = (letter: string) => newAnswers.filter((a) => a === letter).length;
       const mbti = [
         count("E") >= count("I") ? "E" : "I",
@@ -234,7 +166,6 @@ export default function MbtiQuiz({ onComplete }: Props) {
       ].join("");
 
       const classInfo = MBTI_CLASS_MAP[mbti];
-      // Character class = MBTI type itself
       onComplete(mbti, classInfo?.class || mbti);
     }
   };

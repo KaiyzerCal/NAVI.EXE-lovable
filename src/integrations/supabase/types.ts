@@ -71,6 +71,48 @@ export type Database = {
         }
         Relationships: []
       }
+      buffs: {
+        Row: {
+          created_at: string
+          description: string
+          duration_hours: number | null
+          effect_type: string
+          expires_at: string | null
+          id: string
+          modifier_value: number
+          name: string
+          source: string
+          stat_affected: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          duration_hours?: number | null
+          effect_type?: string
+          expires_at?: string | null
+          id?: string
+          modifier_value?: number
+          name: string
+          source?: string
+          stat_affected?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          duration_hours?: number | null
+          effect_type?: string
+          expires_at?: string | null
+          id?: string
+          modifier_value?: number
+          name?: string
+          source?: string
+          stat_affected?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_conversations: {
         Row: {
           created_at: string
@@ -126,6 +168,56 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipment: {
+        Row: {
+          buff_id: string | null
+          description: string
+          id: string
+          is_equipped: boolean
+          name: string
+          obtained_at: string
+          obtained_from: string
+          rarity: string
+          slot: string
+          stat_bonuses: Json
+          user_id: string
+        }
+        Insert: {
+          buff_id?: string | null
+          description?: string
+          id?: string
+          is_equipped?: boolean
+          name: string
+          obtained_at?: string
+          obtained_from?: string
+          rarity?: string
+          slot?: string
+          stat_bonuses?: Json
+          user_id: string
+        }
+        Update: {
+          buff_id?: string | null
+          description?: string
+          id?: string
+          is_equipped?: boolean
+          name?: string
+          obtained_at?: string
+          obtained_from?: string
+          rarity?: string
+          slot?: string
+          stat_bonuses?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_buff_id_fkey"
+            columns: ["buff_id"]
+            isOneToOne: false
+            referencedRelation: "buffs"
             referencedColumns: ["id"]
           },
         ]
@@ -249,6 +341,7 @@ export type Database = {
           navi_level: number
           navi_name: string
           navi_personality: string
+          subclass: string | null
           user_navi_description: string | null
           xp_total: number
         }
@@ -268,6 +361,7 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number
         }
@@ -287,6 +381,7 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number
         }
@@ -294,9 +389,13 @@ export type Database = {
       }
       quests: {
         Row: {
+          buff_reward_id: string | null
           completed: boolean
           created_at: string
+          debuff_penalty_id: string | null
+          equipment_reward_id: string | null
           id: string
+          loot_description: string
           name: string
           progress: number
           total: number
@@ -306,9 +405,13 @@ export type Database = {
           xp_reward: number
         }
         Insert: {
+          buff_reward_id?: string | null
           completed?: boolean
           created_at?: string
+          debuff_penalty_id?: string | null
+          equipment_reward_id?: string | null
           id?: string
+          loot_description?: string
           name: string
           progress?: number
           total?: number
@@ -318,9 +421,13 @@ export type Database = {
           xp_reward?: number
         }
         Update: {
+          buff_reward_id?: string | null
           completed?: boolean
           created_at?: string
+          debuff_penalty_id?: string | null
+          equipment_reward_id?: string | null
           id?: string
+          loot_description?: string
           name?: string
           progress?: number
           total?: number
@@ -329,7 +436,29 @@ export type Database = {
           user_id?: string
           xp_reward?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quests_buff_reward_id_fkey"
+            columns: ["buff_reward_id"]
+            isOneToOne: false
+            referencedRelation: "buffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quests_debuff_penalty_id_fkey"
+            columns: ["debuff_penalty_id"]
+            isOneToOne: false
+            referencedRelation: "buffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quests_equipment_reward_id_fkey"
+            columns: ["equipment_reward_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       skills: {
         Row: {

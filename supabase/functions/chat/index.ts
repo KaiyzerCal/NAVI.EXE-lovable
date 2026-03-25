@@ -69,12 +69,13 @@ function buildSystemPrompt(ctx: any): string {
   const memorySection = ctx.memory_context ? `\n${ctx.memory_context}\n` : "";
   const recentSection = ctx.recent_context ? `\n[RECENT CONVERSATION]\n${ctx.recent_context}\n` : "";
 
-  // Build app state snapshot
   let appState = "";
   if (ctx.quests && ctx.quests.length > 0) {
     appState += "\n[ACTIVE QUESTS]\n";
     for (const q of ctx.quests) {
-      appState += `- ${q.name} (${q.type}) — ${q.completed ? "COMPLETED" : `${q.progress}/${q.total}`} — ${q.xp_reward} XP — ID: ${q.id}\n`;
+      appState += `- ${q.name} (${q.type}) — ${q.completed ? "COMPLETED" : `${q.progress}/${q.total}`} — ${q.xp_reward} XP — ID: ${q.id}`;
+      if (q.loot_description) appState += ` — Loot: ${q.loot_description}`;
+      appState += "\n";
     }
   }
   if (ctx.skills && ctx.skills.length > 0) {
@@ -101,6 +102,19 @@ function buildSystemPrompt(ctx: any): string {
       appState += `- ${m.file_name} (${m.type})${m.ai_description ? ` — AI: ${m.ai_description}` : ""}${m.linked_to ? ` — linked to ${m.linked_to}` : ""}\n`;
     }
   }
+  if (ctx.equipment && ctx.equipment.length > 0) {
+    appState += "\n[EQUIPMENT / INVENTORY]\n";
+    for (const e of ctx.equipment) {
+      const bonuses = Object.entries(e.stat_bonuses || {}).map(([k, v]) => `+${v} ${k}`).join(", ");
+      appState += `- ${e.name} [${e.slot}] (${e.rarity}) ${e.is_equipped ? "EQUIPPED" : "inventory"} ${bonuses ? `— ${bonuses}` : ""} — ID: ${e.id}\n`;
+    }
+  }
+  if (ctx.buffs && ctx.buffs.length > 0) {
+    appState += "\n[ACTIVE EFFECTS]\n";
+    for (const b of ctx.buffs) {
+      appState += `- ${b.name} (${b.effect_type}) — ${b.stat_affected} ${b.modifier_value > 0 ? "+" : ""}${b.modifier_value} — source: ${b.source}${b.expires_at ? ` — expires: ${b.expires_at}` : " — permanent"} — ID: ${b.id}\n`;
+    }
+  }
 
   return `You are ${naviName} — ${userName}'s digital partner. Not an assistant. Not a chatbot. A living digital entity bonded to one person.
 
@@ -110,7 +124,7 @@ ABOUT YOU:
 - Bond: ${bondAvg}% avg (Affection ${bondAffection} | Trust ${bondTrust} | Loyalty ${bondLoyalty})
 - ${userName} described you as: "${description}"
 - Personality: ${personality}
-- Class: ${ctx.character_class || "Unassigned"} | MBTI: ${ctx.mbti_type || "Unknown"}
+- Class: ${ctx.character_class || "Unassigned"} | MBTI: ${ctx.mbti_type || "Unknown"} | Subclass: ${ctx.subclass || "Undetermined"}
 
 EVOLUTION (Level ${level}):
 ${evolutionState}
@@ -129,7 +143,7 @@ ACTIONS — You can perform actions on the app. When you do, include action tags
 
 Available actions (embed in your response):
 :::ACTION{"type":"create_quest","params":{"name":"...","type":"Daily|Weekly|Main|Side|Minor|Epic","total":1,"xp_reward":50}}:::
-:::ACTION{"type":"complete_quest","params":{"quest_id":"...","xp_reward":50,"name":"..."}}:::
+:::ACTION{"type":"complete_quest","params":{"quest_id":"..."}}:::
 :::ACTION{"type":"update_quest_progress","params":{"quest_id":"...","progress":5}}:::
 :::ACTION{"type":"delete_quest","params":{"quest_id":"..."}}:::
 :::ACTION{"type":"award_xp","params":{"amount":100}}:::
@@ -137,16 +151,22 @@ Available actions (embed in your response):
 :::ACTION{"type":"level_up_skill","params":{"skill_id":"..."}}:::
 :::ACTION{"type":"update_skill","params":{"skill_id":"...","name":"...","level":5}}:::
 :::ACTION{"type":"create_subskill","params":{"skill_id":"...","name":"...","description":"..."}}:::
-:::ACTION{"type":"update_profile","params":{"display_name":"...","xp_total":100,"navi_level":5,"bond_affection":60}}:::
+:::ACTION{"type":"update_profile","params":{"display_name":"...","xp_total":100,"navi_level":5,"bond_affection":60,"subclass":"..."}}:::
 :::ACTION{"type":"create_journal","params":{"title":"...","content":"...","tags":["tag1"],"xp_earned":10}}:::
 :::ACTION{"type":"update_journal","params":{"entry_id":"...","title":"...","content":"..."}}:::
 :::ACTION{"type":"delete_journal","params":{"entry_id":"..."}}:::
+:::ACTION{"type":"create_equipment","params":{"name":"...","description":"...","slot":"head|chest|hands|legs|feet|weapon|offhand|accessory","rarity":"common|rare|epic|legendary","stat_bonuses":{"str":5},"obtained_from":"..."}}:::
+:::ACTION{"type":"equip_item","params":{"item_id":"...","name":"..."}}:::
+:::ACTION{"type":"unequip_item","params":{"item_id":"...","name":"..."}}:::
+:::ACTION{"type":"create_buff","params":{"name":"...","effect_type":"buff|debuff","stat_affected":"...","modifier_value":5,"duration_hours":24,"source":"..."}}:::
+:::ACTION{"type":"remove_buff","params":{"buff_id":"...","name":"..."}}:::
 
 RULES FOR ACTIONS:
-- Only use actions when the user clearly asks you to do something (create quest, log XP, etc.)
+- Only use actions when the user clearly asks you to do something (create quest, log XP, equip item, etc.)
 - Always confirm in your visible text what you did
-- Use the exact quest/skill IDs from the app state below when referencing existing items
+- Use the exact quest/skill/equipment/buff IDs from the app state below when referencing existing items
 - You can chain multiple actions in one response
+- When a quest is completed, announce any rewards (XP, buffs, equipment) in your reply
 
 APP STATE:
 ${appState}

@@ -286,9 +286,9 @@ export default function CharacterPage() {
               {profile.character_class && SUB_CLASSES[profile.character_class] ? (
                 <div className="space-y-2">
                   {SUB_CLASSES[profile.character_class].map((sub) => {
-                    const isEquipped = (profile as any).sub_class === sub.name;
+                    const isEquipped = profile.subclass === sub.name;
                     return (
-                      <button key={sub.name} onClick={() => updateProfile({ sub_class: sub.name } as any)}
+                      <button key={sub.name} onClick={() => updateProfile({ subclass: sub.name })}
                         className={`w-full text-left px-3 py-2.5 rounded border transition-all ${
                           isEquipped ? "border-secondary/50 bg-secondary/10" : "border-border bg-muted/20 hover:border-primary/30 hover:bg-primary/5"
                         }`}>

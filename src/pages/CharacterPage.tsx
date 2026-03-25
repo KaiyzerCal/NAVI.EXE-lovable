@@ -68,8 +68,8 @@ export default function CharacterPage() {
       supabase.from("skills" as any).select("*").eq("user_id", user.id).order("created_at"),
       supabase.from("subskills" as any).select("*").eq("user_id", user.id),
     ]).then(([skillsRes, subsRes]) => {
-      setSkills((skillsRes.data || []) as Skill[]);
-      setSubskills((subsRes.data || []) as Subskill[]);
+      setSkills((skillsRes.data || []) as unknown as Skill[]);
+      setSubskills((subsRes.data || []) as unknown as Subskill[]);
     });
   }, [user]);
 

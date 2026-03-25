@@ -44,6 +44,33 @@ export type Database = {
         }
         Relationships: []
       }
+      activity_log: {
+        Row: {
+          created_at: string
+          description: string
+          event_type: string
+          id: string
+          user_id: string
+          xp_amount: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          event_type: string
+          id?: string
+          user_id: string
+          xp_amount?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          event_type?: string
+          id?: string
+          user_id?: string
+          xp_amount?: number
+        }
+        Relationships: []
+      }
       chat_conversations: {
         Row: {
           created_at: string
@@ -265,6 +292,45 @@ export type Database = {
         }
         Relationships: []
       }
+      skills: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          id: string
+          level: number
+          max_level: number
+          name: string
+          updated_at: string
+          user_id: string
+          xp: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          level?: number
+          max_level?: number
+          name: string
+          updated_at?: string
+          user_id: string
+          xp?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          level?: number
+          max_level?: number
+          name?: string
+          updated_at?: string
+          user_id?: string
+          xp?: number
+        }
+        Relationships: []
+      }
       skin_unlock_conditions: {
         Row: {
           description: string | null
@@ -288,6 +354,44 @@ export type Database = {
           unlock_value?: number
         }
         Relationships: []
+      }
+      subskills: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          level: number
+          name: string
+          skill_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          level?: number
+          name: string
+          skill_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          level?: number
+          name?: string
+          skill_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subskills_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

@@ -163,6 +163,45 @@ export type Database = {
         }
         Relationships: []
       }
+      media: {
+        Row: {
+          ai_description: string | null
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          linked_entity_id: string | null
+          linked_entity_type: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_description?: string | null
+          created_at?: string
+          file_name: string
+          file_size?: number
+          file_type: string
+          file_url: string
+          id?: string
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_description?: string | null
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       navi_core_memory: {
         Row: {
           content: string

@@ -83,7 +83,7 @@ export default function CharacterPage() {
       user_id: user.id, name: skillForm.name, description: skillForm.description,
       category: skillForm.category, max_level: skillForm.max_level,
     }).select("*").single();
-    if (data) setSkills((prev) => [...prev, data as Skill]);
+    if (data) setSkills((prev) => [...prev, data as unknown as Skill]);
     setSkillForm({ name: "", description: "", category: "General", max_level: 10 });
     setShowAddSkill(false);
   };

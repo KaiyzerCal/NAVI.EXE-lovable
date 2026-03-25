@@ -3,7 +3,7 @@ import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Swords, Plus, Check, X, ChevronDown, ChevronUp, Star, Zap, Target, BookOpen, Layers, Loader2, AlertTriangle } from "lucide-react";
+import { Swords, Plus, Check, X, ChevronDown, ChevronUp, Star, Zap, Target, BookOpen, Layers, Loader2, AlertTriangle, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,6 +21,16 @@ interface Quest {
   equipment_reward_id: string | null;
   buff_reward_id: string | null;
   debuff_penalty_id: string | null;
+  linked_skill_id: string | null;
+}
+
+interface Skill {
+  id: string;
+  name: string;
+  category: string;
+  level: number;
+  max_level: number;
+  xp: number;
 }
 
 const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
@@ -39,6 +49,7 @@ interface NewQuestForm {
   type: QuestType;
   total: number;
   xp_reward: number;
+  linked_skill_id: string;
   buff_name: string;
   buff_stat: string;
   buff_value: number;
@@ -50,7 +61,7 @@ interface NewQuestForm {
 }
 
 const defaultForm: NewQuestForm = {
-  name: "", type: "Daily", total: 1, xp_reward: 50,
+  name: "", type: "Daily", total: 1, xp_reward: 50, linked_skill_id: "",
   buff_name: "", buff_stat: "", buff_value: 0, buff_duration: "",
   debuff_name: "", debuff_stat: "", debuff_value: 0, debuff_duration: "",
 };
@@ -58,20 +69,25 @@ const defaultForm: NewQuestForm = {
 export default function QuestsPage() {
   const { user } = useAuth();
   const [quests, setQuests] = useState<Quest[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
   const [form, setForm] = useState<NewQuestForm>(defaultForm);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("quests").select("id, name, type, progress, total, xp_reward, completed, loot_description, equipment_reward_id, buff_reward_id, debuff_penalty_id")
-      .eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setQuests(data as Quest[]);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.from("quests").select("id, name, type, progress, total, xp_reward, completed, loot_description, equipment_reward_id, buff_reward_id, debuff_penalty_id, linked_skill_id")
+        .eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("skills").select("id, name, category, level, max_level, xp").eq("user_id", user.id),
+    ]).then(([qRes, sRes]) => {
+      if (qRes.data) setQuests(qRes.data as Quest[]);
+      if (sRes.data) setSkills(sRes.data as Skill[]);
+      setLoading(false);
+    });
   }, [user]);
 
   const filtered = quests.filter((q) => {
@@ -92,27 +108,50 @@ export default function QuestsPage() {
     setQuests((prev) => prev.map((q) => q.id === id ? { ...q, completed: true, progress: q.total } : q));
     await supabase.from("quests").update({ completed: true, progress: quest.total }).eq("id", id);
 
-    // Award XP
+    // Award XP to profile
     const { data: profile } = await supabase.from("profiles").select("xp_total").eq("id", user.id).single();
     if (profile) {
       await supabase.from("profiles").update({ xp_total: profile.xp_total + quest.xp_reward }).eq("id", user.id);
     }
-    await supabase.from("activity_log" as any).insert({
+    await supabase.from("activity_log").insert({
       user_id: user.id, event_type: "quest_completed", description: `Quest completed: ${quest.name}`, xp_amount: quest.xp_reward,
     });
 
+    // Award XP to linked skill
+    if (quest.linked_skill_id) {
+      const skill = skills.find((s) => s.id === quest.linked_skill_id);
+      if (skill) {
+        const newXp = skill.xp + quest.xp_reward;
+        const xpPerLevel = 100;
+        let newLevel = skill.level;
+        let remainingXp = newXp;
+        while (remainingXp >= xpPerLevel && newLevel < skill.max_level) {
+          remainingXp -= xpPerLevel;
+          newLevel++;
+        }
+        await supabase.from("skills").update({ xp: remainingXp, level: newLevel }).eq("id", skill.id);
+        setSkills((prev) => prev.map((s) => s.id === skill.id ? { ...s, xp: remainingXp, level: newLevel } : s));
+        if (newLevel > skill.level) {
+          await supabase.from("activity_log").insert({
+            user_id: user.id, event_type: "skill_levelup",
+            description: `${skill.name} leveled up to ${newLevel} from quest: ${quest.name}`, xp_amount: quest.xp_reward,
+          });
+        }
+      }
+    }
+
     // Apply buff reward if defined
     if (quest.buff_reward_id) {
-      const { data: buffTemplate } = await supabase.from("buffs" as any).select("*").eq("id", quest.buff_reward_id).single();
+      const { data: buffTemplate } = await supabase.from("buffs").select("*").eq("id", quest.buff_reward_id).single();
       if (buffTemplate) {
         const bt = buffTemplate as any;
         const expiresAt = bt.duration_hours ? new Date(Date.now() + bt.duration_hours * 3600000).toISOString() : null;
-        await supabase.from("buffs" as any).insert({
+        await supabase.from("buffs").insert({
           user_id: user.id, name: bt.name, description: bt.description || "", effect_type: "buff",
           stat_affected: bt.stat_affected, modifier_value: bt.modifier_value, duration_hours: bt.duration_hours,
           source: quest.name, expires_at: expiresAt,
         });
-        await supabase.from("activity_log" as any).insert({
+        await supabase.from("activity_log").insert({
           user_id: user.id, event_type: "buff_gained", description: `Buff gained: ${bt.name} from ${quest.name}`, xp_amount: 0,
         });
       }
@@ -126,22 +165,21 @@ export default function QuestsPage() {
     setQuests((prev) => prev.filter((q) => q.id !== id));
     await supabase.from("quests").delete().eq("id", id);
 
-    await supabase.from("activity_log" as any).insert({
+    await supabase.from("activity_log").insert({
       user_id: user.id, event_type: "quest_failed", description: `Quest failed: ${quest.name}`, xp_amount: 0,
     });
 
-    // Apply debuff penalty if defined
     if (quest.debuff_penalty_id) {
-      const { data: debuffTemplate } = await supabase.from("buffs" as any).select("*").eq("id", quest.debuff_penalty_id).single();
+      const { data: debuffTemplate } = await supabase.from("buffs").select("*").eq("id", quest.debuff_penalty_id).single();
       if (debuffTemplate) {
         const dt = debuffTemplate as any;
         const expiresAt = dt.duration_hours ? new Date(Date.now() + dt.duration_hours * 3600000).toISOString() : null;
-        await supabase.from("buffs" as any).insert({
+        await supabase.from("buffs").insert({
           user_id: user.id, name: dt.name, description: dt.description || "", effect_type: "debuff",
           stat_affected: dt.stat_affected, modifier_value: dt.modifier_value, duration_hours: dt.duration_hours,
           source: quest.name, expires_at: expiresAt,
         });
-        await supabase.from("activity_log" as any).insert({
+        await supabase.from("activity_log").insert({
           user_id: user.id, event_type: "debuff_gained", description: `Debuff applied: ${dt.name} from failing ${quest.name}`, xp_amount: 0,
         });
       }
@@ -151,9 +189,24 @@ export default function QuestsPage() {
   const generateLootDesc = (f: NewQuestForm): string => {
     const parts: string[] = [];
     if (f.xp_reward > 0) parts.push(`+${f.xp_reward} XP`);
+    if (f.linked_skill_id) {
+      const sk = skills.find((s) => s.id === f.linked_skill_id);
+      if (sk) parts.push(`Skill: ${sk.name}`);
+    }
     if (f.buff_name.trim()) parts.push(`Buff: ${f.buff_name} (+${f.buff_value} ${f.buff_stat})`);
     if (f.debuff_name.trim()) parts.push(`Penalty on fail: ${f.debuff_name} (${f.debuff_value} ${f.debuff_stat})`);
     return parts.join(" | ") || "No rewards set";
+  };
+
+  const incrementProgress = async (id: string) => {
+    const quest = quests.find((q) => q.id === id);
+    if (!quest || quest.completed || !user) return;
+    const newProgress = Math.min(quest.progress + 1, quest.total);
+    setQuests((prev) => prev.map((q) => q.id === id ? { ...q, progress: newProgress } : q));
+    await supabase.from("quests").update({ progress: newProgress }).eq("id", id);
+    if (newProgress >= quest.total) {
+      completeQuest(id);
+    }
   };
 
   const addQuest = async () => {
@@ -162,24 +215,22 @@ export default function QuestsPage() {
     let buffId: string | null = null;
     let debuffId: string | null = null;
 
-    // Create buff template if defined
     if (form.buff_name.trim()) {
       const dur = parseInt(form.buff_duration) || null;
-      const { data } = await supabase.from("buffs" as any).insert({
+      const { data } = await supabase.from("buffs").insert({
         user_id: user.id, name: form.buff_name, effect_type: "buff", stat_affected: form.buff_stat,
         modifier_value: form.buff_value, duration_hours: dur, source: "quest_reward",
       }).select("id").single();
-      if (data) buffId = (data as any).id;
+      if (data) buffId = data.id;
     }
 
-    // Create debuff template if defined
     if (form.debuff_name.trim()) {
       const dur = parseInt(form.debuff_duration) || null;
-      const { data } = await supabase.from("buffs" as any).insert({
+      const { data } = await supabase.from("buffs").insert({
         user_id: user.id, name: form.debuff_name, effect_type: "debuff", stat_affected: form.debuff_stat,
         modifier_value: form.debuff_value, duration_hours: dur, source: "quest_penalty",
       }).select("id").single();
-      if (data) debuffId = (data as any).id;
+      if (data) debuffId = data.id;
     }
 
     const loot = generateLootDesc(form);
@@ -188,7 +239,8 @@ export default function QuestsPage() {
       user_id: user.id, name: form.name.trim(), type: form.type, total: form.total,
       xp_reward: form.xp_reward, loot_description: loot,
       buff_reward_id: buffId, debuff_penalty_id: debuffId,
-    } as any).select("id, name, type, progress, total, xp_reward, completed, loot_description, equipment_reward_id, buff_reward_id, debuff_penalty_id").single();
+      linked_skill_id: form.linked_skill_id || null,
+    } as any).select("id, name, type, progress, total, xp_reward, completed, loot_description, equipment_reward_id, buff_reward_id, debuff_penalty_id, linked_skill_id").single();
     if (data) setQuests((prev) => [data as Quest, ...prev]);
     setForm(defaultForm);
     setShowNewForm(false);
@@ -257,10 +309,22 @@ export default function QuestsPage() {
                       min={1} className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
                   </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-mono text-muted-foreground block mb-1">STEPS</label>
-                  <input type="number" value={form.total} onChange={(e) => setForm((f) => ({ ...f, total: Math.max(1, parseInt(e.target.value) || 1) }))}
-                    min={1} className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-mono text-muted-foreground block mb-1">STEPS</label>
+                    <input type="number" value={form.total} onChange={(e) => setForm((f) => ({ ...f, total: Math.max(1, parseInt(e.target.value) || 1) }))}
+                      min={1} className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-muted-foreground block mb-1">LINKED SKILL</label>
+                    <select value={form.linked_skill_id} onChange={(e) => setForm((f) => ({ ...f, linked_skill_id: e.target.value }))}
+                      className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors">
+                      <option value="">None</option>
+                      {skills.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} (Lv{s.level})</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Buff Reward */}
@@ -361,39 +425,68 @@ export default function QuestsPage() {
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {groupQuests.map((quest, i) => (
-                    <motion.div key={quest.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-                      className={`bg-card border rounded transition-colors ${quest.completed ? "border-neon-green/20 opacity-60" : "border-border hover:border-primary/20"}`}>
-                      <div className="flex items-center gap-3 p-3">
-                        <button onClick={() => !quest.completed && completeQuest(quest.id)}
-                          className={`w-6 h-6 rounded shrink-0 border flex items-center justify-center transition-colors ${
-                            quest.completed ? "bg-neon-green/20 border-neon-green/40 text-neon-green" : "border-border hover:border-primary/40"
-                          }`}>{quest.completed && <Check size={12} />}</button>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-body truncate mb-1 ${quest.completed ? "line-through text-muted-foreground" : ""}`}>{quest.name}</p>
-                          <ProgressBar value={quest.completed ? quest.total : quest.progress} max={quest.total}
-                            variant={quest.completed ? "green" : "amber"} showValue={false} />
-                          {quest.loot_description && (
-                            <p className="text-[9px] font-mono text-muted-foreground mt-1">{quest.loot_description}</p>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0 flex items-center gap-2">
-                          <div>
-                            <p className="text-xs font-mono text-neon-green">+{quest.xp_reward} XP</p>
-                            <p className="text-[10px] font-mono text-muted-foreground">{quest.progress}/{quest.total}</p>
+                  {groupQuests.map((quest, i) => {
+                    const linkedSkill = quest.linked_skill_id ? skills.find((s) => s.id === quest.linked_skill_id) : null;
+                    const isExpanded = expandedId === quest.id;
+                    return (
+                      <motion.div key={quest.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+                        className={`bg-card border rounded transition-colors ${quest.completed ? "border-neon-green/20 opacity-60" : "border-border hover:border-primary/20"}`}>
+                        <div className="flex items-center gap-3 p-3 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : quest.id)}>
+                          <button onClick={(e) => { e.stopPropagation(); if (!quest.completed) completeQuest(quest.id); }}
+                            className={`w-6 h-6 rounded shrink-0 border flex items-center justify-center transition-colors ${
+                              quest.completed ? "bg-neon-green/20 border-neon-green/40 text-neon-green" : "border-border hover:border-primary/40"
+                            }`}>{quest.completed && <Check size={12} />}</button>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-body truncate ${quest.completed ? "line-through text-muted-foreground" : ""}`}>{quest.name}</p>
+                            <ProgressBar value={quest.completed ? quest.total : quest.progress} max={quest.total}
+                              variant={quest.completed ? "green" : "amber"} showValue={false} />
                           </div>
-                          {!quest.completed && (
-                            <button onClick={() => failQuest(quest.id)} className="text-muted-foreground hover:text-destructive transition-colors" title="Fail quest">
-                              <AlertTriangle size={12} />
-                            </button>
-                          )}
-                          <button onClick={() => deleteQuest(quest.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                            <X size={12} />
-                          </button>
+                          <div className="text-right shrink-0 flex items-center gap-2">
+                            <div>
+                              <p className="text-xs font-mono text-neon-green">+{quest.xp_reward} XP</p>
+                              <p className="text-[10px] font-mono text-muted-foreground">{quest.progress}/{quest.total}</p>
+                            </div>
+                            {isExpanded ? <ChevronUp size={12} className="text-muted-foreground" /> : <ChevronDown size={12} className="text-muted-foreground" />}
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden border-t border-border">
+                              <div className="p-3 space-y-2">
+                                {linkedSkill && (
+                                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-primary">
+                                    <Link2 size={10} /> Linked: {linkedSkill.name} (Lv{linkedSkill.level}, {linkedSkill.xp}/100 XP)
+                                  </div>
+                                )}
+                                {quest.loot_description && (
+                                  <p className="text-[10px] font-mono text-muted-foreground">{quest.loot_description}</p>
+                                )}
+                                <div className="flex gap-2 pt-1">
+                                  {!quest.completed && (
+                                    <>
+                                      <button onClick={() => incrementProgress(quest.id)}
+                                        className="px-2 py-1 rounded bg-primary/10 border border-primary/30 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors">
+                                        +1 PROGRESS
+                                      </button>
+                                      <button onClick={() => failQuest(quest.id)}
+                                        className="px-2 py-1 rounded bg-destructive/10 border border-destructive/30 text-destructive text-[10px] font-mono hover:bg-destructive/20 transition-colors">
+                                        <AlertTriangle size={10} className="inline mr-1" />FAIL
+                                      </button>
+                                    </>
+                                  )}
+                                  <button onClick={() => deleteQuest(quest.id)}
+                                    className="px-2 py-1 rounded bg-muted border border-border text-muted-foreground text-[10px] font-mono hover:text-destructive transition-colors ml-auto">
+                                    <X size={10} className="inline mr-1" />DELETE
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
             );

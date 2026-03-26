@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppSidebar from "@/components/AppSidebar";
+import Onboarding from "@/components/Onboarding";
 import AuthPage from "./pages/AuthPage";
 import Index from "./pages/Index";
 import NaviPage from "./pages/NaviPage";
@@ -16,11 +17,20 @@ import StatsPage from "./pages/StatsPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const queryClient = new QueryClient();
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      const done = localStorage.getItem("navi_onboarding_done");
+      if (!done) setShowOnboarding(true);
+    }
+  }, [user]);
 
   if (loading) {
     return (
@@ -31,6 +41,10 @@ function AppContent() {
   }
 
   if (!user) return <AuthPage />;
+
+  if (showOnboarding) {
+    return <Onboarding onComplete={() => setShowOnboarding(false)} />;
+  }
 
   return (
     <div className="flex min-h-screen">

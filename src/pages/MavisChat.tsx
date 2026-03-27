@@ -91,12 +91,12 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user } = useAuth();
-  const { profile } = useProfile();
-  const { quests, stats: questStats } = useQuests();
-  const { entries } = useJournal();
+  const { profile, updateProfile } = useProfile();
+  const { quests, stats: questStats, refetch: refetchQuests } = useQuests();
+  const { entries, refetch: refetchJournal } = useJournal();
   const { achievements } = useAchievements();
-  const { skills } = useOperatorSkills();
-  const { items: equipment } = useEquipment();
+  const { skills, refetch: refetchSkills } = useOperatorSkills();
+  const { items: equipment, refetch: refetchEquipment } = useEquipment();
   const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

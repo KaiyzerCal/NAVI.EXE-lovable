@@ -24,7 +24,9 @@ function computeBaseStats(
   currentStreak: number,
   xpTotal: number,
   naviLevel: number,
-  operatorLevel: number
+  operatorLevel: number,
+  perception: number,
+  luck: number,
 ) {
   const clamp = (v: number, min = 1, max = 100) => Math.max(min, Math.min(max, v));
   return [
@@ -33,6 +35,8 @@ function computeBaseStats(
     { name: "VIT", label: "Vitality",     value: clamp(currentStreak * 2 + operatorLevel),                       icon: <Heart size={12} />,  desc: "Consistency & endurance" },
     { name: "AGI", label: "Agility",      value: clamp(Math.floor(questsCompleted / 2) + naviLevel),             icon: <Zap size={12} />,    desc: "Speed of execution" },
     { name: "RES", label: "Resonance",    value: clamp(naviLevel * 2 + Math.floor(currentStreak / 2)),           icon: <Shield size={12} />, desc: "Navi bond strength" },
+    { name: "PER", label: "Perception",   value: clamp(perception),                                              icon: <ScanEye size={12} />, desc: "Awareness & insight" },
+    { name: "LCK", label: "Luck",         value: clamp(luck),                                                    icon: <Clover size={12} />,  desc: "Fortune & loot quality" },
   ];
 }
 

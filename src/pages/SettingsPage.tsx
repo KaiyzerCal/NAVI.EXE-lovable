@@ -1,10 +1,11 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { User, Bell, Database, Shield, Check } from "lucide-react";
+import { User, Bell, Database, Shield, Check, Sun, Moon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { toast } from "@/hooks/use-toast";
+import { useTheme } from "next-themes";
 
 const ENCOURAGEMENT_OPTIONS = ["Low", "Moderate", "High"] as const;
 const STYLE_OPTIONS = ["Casual", "Direct", "Poetic", "Technical"] as const;
@@ -64,6 +65,7 @@ function OptionRow<T extends string>({
 
 export default function SettingsPage() {
   const { profile, updateProfile, loading } = useProfile();
+  const { theme, setTheme } = useTheme();
   const [personality, setPersonality] = useState<NaviPersonalitySettings>(DEFAULT_PERSONALITY);
   const [saving, setSaving] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -127,6 +129,23 @@ export default function SettingsPage() {
             <button onClick={saveProfile} disabled={saving}
               className="px-4 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors disabled:opacity-50">
               {saving ? "SAVING..." : "SAVE PROFILE"}
+            </button>
+          </div>
+        </HudCard>
+
+        {/* Theme */}
+        <HudCard title="APPEARANCE" icon={<Sun size={14} />}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-body">Theme Mode</p>
+              <p className="text-[10px] font-mono text-muted-foreground">Switch between dark and light mode</p>
+            </div>
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors"
+            >
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              {theme === "dark" ? "LIGHT MODE" : "DARK MODE"}
             </button>
           </div>
         </HudCard>

@@ -16,29 +16,47 @@ export type Database = {
     Tables: {
       achievements: {
         Row: {
+          category: string
           created_at: string
           description: string
+          icon: string | null
           id: string
           name: string
+          rarity: string
+          source: string
+          threshold: number | null
           unlocked: boolean
+          unlocked_at: string | null
           user_id: string
           xp: number
         }
         Insert: {
+          category?: string
           created_at?: string
           description?: string
+          icon?: string | null
           id?: string
           name: string
+          rarity?: string
+          source?: string
+          threshold?: number | null
           unlocked?: boolean
+          unlocked_at?: string | null
           user_id: string
           xp?: number
         }
         Update: {
+          category?: string
           created_at?: string
           description?: string
+          icon?: string | null
           id?: string
           name?: string
+          rarity?: string
+          source?: string
+          threshold?: number | null
           unlocked?: boolean
+          unlocked_at?: string | null
           user_id?: string
           xp?: number
         }
@@ -348,6 +366,9 @@ export type Database = {
           navi_name: string
           navi_personality: string
           notification_settings: Json
+          onboarding_done: boolean
+          operator_level: number
+          operator_xp: number
           subclass: string | null
           user_navi_description: string | null
           xp_total: number
@@ -369,6 +390,9 @@ export type Database = {
           navi_name?: string
           navi_personality?: string
           notification_settings?: Json
+          onboarding_done?: boolean
+          operator_level?: number
+          operator_xp?: number
           subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number
@@ -390,6 +414,9 @@ export type Database = {
           navi_name?: string
           navi_personality?: string
           notification_settings?: Json
+          onboarding_done?: boolean
+          operator_level?: number
+          operator_xp?: number
           subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number

@@ -224,6 +224,20 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       }
       break;
     }
+    case "delete_skill": {
+      if (params.skill_id) {
+        await supabase.from("skills" as any).delete().eq("id", params.skill_id).eq("user_id", userId);
+        await logActivity(userId, "skill_deleted", `Skill deleted`, 0);
+      }
+      break;
+    }
+    case "delete_equipment": {
+      if (params.item_id) {
+        await supabase.from("equipment" as any).delete().eq("id", params.item_id).eq("user_id", userId);
+        await logActivity(userId, "equipment_deleted", `Equipment deleted`, 0);
+      }
+      break;
+    }
     default:
       console.warn("Unknown Navi action:", type);
   }

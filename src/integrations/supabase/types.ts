@@ -402,6 +402,7 @@ export type Database = {
           completed: boolean
           created_at: string
           debuff_penalty_id: string | null
+          description: string | null
           equipment_reward_id: string | null
           id: string
           linked_skill_id: string | null
@@ -419,6 +420,7 @@ export type Database = {
           completed?: boolean
           created_at?: string
           debuff_penalty_id?: string | null
+          description?: string | null
           equipment_reward_id?: string | null
           id?: string
           linked_skill_id?: string | null
@@ -436,6 +438,7 @@ export type Database = {
           completed?: boolean
           created_at?: string
           debuff_penalty_id?: string | null
+          description?: string | null
           equipment_reward_id?: string | null
           id?: string
           linked_skill_id?: string | null

@@ -308,7 +308,7 @@ export default function MavisChat() {
                 refetchSkills(),
                 refetchEquipment(),
                 refetchEffects(),
-                updateProfile({}),
+                refetchProfile(),
               ]);
             }
           } catch (err) {

@@ -152,12 +152,14 @@ export default function CharacterPage() {
             <p className="text-[9px] font-mono text-muted-foreground mt-0.5">
               {operatorXp.toLocaleString()} / {xpToNext.toLocaleString()} XP TO LEVEL {operatorLevel + 1}
             </p>
-          </div>
-          {/* Edit toggle */}
-          <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)} className="text-[10px] font-mono shrink-0">
-            <Eye size={10} className="mr-1" /> {editMode ? "VIEW" : "EDIT"}
-          </Button>
         </div>
+      </div>
+      {/* Edit toggle — moved below hero to avoid blocking content on mobile */}
+      <div className="flex justify-end mb-4">
+        <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)} className="text-[10px] font-mono">
+          <Eye size={10} className="mr-1" /> {editMode ? "VIEW" : "EDIT"}
+        </Button>
+      </div>
         {/* Stat chips */}
         <div className="relative flex gap-2 px-6 pb-4 flex-wrap">
           {baseStats.map((s) => (

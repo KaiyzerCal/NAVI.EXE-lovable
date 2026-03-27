@@ -133,7 +133,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       break;
     }
     case "update_profile": {
-      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception", "luck", "codex_points", "cali_coins", "operator_level", "operator_xp"];
+      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception", "luck", "codex_points", "cali_coins", "operator_level", "operator_xp", "onboarding_done", "notification_settings", "user_navi_description"];
       const updates: any = {};
       for (const key of allowed) {
         if (params[key] !== undefined) updates[key] = params[key];

@@ -180,5 +180,16 @@ export function useQuests() {
     xpEarned: quests.filter((q) => q.completed).reduce((s, q) => s + q.xp_reward, 0),
   };
 
-  return { quests, loading, stats, createQuest, updateQuest, toggleQuest, deleteQuest };
+  // ── Refetch (for external mutations like Navi actions) ─────────────────
+  const refetch = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("quests")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    if (data) setQuests(data as Quest[]);
+  }, [user]);
+
+  return { quests, loading, stats, createQuest, updateQuest, toggleQuest, deleteQuest, refetch };
 }

@@ -134,5 +134,16 @@ export function useJournal() {
     [user]
   );
 
-  return { entries, loading, createEntry, updateEntry, deleteEntry };
+  // ── Refetch (for external mutations like Navi actions) ─────────────────
+  const refetch = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("journal_entries")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    if (data) setEntries(data as JournalEntry[]);
+  }, [user]);
+
+  return { entries, loading, createEntry, updateEntry, deleteEntry, refetch };
 }

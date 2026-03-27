@@ -1,49 +1,64 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { BarChart3, TrendingUp, Target, Flame, BookOpen, Loader2 } from "lucide-react";
+import { BarChart3, TrendingUp, Target, Flame, BookOpen, Loader2, Trophy } from "lucide-react";
 import { useProfile } from "@/hooks/useProfile";
 import { useQuests } from "@/hooks/useQuests";
 import { useJournal } from "@/hooks/useJournal";
+import { useAchievements } from "@/hooks/useAchievements";
+import { useEffect } from "react";
 
-// Build last-7-days XP bars from quest completion timestamps
 function buildWeeklyData(quests: ReturnType<typeof useQuests>["quests"]) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const now = new Date();
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(now);
     d.setDate(d.getDate() - (6 - i));
-    return { day: days[d.getDay()], date: d.toDateString(), xp: 0, quests: 0 };
+    return { day: days[d.getDay()], date: d.toDateString(), xp: 0, count: 0 };
   });
-
   for (const q of quests) {
     if (!q.completed) continue;
     const updated = new Date(q.updated_at).toDateString();
     const slot = week.find((w) => w.date === updated);
-    if (slot) { slot.xp += q.xp_reward; slot.quests += 1; }
+    if (slot) { slot.xp += q.xp_reward; slot.count += 1; }
   }
   return week;
 }
+
+const RARITY_COLORS: Record<string, string> = {
+  COMMON: "text-muted-foreground",
+  RARE: "text-primary",
+  EPIC: "text-secondary",
+  LEGENDARY: "text-accent",
+};
 
 export default function StatsPage() {
   const { profile, loading: profileLoading } = useProfile();
   const { quests, loading: questsLoading, stats } = useQuests();
   const { entries, loading: journalLoading } = useJournal();
+  const { achievements, loading: achLoading, checkAchievements, stats: achStats } = useAchievements();
 
-  const loading = profileLoading || questsLoading || journalLoading;
+  const loading = profileLoading || questsLoading || journalLoading || achLoading;
+
+  // Auto-check achievements whenever data loads
+  useEffect(() => {
+    if (loading) return;
+    checkAchievements({
+      questsCompleted: stats.completed,
+      journalEntries: entries.length,
+      currentStreak: profile.current_streak,
+      xpTotal: profile.xp_total,
+      operatorLevel: (profile as any).operator_level ?? 1,
+      naviLevel: profile.navi_level,
+      hasMbti: !!profile.mbti_type,
+      hasSubClass: !!(profile as any).sub_class,
+      hasMainQuestCompleted: quests.some((q) => q.type === "Main" && q.completed),
+      sideQuestsCompleted: quests.filter((q) => q.type === "Side" && q.completed).length,
+    });
+  }, [loading]);
 
   const weeklyData = buildWeeklyData(quests);
   const maxXp = Math.max(...weeklyData.map((d) => d.xp), 1);
-
-  // Achievements derived from real data
-  const achievements = [
-    { name: "First Quest",    desc: "Complete your first quest",  unlocked: stats.completed >= 1 },
-    { name: "Week Warrior",   desc: "Complete 7 quests",          unlocked: stats.completed >= 7 },
-    { name: "Century",        desc: "Complete 100 quests",        unlocked: stats.completed >= 100 },
-    { name: "Chronicler",     desc: "Write 10 journal entries",   unlocked: entries.length >= 10 },
-    { name: "Grandmaster",    desc: "Reach Navi level 20",        unlocked: profile.navi_level >= 20 },
-    { name: "XP Hunter",      desc: "Earn 10,000 total XP",       unlocked: profile.xp_total >= 10000 },
-  ];
 
   if (loading) {
     return (
@@ -58,13 +73,13 @@ export default function StatsPage() {
     <div>
       <PageHeader title="STATS" subtitle="// PERFORMANCE METRICS" />
 
-      {/* Overview Cards */}
+      {/* Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "TOTAL XP",      value: profile.xp_total.toLocaleString(), icon: <TrendingUp size={16} />, color: "text-neon-cyan" },
-          { label: "QUESTS DONE",   value: stats.completed,                   icon: <Target size={16} />,    color: "text-neon-green" },
-          { label: "JOURNAL ENTRIES", value: entries.length,                  icon: <BookOpen size={16} />,  color: "text-neon-purple" },
-          { label: "BEST STREAK",   value: `${profile.longest_streak}d`,      icon: <Flame size={16} />,     color: "text-neon-amber" },
+          { label: "TOTAL XP",       value: profile.xp_total.toLocaleString(), icon: <TrendingUp size={16} />, color: "text-neon-cyan" },
+          { label: "QUESTS DONE",    value: stats.completed,                   icon: <Target size={16} />,     color: "text-neon-green" },
+          { label: "JOURNAL ENTRIES",value: entries.length,                    icon: <BookOpen size={16} />,   color: "text-neon-purple" },
+          { label: "BEST STREAK",    value: `${profile.longest_streak}d`,      icon: <Flame size={16} />,      color: "text-neon-amber" },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <HudCard title={stat.label} icon={stat.icon}>
@@ -74,22 +89,16 @@ export default function StatsPage() {
         ))}
       </div>
 
-      {/* Weekly XP chart — real data */}
-      <HudCard title="XP THIS WEEK (BY QUEST COMPLETIONS)" icon={<BarChart3 size={14} />} glow className="mb-6">
-        <div className="flex items-end gap-2 h-40">
+      {/* Weekly XP chart */}
+      <HudCard title="XP THIS WEEK" icon={<BarChart3 size={14} />} glow className="mb-6">
+        <div className="flex items-end gap-2 h-32">
           {weeklyData.map((d, i) => (
-            <motion.div
-              key={d.day}
-              initial={{ height: 0 }}
-              animate={{ height: `${(d.xp / maxXp) * 100}%` }}
-              transition={{ delay: i * 0.05, duration: 0.4 }}
-              className="flex-1 flex flex-col items-center justify-end"
-            >
-              {d.xp > 0 && <span className="text-[10px] font-mono text-neon-cyan mb-1">{d.xp}</span>}
+            <motion.div key={d.day} initial={{ height: 0 }} animate={{ height: `${(d.xp / maxXp) * 100}%` }} transition={{ delay: i * 0.05, duration: 0.4 }} className="flex-1 flex flex-col items-center justify-end">
+              {d.xp > 0 && <span className="text-[9px] font-mono text-neon-cyan mb-1">{d.xp}</span>}
               <div className="w-full rounded-t bg-primary/30 border border-primary/40 relative overflow-hidden" style={{ height: "100%", minHeight: d.xp > 0 ? "4px" : "2px" }}>
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/40 to-primary/10" />
               </div>
-              <span className="text-[10px] font-mono text-muted-foreground mt-1">{d.day}</span>
+              <span className="text-[9px] font-mono text-muted-foreground mt-1">{d.day}</span>
             </motion.div>
           ))}
         </div>
@@ -103,13 +112,13 @@ export default function StatsPage() {
         <HudCard title="QUEST BREAKDOWN" icon={<Target size={14} />}>
           <div className="space-y-2">
             {(["Main","Side","Weekly","Daily","Minor","Epic"] as const).map((type) => {
-              const count = quests.filter((q) => q.type === type).length;
-              const done  = quests.filter((q) => q.type === type && q.completed).length;
-              if (count === 0) return null;
+              const total = quests.filter((q) => q.type === type).length;
+              const done = quests.filter((q) => q.type === type && q.completed).length;
+              if (total === 0) return null;
               return (
                 <div key={type} className="flex items-center justify-between">
                   <span className="text-sm font-body">{type}</span>
-                  <span className="text-xs font-mono text-muted-foreground">{done}/{count} complete</span>
+                  <span className="text-xs font-mono text-muted-foreground">{done}/{total}</span>
                 </div>
               );
             })}
@@ -117,18 +126,28 @@ export default function StatsPage() {
           </div>
         </HudCard>
 
-        {/* Achievements — all derived from real data */}
-        <HudCard title="ACHIEVEMENTS" icon={<TrendingUp size={14} />}>
-          <div className="space-y-2">
-            {achievements.map((a) => (
-              <div key={a.name} className={`flex items-center gap-3 py-1 ${!a.unlocked ? "opacity-40" : ""}`}>
-                <div className={`w-6 h-6 rounded flex items-center justify-center text-xs ${a.unlocked ? "bg-neon-amber/20 text-neon-amber" : "bg-muted text-muted-foreground"}`}>★</div>
-                <div>
-                  <p className="text-sm font-body">{a.name}</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">{a.desc}</p>
+        {/* Achievements — ALL from DB, real unlocked status */}
+        <HudCard title={`ACHIEVEMENTS (${achStats.unlocked}/${achStats.total})`} icon={<Trophy size={14} />}>
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {achievements.length === 0 ? (
+              <p className="text-xs font-mono text-muted-foreground">Loading achievements...</p>
+            ) : (
+              achievements.map((a) => (
+                <div key={a.id} className={`flex items-center gap-3 py-1 ${!a.unlocked ? "opacity-35" : ""}`}>
+                  <div className={`w-7 h-7 rounded flex items-center justify-center text-sm shrink-0 ${a.unlocked ? "bg-neon-amber/20" : "bg-muted"}`}>
+                    {a.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-body ${RARITY_COLORS[a.rarity]}`}>{a.name}</p>
+                    <p className="text-[10px] font-mono text-muted-foreground truncate">{a.description}</p>
+                    {a.unlocked && a.unlocked_at && (
+                      <p className="text-[9px] font-mono text-neon-green">{new Date(a.unlocked_at).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                  <span className={`text-[9px] font-mono shrink-0 ${RARITY_COLORS[a.rarity]}`}>{a.rarity}</span>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </HudCard>
       </div>

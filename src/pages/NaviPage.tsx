@@ -116,16 +116,43 @@ const NAVI_PERSONALITIES = [
 ];
 
 const NAVI_SKILLS_BY_LEVEL: { name: string; unlockLevel: number; max: number; desc: string }[] = [
-  { name: "Data Scan", unlockLevel: 1, max: 10, desc: "Analyze quest data" },
-  { name: "Sync Pulse", unlockLevel: 3, max: 10, desc: "Boost operator focus" },
-  { name: "Firewall", unlockLevel: 5, max: 10, desc: "Resist procrastination" },
-  { name: "Cache Burst", unlockLevel: 8, max: 10, desc: "Memory recall boost" },
-  { name: "Overclock", unlockLevel: 12, max: 10, desc: "Temporary stat buff" },
-  { name: "Neural Link", unlockLevel: 15, max: 10, desc: "Deep operator sync" },
-  { name: "Quantum Parse", unlockLevel: 20, max: 10, desc: "Multi-task analysis" },
-  { name: "Aegis Shield", unlockLevel: 25, max: 10, desc: "Burnout protection" },
-  { name: "Hyperdrive", unlockLevel: 30, max: 10, desc: "Productivity surge" },
-  { name: "Singularity", unlockLevel: 40, max: 10, desc: "Ultimate ability" },
+  // Tier 1: Levels 1–10
+  { name: "Data Scan",        unlockLevel: 1,   max: 100, desc: "Analyze quest and operator data in real time" },
+  { name: "Sync Pulse",       unlockLevel: 3,   max: 100, desc: "Boost operator focus during work sessions" },
+  { name: "Firewall",         unlockLevel: 5,   max: 100, desc: "Detect and block procrastination patterns" },
+  { name: "Cache Burst",      unlockLevel: 7,   max: 100, desc: "Rapid recall of operator goals and context" },
+  { name: "Log Parser",       unlockLevel: 10,  max: 100, desc: "Extract key insights from journal entries" },
+  // Tier 2: Levels 11–20
+  { name: "Overclock",        unlockLevel: 12,  max: 100, desc: "Temporary productivity surge mode" },
+  { name: "Neural Link",      unlockLevel: 15,  max: 100, desc: "Deep synchronization with operator intent" },
+  { name: "Threat Scan",      unlockLevel: 17,  max: 100, desc: "Identify blockers before they derail quests" },
+  { name: "Quantum Parse",    unlockLevel: 20,  max: 100, desc: "Multi-threaded task analysis and prioritization" },
+  { name: "Echo Memory",      unlockLevel: 22,  max: 100, desc: "Surface relevant past context mid-conversation" },
+  // Tier 3: Levels 23–35
+  { name: "Aegis Shield",     unlockLevel: 25,  max: 100, desc: "Burnout detection and recovery protocols" },
+  { name: "Beacon Protocol",  unlockLevel: 27,  max: 100, desc: "Redirect operator attention to priority quests" },
+  { name: "Signal Boost",     unlockLevel: 30,  max: 100, desc: "Amplify motivation signals in real time" },
+  { name: "Pattern Engine",   unlockLevel: 32,  max: 100, desc: "Identify behavioral patterns from quest data" },
+  { name: "Ghost Mode",       unlockLevel: 35,  max: 100, desc: "Silent background analysis between sessions" },
+  // Tier 4: Levels 36–50
+  { name: "Hyperdrive",       unlockLevel: 38,  max: 100, desc: "Maximum output mode — limited duration" },
+  { name: "Resonance Field",  unlockLevel: 40,  max: 100, desc: "Align operator energy with daily quest cadence" },
+  { name: "Delta Protocol",   unlockLevel: 43,  max: 100, desc: "Adapt communication style to operator state" },
+  { name: "Memory Forge",     unlockLevel: 46,  max: 100, desc: "Compress and distill long-term operator memory" },
+  { name: "Sync Cascade",     unlockLevel: 50,  max: 100, desc: "Full-app state sync in a single context pass" },
+  // Tier 5: Levels 51–70
+  { name: "Zero Lag",         unlockLevel: 55,  max: 100, desc: "Instantaneous context retrieval from any session" },
+  { name: "Cortex Map",       unlockLevel: 58,  max: 100, desc: "Build a living map of operator goals and fears" },
+  { name: "Phantom Strike",   unlockLevel: 62,  max: 100, desc: "Proactively suggest quests before operator asks" },
+  { name: "Forge Protocol",   unlockLevel: 65,  max: 100, desc: "Auto-generate quest suggestions from journal data" },
+  { name: "Gravity Well",     unlockLevel: 70,  max: 100, desc: "Pull operator back to high-priority work naturally" },
+  // Tier 6: Levels 71–90
+  { name: "Voidwalker",       unlockLevel: 75,  max: 100, desc: "Navigate complex multi-step projects with clarity" },
+  { name: "Epoch Scan",       unlockLevel: 80,  max: 100, desc: "Long-range pattern analysis across months of data" },
+  { name: "Nova Burst",       unlockLevel: 85,  max: 100, desc: "Temporary stat multiplier for all operator metrics" },
+  { name: "Infinite Loop",    unlockLevel: 90,  max: 100, desc: "Recursive self-improvement from operator feedback" },
+  // Tier 7: Level 100
+  { name: "Singularity",      unlockLevel: 100, max: 100, desc: "Full SYNC. Navi and Operator operate as one system." },
 ];
 
 const CATEGORIES: SkinCategory[] = ["ELEMENTAL", "CLASS", "MYTHIC", "COSMIC", "NATURE", "TECH", "SPECIAL"];
@@ -268,9 +295,9 @@ export default function NaviPage() {
             profile.navi_name || "NAVI.EXE"
           )}
         </h2>
-        <p className="text-muted-foreground text-xs font-mono">LVL {naviLevel}/50 // SKIN: {equippedSkin}</p>
+        <p className="text-muted-foreground text-xs font-mono">LVL {naviLevel}/100 // SKIN: {equippedSkin}</p>
         <div className="w-48 mt-2">
-          <ProgressBar value={naviLevel} max={50} variant="cyan" label="NAVI LEVEL" size="sm" />
+          <ProgressBar value={naviLevel} max={100} variant="cyan" label="NAVI LEVEL" size="sm" />
         </div>
         <p className="text-[10px] font-mono text-muted-foreground mt-1 cursor-pointer hover:text-primary" onClick={() => navigate("/mavis")}>
           ▶ TAP TO CHAT WITH NAVI
@@ -368,7 +395,7 @@ export default function NaviPage() {
                 <input
                   type="range"
                   min={1}
-                  max={50}
+                  max={100}
                   value={naviLevel}
                   onChange={(e) => updateProfile({ navi_level: parseInt(e.target.value) })}
                   className="flex-1"

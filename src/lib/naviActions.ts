@@ -43,7 +43,9 @@ export function parseActions(text: string): { cleanText: string; actions: NaviAc
 }
 
 async function logActivity(userId: string, eventType: string, description: string, xpAmount: number) {
-  await supabase.from("activity_log" as any).insert({ user_id: userId, event_type: eventType, description, xp_amount: xpAmount });
+async function logActivity(userId: string, eventType: string, description: string, xpAmount: number) {
+  const { error } = await supabase.from("activity_log").insert({ user_id: userId, event_type: eventType, description, xp_amount: xpAmount });
+  if (error) console.error("logActivity error:", error);
 }
 
 const xpForLevel = (lv: number) => lv * 500;

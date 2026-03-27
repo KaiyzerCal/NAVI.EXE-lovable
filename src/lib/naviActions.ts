@@ -5,21 +5,46 @@ export interface NaviAction {
   params: Record<string, any>;
 }
 
-const ACTION_REGEX = /:::ACTION(\{.*?\}):::/gs;
-
 export function parseActions(text: string): { cleanText: string; actions: NaviAction[] } {
   const actions: NaviAction[] = [];
-  const cleanText = text.replace(ACTION_REGEX, (_, json) => {
+  let cleanText = text;
+  const marker = ":::ACTION";
+  const endMarker = ":::";
+
+  let safety = 0;
+  while (safety++ < 50) {
+    const start = cleanText.indexOf(marker);
+    if (start === -1) break;
+    const jsonStart = start + marker.length;
+    // Find matching closing brace by counting depth
+    let depth = 0;
+    let jsonEnd = -1;
+    for (let i = jsonStart; i < cleanText.length; i++) {
+      if (cleanText[i] === "{") depth++;
+      else if (cleanText[i] === "}") {
+        depth--;
+        if (depth === 0) { jsonEnd = i; break; }
+      }
+    }
+    if (jsonEnd === -1) break;
+    const jsonStr = cleanText.slice(jsonStart, jsonEnd + 1);
+    // Find the trailing :::
+    const afterJson = cleanText.indexOf(endMarker, jsonEnd + 1);
+    const removeEnd = afterJson !== -1 && afterJson <= jsonEnd + 4 ? afterJson + endMarker.length : jsonEnd + 1;
     try {
-      actions.push(JSON.parse(json));
-    } catch {}
-    return "";
-  });
+      actions.push(JSON.parse(jsonStr));
+    } catch (e) {
+      console.error("Failed to parse action JSON:", jsonStr, e);
+    }
+    cleanText = cleanText.slice(0, start) + cleanText.slice(removeEnd);
+  }
+
   return { cleanText: cleanText.trim(), actions };
 }
 
 async function logActivity(userId: string, eventType: string, description: string, xpAmount: number) {
-  await supabase.from("activity_log" as any).insert({ user_id: userId, event_type: eventType, description, xp_amount: xpAmount });
+  const { error } = await supabase.from("activity_log").insert({ user_id: userId, event_type: eventType, description, xp_amount: xpAmount });
+  if (error) console.error("logActivity error:", error);
 }
 
 const xpForLevel = (lv: number) => lv * 500;
@@ -145,13 +170,19 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       break;
     }
     case "create_journal": {
-      await supabase.from("journal_entries").insert({
+      const { error } = await supabase.from("journal_entries").insert({
         user_id: userId,
         title: params.title || "New Entry",
         content: params.content || "",
         tags: params.tags || [],
         xp_earned: params.xp_earned || 10,
+        category: params.category || "personal",
+        importance: params.importance || "medium",
       });
+      if (error) {
+        console.error("create_journal error:", error);
+        break;
+      }
       await awardXP(userId, params.xp_earned || 10);
       await logActivity(userId, "journal_created", `Journal entry: ${params.title}`, params.xp_earned || 10);
       break;

@@ -47,6 +47,9 @@ const defaults: ProfileData = {
   user_navi_description: null,
   last_active: null,
   subclass: null,
+  operator_level: 1,
+  operator_xp: 0,
+  onboarding_done: false,
   notification_settings: {
     questReminders: true,
     streakWarnings: true,

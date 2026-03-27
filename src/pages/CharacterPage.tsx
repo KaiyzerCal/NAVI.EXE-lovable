@@ -151,8 +151,13 @@ export default function CharacterPage() {
                 MBTI: <span className="text-primary">{mbtiType}</span> // {classInfo?.desc}
               </p>
             )}
-            <p className="text-[10px] font-mono text-muted-foreground mb-2">
+            <p className="text-[10px] font-mono text-muted-foreground mb-1">
               OPERATOR LV{operatorLevel} · NAVI LV{profile.navi_level} · {operatorXp.toLocaleString()} XP
+            </p>
+            <p className="text-[10px] font-mono text-muted-foreground mb-2 flex items-center gap-3">
+              <span><Coins size={10} className="inline mr-0.5 text-accent" />{((profile as any).codex_points ?? 0).toLocaleString()} CP</span>
+              <span><Coins size={10} className="inline mr-0.5 text-secondary" />{((profile as any).cali_coins ?? 0).toLocaleString()} CC</span>
+            </p>
             </p>
             <ProgressBar value={operatorXp % xpForLevel(1) || operatorXp} max={xpToNext} variant="cyan" showValue={false} size="sm" />
             <p className="text-[9px] font-mono text-muted-foreground mt-0.5">

@@ -134,9 +134,9 @@ export default function CharacterPage() {
               <span className="text-[10px] font-mono bg-secondary/20 text-secondary border border-secondary/30 px-2 py-0.5 rounded">
                 {characterClass.toUpperCase()}
               </span>
-              {(profile as any).sub_class && (
+              {profile.subclass && (
                 <span className="text-[10px] font-mono bg-neon-green/10 text-neon-green border border-neon-green/30 px-2 py-0.5 rounded">
-                  {(profile as any).sub_class}
+                  {profile.subclass}
                 </span>
               )}
             </div>

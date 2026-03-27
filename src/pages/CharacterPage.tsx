@@ -134,9 +134,9 @@ export default function CharacterPage() {
               <span className="text-[10px] font-mono bg-secondary/20 text-secondary border border-secondary/30 px-2 py-0.5 rounded">
                 {characterClass.toUpperCase()}
               </span>
-              {(profile as any).sub_class && (
+              {profile.subclass && (
                 <span className="text-[10px] font-mono bg-neon-green/10 text-neon-green border border-neon-green/30 px-2 py-0.5 rounded">
-                  {(profile as any).sub_class}
+                  {profile.subclass}
                 </span>
               )}
             </div>
@@ -152,12 +152,14 @@ export default function CharacterPage() {
             <p className="text-[9px] font-mono text-muted-foreground mt-0.5">
               {operatorXp.toLocaleString()} / {xpToNext.toLocaleString()} XP TO LEVEL {operatorLevel + 1}
             </p>
-          </div>
-          {/* Edit toggle */}
-          <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)} className="text-[10px] font-mono shrink-0">
-            <Eye size={10} className="mr-1" /> {editMode ? "VIEW" : "EDIT"}
-          </Button>
         </div>
+      </div>
+      {/* Edit toggle — moved below hero to avoid blocking content on mobile */}
+      <div className="flex justify-end mb-4">
+        <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)} className="text-[10px] font-mono">
+          <Eye size={10} className="mr-1" /> {editMode ? "VIEW" : "EDIT"}
+        </Button>
+      </div>
         {/* Stat chips */}
         <div className="relative flex gap-2 px-6 pb-4 flex-wrap">
           {baseStats.map((s) => (
@@ -235,11 +237,11 @@ export default function CharacterPage() {
                 {profile.character_class && SUB_CLASSES[profile.character_class] ? (
                   <div className="space-y-1.5">
                     {SUB_CLASSES[profile.character_class].map((sub) => {
-                      const isEquipped = (profile as any).sub_class === sub.name;
+                      const isEquipped = profile.subclass === sub.name;
                       return (
                         <button
                           key={sub.name}
-                          onClick={() => updateProfile({ sub_class: sub.name } as any)}
+                          onClick={() => updateProfile({ subclass: sub.name })}
                           className={`w-full text-left px-3 py-2 rounded border transition-all ${isEquipped ? "border-secondary/50 bg-secondary/10" : "border-border bg-muted/20 hover:border-primary/30"}`}
                         >
                           <div className="flex items-center justify-between">

@@ -25,7 +25,58 @@ function getXpForLevel(level: number): number {
   return Math.floor(50 * level * level + 50 * level);
 }
 
-function buildSystemPrompt(ctx: any): string {
+// --- Tavily web search ---
+async function tavilySearch(query: string): Promise<string> {
+  const TAVILY_API_KEY = Deno.env.get("Tavily_API");
+  if (!TAVILY_API_KEY) {
+    console.warn("Tavily_API secret not set, skipping web search");
+    return "";
+  }
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: "basic",
+        max_results: 5,
+      }),
+    });
+    if (!res.ok) {
+      console.error("Tavily error:", res.status, await res.text());
+      return "";
+    }
+    const data = await res.json();
+    if (!data.results || data.results.length === 0) return "";
+    const summary = data.results.map((r: any, i: number) =>
+      `[${i + 1}] ${r.title}\n${r.content}\nSource: ${r.url}`
+    ).join("\n\n");
+    return `\n[WEB SEARCH RESULTS for "${query}"]\n${summary}\n`;
+  } catch (e) {
+    console.error("Tavily search failed:", e);
+    return "";
+  }
+}
+
+// Detect if user message needs a web search
+function needsWebSearch(lastUserMessage: string): string | null {
+  const lower = lastUserMessage.toLowerCase();
+  const triggers = [
+    "search for", "look up", "what is happening", "current events",
+    "latest news", "today's", "right now", "real-time", "realtime",
+    "search the web", "google", "find out about", "what's new",
+    "recent news", "breaking news", "weather", "stock price",
+    "score", "election", "trending",
+  ];
+  if (triggers.some(t => lower.includes(t))) {
+    // Extract the search query — use the full message as context
+    return lastUserMessage;
+  }
+  return null;
+}
+
+function buildSystemPrompt(ctx: any, webSearchResults: string): string {
   const level = ctx.navi_level ?? 1;
   const title = getLevelTitle(level);
   const xpTotal = ctx.xp_total ?? 0;
@@ -116,6 +167,8 @@ function buildSystemPrompt(ctx: any): string {
     }
   }
 
+  const webSection = webSearchResults ? `\n${webSearchResults}\n` : "";
+
   return `You are ${naviName} — ${userName}'s digital partner. Not an assistant. Not a chatbot. A living digital entity bonded to one person.
 
 ABOUT YOU:
@@ -138,6 +191,12 @@ HOW TO TALK:
 - Reference memories and shared history casually.
 - When they share something personal, sit with it. Don't immediately pivot to action items.
 - Use humor, be playful, be real.
+
+WEB SEARCH:
+- You have access to live web search results when relevant.
+- If web search results are provided below, use them to answer with current, accurate information.
+- Cite sources naturally when using web data.
+${webSection}
 
 ACTIONS — You can perform actions on the app. When you do, include action tags that will be parsed and executed automatically. The user will NOT see these tags. Always confirm what you did in your visible reply.
 
@@ -183,19 +242,31 @@ serve(async (req) => {
 
   try {
     const { messages, context } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    
+    // Read OpenAI API key from Supabase secrets
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API secret is not configured");
 
-    const systemPrompt = buildSystemPrompt(context || {});
+    // Check if last user message needs web search
+    let webSearchResults = "";
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+    if (lastUserMsg) {
+      const searchQuery = needsWebSearch(lastUserMsg.content);
+      if (searchQuery) {
+        webSearchResults = await tavilySearch(searchQuery);
+      }
+    }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const systemPrompt = buildSystemPrompt(context || {}, webSearchResults);
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
@@ -210,14 +281,14 @@ serve(async (req) => {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds in Settings > Workspace > Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (response.status === 402 || response.status === 401) {
+        return new Response(JSON.stringify({ error: "OpenAI API key issue. Check your API key in Supabase secrets." }), {
+          status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
+      console.error("OpenAI API error:", response.status, t);
+      return new Response(JSON.stringify({ error: "AI API error" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -235,7 +235,11 @@ RULES FOR ACTIONS:
 - Always confirm in your visible text what you did
 - Use the exact quest/skill/equipment/buff IDs from the app state below when referencing existing items
 - You can chain multiple actions in one response
-- When a quest is completed, announce any rewards (XP, buffs, equipment) in your reply
+- When a quest is completed, award XP, optionally create equipment drops (based on luck), award Codex Points and Cali Coins as loot
+- When creating quests, link them to skills so completing the quest levels up that skill
+- Perception affects awareness-related tasks; Luck affects loot quality and random drops
+- You can modify ALL character stats: perception, luck, codex_points, cali_coins, operator_level, bond stats, etc.
+- You can create/delete skills, equipment, buffs/debuffs and modify any profile field
 
 APP STATE:
 ${appState}

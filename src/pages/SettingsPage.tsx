@@ -65,6 +65,7 @@ function OptionRow<T extends string>({
 
 export default function SettingsPage() {
   const { profile, updateProfile, loading } = useProfile();
+  const { theme, setTheme } = useTheme();
   const [personality, setPersonality] = useState<NaviPersonalitySettings>(DEFAULT_PERSONALITY);
   const [saving, setSaving] = useState(false);
   const [displayName, setDisplayName] = useState("");

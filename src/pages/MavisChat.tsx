@@ -262,6 +262,11 @@ export default function MavisChat() {
           achievements: achievements.slice(0, 15).map((a) => ({
             name: a.name, unlocked: a.unlocked,
           })),
+          buffs: buffs.map((b) => ({
+            id: b.id, name: b.name, effect_type: (b as any).effect_type || "buff",
+            stat_affected: (b as any).stat_affected || "", modifier_value: (b as any).modifier_value || 0,
+            source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,
+          })),
         },
         onDelta: (chunk) => {
           assistantContent += chunk;

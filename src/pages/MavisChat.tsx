@@ -388,6 +388,37 @@ export default function MavisChat() {
 
       {/* Input box */}
       <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">
+        {/* Glowing NAVI orb */}
+        <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
+          <motion.div
+            className="absolute inset-0 rounded-full bg-primary/20 border border-primary/40"
+            animate={isLoading ? {
+              scale: [1, 1.3, 1],
+              opacity: [0.4, 0.8, 0.4],
+            } : { scale: 1, opacity: 0.4 }}
+            transition={isLoading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
+          />
+          <motion.div
+            className="absolute inset-1 rounded-full bg-primary/30"
+            animate={isLoading ? {
+              scale: [1, 1.2, 1],
+              opacity: [0.5, 1, 0.5],
+            } : { scale: 1, opacity: 0.5 }}
+            transition={isLoading ? { duration: 1.2, repeat: Infinity, ease: "easeInOut", delay: 0.2 } : {}}
+          />
+          <motion.div
+            className="w-3 h-3 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)),0_0_16px_hsl(var(--primary)/0.5)]"
+            animate={isLoading ? {
+              scale: [0.8, 1.1, 0.8],
+              boxShadow: [
+                "0 0 8px hsl(var(--primary)), 0 0 16px hsl(var(--primary)/0.5)",
+                "0 0 16px hsl(var(--primary)), 0 0 32px hsl(var(--primary)/0.7)",
+                "0 0 8px hsl(var(--primary)), 0 0 16px hsl(var(--primary)/0.5)",
+              ],
+            } : {}}
+            transition={isLoading ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : {}}
+          />
+        </div>
         {/* Textarea — clearly visible, grows with content */}
         <textarea
           ref={textareaRef}

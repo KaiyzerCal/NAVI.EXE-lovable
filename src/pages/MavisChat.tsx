@@ -237,6 +237,10 @@ export default function MavisChat() {
           bond_trust: profile.bond_trust,
           bond_loyalty: profile.bond_loyalty,
           operator_level: profile.operator_level ?? 1,
+          perception: (profile as any).perception ?? 10,
+          luck: (profile as any).luck ?? 10,
+          codex_points: (profile as any).codex_points ?? 0,
+          cali_coins: (profile as any).cali_coins ?? 0,
           // Full objects with IDs so AI can reference them in actions
           quests: quests.map((q) => ({
             id: q.id, name: q.name, type: q.type, progress: q.progress,

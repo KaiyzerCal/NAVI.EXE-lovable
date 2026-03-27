@@ -54,6 +54,10 @@ const defaults: ProfileData = {
   operator_level: 1,
   operator_xp: 0,
   onboarding_done: false,
+  perception: 10,
+  luck: 10,
+  codex_points: 0,
+  cali_coins: 0,
   notification_settings: {
     questReminders: true,
     streakWarnings: true,

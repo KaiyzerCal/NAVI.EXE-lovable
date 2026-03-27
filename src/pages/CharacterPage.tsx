@@ -80,7 +80,9 @@ export default function CharacterPage() {
     profile.current_streak,
     operatorXp,
     profile.navi_level,
-    operatorLevel
+    operatorLevel,
+    (profile as any).perception ?? 10,
+    (profile as any).luck ?? 10,
   );
 
   const handleQuizComplete = (mbti: string, charClass: string) => {

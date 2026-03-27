@@ -232,7 +232,13 @@ export function useEquipment() {
     [user]
   );
 
-  return { items, loading, addItem, equipItem, updateItem, deleteItem };
+  const refetch = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from("equipment").select("*").eq("user_id", user.id).order("obtained_at", { ascending: false });
+    if (data) setItems(data.map(mapEquipmentRow));
+  }, [user]);
+
+  return { items, loading, addItem, equipItem, updateItem, deleteItem, refetch };
 }
 
 // ─── ACTIVE EFFECTS (uses existing `buffs` table) ─────────────────────────────

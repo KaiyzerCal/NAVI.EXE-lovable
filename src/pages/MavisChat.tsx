@@ -1,15 +1,16 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2 } from "lucide-react";
-import VoiceInput from "@/components/VoiceInput";
+import { motion, AnimatePresence } from "framer-motion";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
-import { getOrCreateConversation, loadMessages, saveMessage, type ChatMessage } from "@/lib/chatService";
-import { parseActions, executeAction } from "@/lib/naviActions";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuests } from "@/hooks/useQuests";
+import { useJournal } from "@/hooks/useJournal";
+import { useAchievements } from "@/hooks/useAchievements";
+import { useOperatorSkills, useEquipment } from "@/hooks/useSkillsAndEquipment";
+import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
 
 interface DisplayMessage {
   id: string;
@@ -23,11 +24,13 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 async function streamChat({
   messages,
   context,
+  signal,
   onDelta,
   onDone,
 }: {
   messages: { role: string; content: string }[];
   context?: Record<string, any>;
+  signal: AbortSignal;
   onDelta: (text: string) => void;
   onDone: () => void;
 }) {
@@ -38,6 +41,7 @@ async function streamChat({
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     },
     body: JSON.stringify({ messages, context }),
+    signal,
   });
 
   if (!resp.ok) {
@@ -87,27 +91,23 @@ const INITIAL_MESSAGE: DisplayMessage = {
 export default function MavisChat() {
   const { user } = useAuth();
   const { profile } = useProfile();
+  const { quests, stats: questStats } = useQuests();
+  const { entries } = useJournal();
+  const { achievements } = useAchievements();
+  const { skills } = useOperatorSkills();
+  const { items: equipment } = useEquipment();
   const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const clearThread = useCallback(async () => {
-    if (!user) return;
-    const { data: newConv } = await supabase
-      .from("chat_conversations")
-      .insert({ user_id: user.id, title: "NAVI Session" })
-      .select("id")
-      .single();
-    if (newConv) {
-      setConversationId(newConv.id);
-    }
-    setMessages([INITIAL_MESSAGE]);
-    toast({ title: "Thread cleared", description: "Neural link refreshed." });
-  }, [user]);
-
+  // ── Load conversation ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -128,7 +128,7 @@ export default function MavisChat() {
             }))
           );
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Failed to load chat history:", err);
       } finally {
         if (!cancelled) setDbLoading(false);
@@ -137,54 +137,61 @@ export default function MavisChat() {
     return () => { cancelled = true; };
   }, [user]);
 
+  // ── Auto-scroll & scroll button ───────────────────────────────────────────
+  const scrollToBottom = useCallback((smooth = true) => {
+    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+    setShowScrollBtn(false);
+  }, []);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
-  const buildContext = useCallback(async () => {
-    if (!user) return {};
-    const [questsRes, skillsRes, journalRes, achieveRes, mediaRes, equipRes, buffsRes] = await Promise.all([
-      supabase.from("quests").select("id, name, type, progress, total, xp_reward, completed, loot_description").eq("user_id", user.id),
-      supabase.from("skills" as any).select("id, name, category, level, max_level, xp").eq("user_id", user.id),
-      supabase.from("journal_entries").select("id, title, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-      supabase.from("achievements").select("id, name, unlocked").eq("user_id", user.id),
-      supabase.from("media" as any).select("id, file_name, file_type, ai_description, linked_entity_type, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
-      supabase.from("equipment" as any).select("id, name, slot, rarity, stat_bonuses, is_equipped").eq("user_id", user.id),
-      supabase.from("buffs" as any).select("id, name, effect_type, stat_affected, modifier_value, source, expires_at").eq("user_id", user.id),
-    ]);
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollBtn(distFromBottom > 120);
+  }, []);
 
-    return {
-      navi_name: profile.navi_name,
-      display_name: profile.display_name,
-      navi_level: profile.navi_level,
-      navi_personality: profile.navi_personality,
-      xp_total: profile.xp_total,
-      current_streak: profile.current_streak,
-      longest_streak: profile.longest_streak,
-      user_navi_description: profile.user_navi_description,
-      bond_affection: profile.bond_affection,
-      bond_trust: profile.bond_trust,
-      bond_loyalty: profile.bond_loyalty,
-      character_class: profile.character_class,
-      mbti_type: profile.mbti_type,
-      equipped_skin: profile.equipped_skin,
-      subclass: (profile as any).subclass,
-      quests: questsRes.data || [],
-      skills: skillsRes.data || [],
-      journal_entries: (journalRes.data || []).map((j: any) => ({ id: j.id, title: j.title, date: j.created_at })),
-      achievements: achieveRes.data || [],
-      media: (mediaRes.data || []).map((m: any) => ({ id: m.id, file_name: m.file_name, type: m.file_type, ai_description: m.ai_description, linked_to: m.linked_entity_type })),
-      equipment: equipRes.data || [],
-      buffs: ((buffsRes.data || []) as any[]).filter((b: any) => !b.expires_at || new Date(b.expires_at).getTime() > Date.now()),
-    };
-  }, [user, profile]);
+  // ── Auto-grow textarea ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+  }, [input]);
 
+  // ── Stop generation ────────────────────────────────────────────────────────
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort();
+    setIsLoading(false);
+  }, []);
+
+  // ── Clear thread ──────────────────────────────────────────────────────────
+  const clearThread = useCallback(() => {
+    setMessages([INITIAL_MESSAGE]);
+    toast({ title: "Thread cleared", description: "Neural link refreshed." });
+  }, []);
+
+  // ── Copy message ──────────────────────────────────────────────────────────
+  const copyMessage = useCallback((content: string) => {
+    navigator.clipboard.writeText(content);
+    toast({ title: "Copied", description: "Message copied to clipboard." });
+  }, []);
+
+  // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || !user || !conversationId) return;
 
     const userContent = input.trim();
     setInput("");
     setIsLoading(true);
+
+    // abort any previous stream
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     let userMsgId: string;
     try {
@@ -195,7 +202,12 @@ export default function MavisChat() {
       return;
     }
 
-    const userMsg: DisplayMessage = { id: userMsgId, role: "user", content: userContent, timestamp: new Date() };
+    const userMsg: DisplayMessage = {
+      id: userMsgId,
+      role: "user",
+      content: userContent,
+      timestamp: new Date(),
+    };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
 
@@ -204,39 +216,49 @@ export default function MavisChat() {
       .filter((m) => m.id !== "initial")
       .map((m) => ({ role: m.role, content: m.content }));
 
-    const context = await buildContext();
-
     try {
       await streamChat({
         messages: chatHistory,
-        context,
+        signal: controller.signal,
+        context: {
+          navi_name: profile.navi_name,
+          display_name: profile.display_name,
+          navi_level: profile.navi_level,
+          navi_personality: profile.navi_personality,
+          xp_total: profile.xp_total,
+          current_streak: profile.current_streak,
+          longest_streak: profile.longest_streak,
+          user_navi_description: profile.user_navi_description,
+          character_class: profile.character_class,
+          mbti_type: profile.mbti_type,
+          operator_level: (profile as any).operator_level ?? 1,
+          // Live app data NAVI can read and reference
+          quests_active: questStats.active,
+          quests_completed: questStats.completed,
+          journal_entries: entries.length,
+          skills: skills.map((s) => `${s.name} Lv${s.level}`).join(", "),
+          equipment_equipped: equipment.filter((e) => e.equipped).map((e) => e.name).join(", "),
+          achievements_unlocked: achievements.filter((a) => a.unlocked).map((a) => a.name).join(", "),
+          achievements_locked: achievements.filter((a) => !a.unlocked).slice(0, 5).map((a) => a.name).join(", "),
+          recent_quests: quests.filter((q) => !q.completed).slice(0, 3).map((q) => q.name).join(", "),
+        },
         onDelta: (chunk) => {
           assistantContent += chunk;
           const content = assistantContent;
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant" && last.id === "streaming") {
-              return prev.map((m, i) => i === prev.length - 1 ? { ...m, content } : m);
+              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content } : m));
             }
             return [...prev, { id: "streaming", role: "assistant", content, timestamp: new Date() }];
           });
         },
         onDone: async () => {
-          const { cleanText, actions } = parseActions(assistantContent);
-          const displayContent = cleanText || assistantContent;
-
-          for (const action of actions) {
-            try {
-              await executeAction(user.id, action);
-            } catch (err) {
-              console.error("Action execution failed:", err);
-            }
-          }
-
+          if (controller.signal.aborted) return;
           try {
-            const assistantId = await saveMessage(conversationId, user.id, "assistant", displayContent);
+            const assistantId = await saveMessage(conversationId, user.id, "assistant", assistantContent);
             setMessages((prev) =>
-              prev.map((m) => m.id === "streaming" ? { ...m, id: assistantId, content: displayContent } : m)
+              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId } : m))
             );
           } catch (err) {
             console.error("Failed to save assistant message:", err);
@@ -245,14 +267,29 @@ export default function MavisChat() {
         },
       });
     } catch (e: any) {
+      if (e.name === "AbortError") return;
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, conversationId, messages, buildContext]);
+  }, [input, isLoading, user, conversationId, messages, profile]);
+
+  // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
+  // isComposing guard prevents firing during IME composition (mobile autocomplete,
+  // emoji picker, CJK input) which was causing the "sends before I'm done" bug.
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+        e.preventDefault();
+        sendMessage();
+      }
+      // Shift+Enter or isComposing → fall through, textarea inserts character naturally
+    },
+    [sendMessage]
+  );
 
   if (dbLoading) {
     return (
-      <div className="flex flex-col h-[calc(100dvh-4rem)] items-center justify-center">
+      <div className="flex flex-col h-[calc(100vh-2rem)] items-center justify-center">
         <Loader2 className="animate-spin text-primary" size={24} />
         <p className="text-xs font-mono text-muted-foreground mt-2">Loading neural link...</p>
       </div>
@@ -260,83 +297,134 @@ export default function MavisChat() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)]">
-      <div className="shrink-0">
-        <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
-          <button onClick={clearThread}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors">
-            <Trash2 size={12} /> CLEAR
-          </button>
-        </PageHeader>
-      </div>
+    <div className="flex flex-col h-[calc(100vh-2rem)]">
+      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
+        <button
+          onClick={clearThread}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
+        >
+          <Trash2 size={12} />
+          CLEAR THREAD
+        </button>
+      </PageHeader>
 
-      <div className="flex-1 overflow-y-auto space-y-3 mb-2 pr-1 min-h-0">
+      {/* Message list */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1 relative"
+      >
         {messages.map((msg) => (
-          <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-            <div className={`w-7 h-7 rounded shrink-0 flex items-center justify-center ${
-              msg.role === "assistant" ? "bg-primary/10 border border-primary/30" : "bg-secondary/10 border border-secondary/30"
-            }`}>
-              {msg.role === "assistant" ? <Bot size={12} className="text-primary" /> : <User size={12} className="text-secondary" />}
+          <motion.div
+            key={msg.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`flex gap-3 group ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+          >
+            {/* Avatar */}
+            <div
+              className={`w-8 h-8 rounded shrink-0 flex items-center justify-center ${
+                msg.role === "assistant"
+                  ? "bg-primary/10 border border-primary/30"
+                  : "bg-secondary/10 border border-secondary/30"
+              }`}
+            >
+              {msg.role === "assistant" ? (
+                <Bot size={14} className="text-primary" />
+              ) : (
+                <User size={14} className="text-secondary" />
+              )}
             </div>
-            <div className={`max-w-[80%] rounded px-3 py-2 ${
-              msg.role === "assistant" ? "bg-card border border-border" : "bg-secondary/10 border border-secondary/20"
-            }`}>
-              <div className={`text-sm prose prose-invert prose-sm max-w-none ${msg.role === "assistant" ? "font-mono" : "font-body"}`}>
+
+            {/* Bubble */}
+            <div
+              className={`max-w-[75%] rounded px-3 py-2 relative ${
+                msg.role === "assistant"
+                  ? "bg-card border border-border"
+                  : "bg-secondary/10 border border-secondary/20"
+              }`}
+            >
+              <div
+                className={`text-sm prose prose-invert prose-sm max-w-none ${
+                  msg.role === "assistant" ? "font-mono" : "font-body"
+                }`}
+              >
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
-              <p className="text-[9px] font-mono text-muted-foreground mt-1">
-                {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </p>
+              <div className="flex items-center justify-between mt-1 gap-3">
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+                {/* Copy button — visible on hover */}
+                <button
+                  onClick={() => copyMessage(msg.content)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                  title="Copy message"
+                >
+                  <Copy size={11} />
+                </button>
+              </div>
             </div>
           </motion.div>
         ))}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar - always visible at bottom */}
-      <div className="shrink-0 border border-border rounded bg-card flex items-center gap-2 p-2 border-glow">
-        {/* Enhanced Navi Orb */}
-        <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
-          {/* Outer ring */}
-          <motion.div
-            className="absolute inset-0 rounded-full border border-primary/30"
-            animate={isLoading
-              ? { scale: [1, 1.3, 1], opacity: [0.2, 0.5, 0.2], borderColor: ["hsl(var(--primary) / 0.3)", "hsl(var(--primary) / 0.7)", "hsl(var(--primary) / 0.3)"] }
-              : { scale: 1, opacity: 0.2 }}
-            transition={isLoading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
-          />
-          {/* Middle glow ring */}
-          <motion.div
-            className="absolute inset-1 rounded-full bg-primary/10"
-            animate={isLoading
-              ? { scale: [1, 1.2, 1], opacity: [0.15, 0.4, 0.15] }
-              : { scale: 1, opacity: 0.1 }}
-            transition={isLoading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.15 } : {}}
-          />
-          {/* Core orb with gradient */}
-          <motion.div
-            className="w-4 h-4 rounded-full"
-            style={{ background: "radial-gradient(circle at 35% 35%, hsl(var(--primary)), hsl(var(--secondary)))" }}
-            animate={isLoading
-              ? { scale: [0.85, 1.15, 0.85], boxShadow: ["0 0 6px 2px hsl(var(--primary) / 0.3)", "0 0 16px 4px hsl(var(--primary) / 0.6)", "0 0 6px 2px hsl(var(--primary) / 0.3)"] }
-              : { scale: 1, boxShadow: "0 0 8px 2px hsl(var(--primary) / 0.25)" }}
-            transition={isLoading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
-          />
-          {/* Highlight dot */}
-          <div className="absolute w-1.5 h-1.5 rounded-full bg-white/60 top-[38%] left-[38%] blur-[0.5px]" />
-        </div>
+      {/* Scroll-to-bottom FAB */}
+      <AnimatePresence>
+        {showScrollBtn && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            onClick={() => scrollToBottom()}
+            className="absolute bottom-24 right-8 w-8 h-8 rounded-full bg-primary/20 border border-primary/40 text-primary flex items-center justify-center hover:bg-primary/30 transition-colors shadow-lg z-10"
+            title="Scroll to bottom"
+          >
+            <ChevronDown size={16} />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
-        <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Message NAVI..."
+      {/* Input box */}
+      <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">
+        {/* Textarea — clearly visible, grows with content */}
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Message NAVI... (Enter to send, Shift+Enter for new line)"
           disabled={isLoading}
-          className="flex-1 bg-transparent text-sm font-body text-foreground placeholder:text-muted-foreground outline-none px-1 disabled:opacity-50 min-w-0" />
-        <VoiceInput onTranscript={(text) => setInput(text)} disabled={isLoading} />
-        <button onClick={sendMessage} disabled={!input.trim() || isLoading}
-          className="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30 shrink-0">
-          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-        </button>
+          rows={1}
+          className="flex-1 bg-muted/60 border border-border rounded px-3 py-2 text-sm font-body text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary/40 transition-colors resize-none disabled:opacity-50 min-h-[40px] max-h-[160px] leading-relaxed"
+        />
+
+        {/* Send / Stop button */}
+        {isLoading ? (
+          <button
+            onClick={stopGeneration}
+            className="w-9 h-9 rounded bg-destructive/20 border border-destructive/40 flex items-center justify-center text-destructive hover:bg-destructive/30 transition-colors shrink-0"
+            title="Stop generation"
+          >
+            <Square size={14} fill="currentColor" />
+          </button>
+        ) : (
+          <button
+            onClick={sendMessage}
+            disabled={!input.trim()}
+            className="w-9 h-9 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+            title="Send message"
+          >
+            <Send size={14} />
+          </button>
+        )}
       </div>
+
+      <p className="text-[10px] font-mono text-muted-foreground/50 text-center mt-1.5">
+        Enter to send · Shift+Enter for new line
+      </p>
     </div>
   );
 }
+

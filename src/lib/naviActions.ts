@@ -5,16 +5,40 @@ export interface NaviAction {
   params: Record<string, any>;
 }
 
-const ACTION_REGEX = /:::ACTION(\{.*?\}):::/gs;
-
 export function parseActions(text: string): { cleanText: string; actions: NaviAction[] } {
   const actions: NaviAction[] = [];
-  const cleanText = text.replace(ACTION_REGEX, (_, json) => {
+  let cleanText = text;
+  const marker = ":::ACTION";
+  const endMarker = ":::";
+
+  let safety = 0;
+  while (safety++ < 50) {
+    const start = cleanText.indexOf(marker);
+    if (start === -1) break;
+    const jsonStart = start + marker.length;
+    // Find matching closing brace by counting depth
+    let depth = 0;
+    let jsonEnd = -1;
+    for (let i = jsonStart; i < cleanText.length; i++) {
+      if (cleanText[i] === "{") depth++;
+      else if (cleanText[i] === "}") {
+        depth--;
+        if (depth === 0) { jsonEnd = i; break; }
+      }
+    }
+    if (jsonEnd === -1) break;
+    const jsonStr = cleanText.slice(jsonStart, jsonEnd + 1);
+    // Find the trailing :::
+    const afterJson = cleanText.indexOf(endMarker, jsonEnd + 1);
+    const removeEnd = afterJson !== -1 && afterJson <= jsonEnd + 4 ? afterJson + endMarker.length : jsonEnd + 1;
     try {
-      actions.push(JSON.parse(json));
-    } catch {}
-    return "";
-  });
+      actions.push(JSON.parse(jsonStr));
+    } catch (e) {
+      console.error("Failed to parse action JSON:", jsonStr, e);
+    }
+    cleanText = cleanText.slice(0, start) + cleanText.slice(removeEnd);
+  }
+
   return { cleanText: cleanText.trim(), actions };
 }
 

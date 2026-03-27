@@ -40,22 +40,24 @@ serve(async (req) => {
       });
     }
 
-    // Generate with AI
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) throw new Error("LOVABLE_API_KEY not set");
+    // Generate with OpenAI DALL-E 3
+    const apiKey = Deno.env.get("OPENAI_API");
+    if (!apiKey) throw new Error("OPENAI_API secret not set");
 
     const prompt = `A digital creature companion called "${skinName}" in the style of a MegaMan Battle Network NetNavi or Digimon. Humanoid digital creature, full body, centered, facing forward, clean transparent background. The creature has a ${skinColor} color theme. Cute but cool cyberpunk digital aesthetic with glowing circuit-line details. Simple clean design suitable for a game avatar icon. On a solid white background.`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
+        model: "dall-e-3",
+        prompt,
+        n: 1,
+        size: "1024x1024",
+        response_format: "b64_json",
       }),
     });
 
@@ -65,11 +67,9 @@ serve(async (req) => {
     }
 
     const aiData = await aiRes.json();
-    const base64Url = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!base64Url) throw new Error("No image in AI response");
+    const base64Data = aiData.data?.[0]?.b64_json;
+    if (!base64Data) throw new Error("No image in AI response");
 
-    // Extract base64 data and upload to storage
-    const base64Data = base64Url.replace(/^data:image\/\w+;base64,/, "");
     const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
 
     const { error: uploadError } = await supabase.storage

@@ -1,10 +1,11 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { User, Bell, Database, Shield, Check } from "lucide-react";
+import { User, Bell, Database, Shield, Check, Sun, Moon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { toast } from "@/hooks/use-toast";
+import { useTheme } from "next-themes";
 
 const ENCOURAGEMENT_OPTIONS = ["Low", "Moderate", "High"] as const;
 const STYLE_OPTIONS = ["Casual", "Direct", "Poetic", "Technical"] as const;

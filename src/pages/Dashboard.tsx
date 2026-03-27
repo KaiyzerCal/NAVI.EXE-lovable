@@ -109,7 +109,7 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* XP Bar */}
+      {/* Operator XP Bar */}
       <motion.div {...fadeIn} className="bg-card border border-primary/20 rounded p-4 mb-6 border-glow">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded bg-primary/10 border border-primary/30 flex items-center justify-center">
@@ -118,17 +118,22 @@ export default function Dashboard() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-display text-sm text-primary font-bold">{profile.display_name || "OPERATOR"}</span>
-              <span className="text-xs font-mono text-muted-foreground">// LVL {profile.navi_level}</span>
+              <span className="text-xs font-mono text-muted-foreground">// LVL {profile.operator_level}</span>
               {profile.character_class && (
                 <span className="text-[10px] font-mono bg-secondary/10 text-secondary px-1.5 py-0.5 rounded">
                   {profile.character_class.toUpperCase()}
                 </span>
               )}
+              {profile.subclass && (
+                <span className="text-[10px] font-mono bg-neon-green/10 text-neon-green px-1.5 py-0.5 rounded">
+                  {profile.subclass}
+                </span>
+              )}
             </div>
-            <ProgressBar value={profile.xp_total} max={xpToNext} variant="cyan" label={`${profile.xp_total.toLocaleString()} / ${xpToNext.toLocaleString()} XP`} size="md" />
+            <ProgressBar value={profile.xp_total} max={xpForLevel(profile.operator_level + 1)} variant="cyan" label={`${profile.xp_total.toLocaleString()} / ${xpForLevel(profile.operator_level + 1).toLocaleString()} XP`} size="md" />
           </div>
           <div className="text-right hidden sm:block">
-            <p className="font-display text-2xl text-primary font-bold text-glow-cyan">{profile.navi_level}</p>
+            <p className="font-display text-2xl text-primary font-bold text-glow-cyan">{profile.operator_level}</p>
             <p className="text-[10px] font-mono text-muted-foreground">LEVEL</p>
           </div>
         </div>

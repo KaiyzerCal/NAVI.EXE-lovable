@@ -22,6 +22,10 @@ export interface ProfileData {
   operator_level: number;
   operator_xp: number;
   onboarding_done: boolean;
+  perception: number;
+  luck: number;
+  codex_points: number;
+  cali_coins: number;
   notification_settings: {
     questReminders: boolean;
     streakWarnings: boolean;

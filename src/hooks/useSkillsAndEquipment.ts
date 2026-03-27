@@ -97,7 +97,13 @@ export function useOperatorSkills() {
     [skills, updateSkill]
   );
 
-  return { skills, loading, addSkill, updateSkill, deleteSkill, levelUpByName };
+  const refetch = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from("skills").select("*").eq("user_id", user.id).order("created_at", { ascending: true });
+    if (data) setSkills(data.map(mapSkillRow));
+  }, [user]);
+
+  return { skills, loading, addSkill, updateSkill, deleteSkill, levelUpByName, refetch };
 }
 
 // ─── EQUIPMENT (uses existing `equipment` table) ──────────────────────────────

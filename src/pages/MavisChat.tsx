@@ -97,6 +97,7 @@ export default function MavisChat() {
   const { achievements } = useAchievements();
   const { skills, refetch: refetchSkills } = useOperatorSkills();
   const { items: equipment, refetch: refetchEquipment } = useEquipment();
+  const { effects: buffs, refetch: refetchEffects } = useActiveEffects();
   const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

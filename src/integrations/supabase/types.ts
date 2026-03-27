@@ -353,7 +353,9 @@ export type Database = {
           bond_affection: number
           bond_loyalty: number
           bond_trust: number
+          cali_coins: number
           character_class: string | null
+          codex_points: number
           created_at: string
           current_streak: number
           display_name: string | null
@@ -361,6 +363,7 @@ export type Database = {
           id: string
           last_active: string | null
           longest_streak: number
+          luck: number
           mbti_type: string | null
           navi_level: number
           navi_name: string
@@ -369,6 +372,7 @@ export type Database = {
           onboarding_done: boolean
           operator_level: number
           operator_xp: number
+          perception: number
           subclass: string | null
           user_navi_description: string | null
           xp_total: number
@@ -377,7 +381,9 @@ export type Database = {
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
+          cali_coins?: number
           character_class?: string | null
+          codex_points?: number
           created_at?: string
           current_streak?: number
           display_name?: string | null
@@ -385,6 +391,7 @@ export type Database = {
           id: string
           last_active?: string | null
           longest_streak?: number
+          luck?: number
           mbti_type?: string | null
           navi_level?: number
           navi_name?: string
@@ -393,6 +400,7 @@ export type Database = {
           onboarding_done?: boolean
           operator_level?: number
           operator_xp?: number
+          perception?: number
           subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number
@@ -401,7 +409,9 @@ export type Database = {
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
+          cali_coins?: number
           character_class?: string | null
+          codex_points?: number
           created_at?: string
           current_streak?: number
           display_name?: string | null
@@ -409,6 +419,7 @@ export type Database = {
           id?: string
           last_active?: string | null
           longest_streak?: number
+          luck?: number
           mbti_type?: string | null
           navi_level?: number
           navi_name?: string
@@ -417,6 +428,7 @@ export type Database = {
           onboarding_done?: boolean
           operator_level?: number
           operator_xp?: number
+          perception?: number
           subclass?: string | null
           user_navi_description?: string | null
           xp_total?: number

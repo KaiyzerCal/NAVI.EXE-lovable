@@ -87,12 +87,18 @@ export function useProfile() {
   const updateProfile = useCallback(
     async (updates: Partial<ProfileData>) => {
       setProfile((p) => ({ ...p, ...updates }));
-      if (user) {
+      if (user && Object.keys(updates).length > 0) {
         await supabase.from("profiles").update(updates as any).eq("id", user.id);
       }
     },
     [user]
   );
 
-  return { profile, loading, updateProfile };
+  const refetchProfile = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    if (data) setProfile(data as any);
+  }, [user]);
+
+  return { profile, loading, updateProfile, refetchProfile };
 }

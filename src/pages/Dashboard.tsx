@@ -130,10 +130,10 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            <ProgressBar value={profile.xp_total} max={xpForLevel(profile.operator_level + 1)} variant="cyan" label={`${profile.xp_total.toLocaleString()} / ${xpForLevel(profile.operator_level + 1).toLocaleString()} XP`} size="md" />
+            <ProgressBar value={operatorXp} max={xpForLevel(operatorLevel + 1)} variant="cyan" label={`${operatorXp.toLocaleString()} / ${xpForLevel(operatorLevel + 1).toLocaleString()} XP`} size="md" />
           </div>
           <div className="text-right hidden sm:block">
-            <p className="font-display text-2xl text-primary font-bold text-glow-cyan">{profile.operator_level}</p>
+            <p className="font-display text-2xl text-primary font-bold text-glow-cyan">{operatorLevel}</p>
             <p className="text-[10px] font-mono text-muted-foreground">LEVEL</p>
           </div>
         </div>

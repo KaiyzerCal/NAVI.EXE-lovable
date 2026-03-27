@@ -22,10 +22,24 @@ async function logActivity(userId: string, eventType: string, description: strin
   await supabase.from("activity_log" as any).insert({ user_id: userId, event_type: eventType, description, xp_amount: xpAmount });
 }
 
+const xpForLevel = (lv: number) => lv * 500;
+
 async function awardXP(userId: string, amount: number) {
-  const { data: profile } = await supabase.from("profiles").select("xp_total").eq("id", userId).single();
+  const { data: profile } = await supabase.from("profiles").select("xp_total, operator_xp, operator_level, navi_level").eq("id", userId).single();
   if (profile) {
-    await supabase.from("profiles").update({ xp_total: (profile.xp_total || 0) + amount }).eq("id", userId);
+    const newXpTotal = (profile.xp_total || 0) + amount;
+    let opXp = (profile.operator_xp || 0) + amount;
+    let opLevel = profile.operator_level || 1;
+    // Auto-level-up loop
+    while (opXp >= xpForLevel(opLevel + 1)) {
+      opXp -= xpForLevel(opLevel + 1);
+      opLevel++;
+    }
+    await supabase.from("profiles").update({
+      xp_total: newXpTotal,
+      operator_xp: opXp,
+      operator_level: opLevel,
+    }).eq("id", userId);
   }
 }
 

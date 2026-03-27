@@ -22,10 +22,24 @@ async function logActivity(userId: string, eventType: string, description: strin
   await supabase.from("activity_log" as any).insert({ user_id: userId, event_type: eventType, description, xp_amount: xpAmount });
 }
 
+const xpForLevel = (lv: number) => lv * 500;
+
 async function awardXP(userId: string, amount: number) {
-  const { data: profile } = await supabase.from("profiles").select("xp_total").eq("id", userId).single();
+  const { data: profile } = await supabase.from("profiles").select("xp_total, operator_xp, operator_level, navi_level").eq("id", userId).single();
   if (profile) {
-    await supabase.from("profiles").update({ xp_total: (profile.xp_total || 0) + amount }).eq("id", userId);
+    const newXpTotal = (profile.xp_total || 0) + amount;
+    let opXp = (profile.operator_xp || 0) + amount;
+    let opLevel = profile.operator_level || 1;
+    // Auto-level-up loop
+    while (opXp >= xpForLevel(opLevel + 1)) {
+      opXp -= xpForLevel(opLevel + 1);
+      opLevel++;
+    }
+    await supabase.from("profiles").update({
+      xp_total: newXpTotal,
+      operator_xp: opXp,
+      operator_level: opLevel,
+    }).eq("id", userId);
   }
 }
 
@@ -119,7 +133,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       break;
     }
     case "update_profile": {
-      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception", "luck", "codex_points", "cali_coins", "operator_level", "operator_xp"];
+      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception", "luck", "codex_points", "cali_coins", "operator_level", "operator_xp", "onboarding_done", "notification_settings", "user_navi_description"];
       const updates: any = {};
       for (const key of allowed) {
         if (params[key] !== undefined) updates[key] = params[key];

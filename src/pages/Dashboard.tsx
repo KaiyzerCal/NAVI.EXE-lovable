@@ -27,6 +27,8 @@ export default function Dashboard() {
   const skinUrl = `${STORAGE_BASE}/${profile.equipped_skin.toLowerCase()}.png`;
   const NaviCharComponent = getNaviCharacter(profile.equipped_skin);
   const bondAvg = Math.round((profile.bond_affection + profile.bond_trust + profile.bond_loyalty) / 3);
+  const operatorXp = profile.operator_xp ?? profile.xp_total ?? 0;
+  const operatorLevel = profile.operator_level ?? 1;
 
   const activeQuests = quests.filter((q) => !q.completed).slice(0, 4);
 
@@ -116,7 +118,7 @@ export default function Dashboard() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-display text-sm text-primary font-bold">{profile.display_name || "OPERATOR"}</span>
-              <span className="text-xs font-mono text-muted-foreground">// LVL {profile.operator_level}</span>
+              <span className="text-xs font-mono text-muted-foreground">// LVL {operatorLevel}</span>
               {profile.character_class && (
                 <span className="text-[10px] font-mono bg-secondary/10 text-secondary px-1.5 py-0.5 rounded">
                   {profile.character_class.toUpperCase()}
@@ -128,10 +130,10 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            <ProgressBar value={profile.xp_total} max={xpForLevel(profile.operator_level + 1)} variant="cyan" label={`${profile.xp_total.toLocaleString()} / ${xpForLevel(profile.operator_level + 1).toLocaleString()} XP`} size="md" />
+            <ProgressBar value={operatorXp} max={xpForLevel(operatorLevel + 1)} variant="cyan" label={`${operatorXp.toLocaleString()} / ${xpForLevel(operatorLevel + 1).toLocaleString()} XP`} size="md" />
           </div>
           <div className="text-right hidden sm:block">
-            <p className="font-display text-2xl text-primary font-bold text-glow-cyan">{profile.operator_level}</p>
+            <p className="font-display text-2xl text-primary font-bold text-glow-cyan">{operatorLevel}</p>
             <p className="text-[10px] font-mono text-muted-foreground">LEVEL</p>
           </div>
         </div>

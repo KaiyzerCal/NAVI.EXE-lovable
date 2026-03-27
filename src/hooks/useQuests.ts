@@ -127,10 +127,12 @@ export function useQuests() {
 
       // Award XP to profile when completing
       if (nowCompleted && user) {
-        await supabase.rpc("increment_xp" as any, {
-          p_user_id: user.id,
-          p_amount: quest.xp_reward,
-        }).catch(() => {
+        try {
+          await supabase.rpc("increment_xp" as any, {
+            p_user_id: user.id,
+            p_amount: quest.xp_reward,
+          });
+        } catch {
           // If RPC doesn't exist yet, do a simple update
           supabase
             .from("profiles")

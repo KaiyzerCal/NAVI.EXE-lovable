@@ -170,13 +170,19 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       break;
     }
     case "create_journal": {
-      await supabase.from("journal_entries").insert({
+      const { error } = await supabase.from("journal_entries").insert({
         user_id: userId,
         title: params.title || "New Entry",
         content: params.content || "",
         tags: params.tags || [],
         xp_earned: params.xp_earned || 10,
+        category: params.category || "personal",
+        importance: params.importance || "medium",
       });
+      if (error) {
+        console.error("create_journal error:", error);
+        break;
+      }
       await awardXP(userId, params.xp_earned || 10);
       await logActivity(userId, "journal_created", `Journal entry: ${params.title}`, params.xp_earned || 10);
       break;

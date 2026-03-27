@@ -147,7 +147,7 @@ export function useQuests() {
                   .eq("id", user.id);
               }
             });
-        });
+        }
       }
     },
     [quests, updateQuest, user]

@@ -19,6 +19,9 @@ export interface ProfileData {
   user_navi_description: string | null;
   last_active: string | null;
   subclass: string | null;
+  operator_level: number;
+  operator_xp: number;
+  onboarding_done: boolean;
   notification_settings: {
     questReminders: boolean;
     streakWarnings: boolean;

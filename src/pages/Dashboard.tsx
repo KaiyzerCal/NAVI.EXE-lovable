@@ -118,7 +118,7 @@ export default function Dashboard() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-display text-sm text-primary font-bold">{profile.display_name || "OPERATOR"}</span>
-              <span className="text-xs font-mono text-muted-foreground">// LVL {profile.operator_level}</span>
+              <span className="text-xs font-mono text-muted-foreground">// LVL {operatorLevel}</span>
               {profile.character_class && (
                 <span className="text-[10px] font-mono bg-secondary/10 text-secondary px-1.5 py-0.5 rounded">
                   {profile.character_class.toUpperCase()}

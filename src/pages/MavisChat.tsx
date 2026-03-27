@@ -91,7 +91,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user } = useAuth();
-  const { profile, updateProfile } = useProfile();
+  const { profile, updateProfile, refetchProfile } = useProfile();
   const { quests, stats: questStats, refetch: refetchQuests } = useQuests();
   const { entries, refetch: refetchJournal } = useJournal();
   const { achievements } = useAchievements();

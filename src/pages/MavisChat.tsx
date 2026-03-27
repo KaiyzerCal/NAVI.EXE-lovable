@@ -311,7 +311,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, conversationId, messages, profile]);
+  }, [input, isLoading, user, conversationId, messages, profile, quests, skills, equipment, entries, achievements, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,

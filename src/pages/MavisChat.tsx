@@ -9,7 +9,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useQuests } from "@/hooks/useQuests";
 import { useJournal } from "@/hooks/useJournal";
 import { useAchievements } from "@/hooks/useAchievements";
-import { useOperatorSkills, useEquipment } from "@/hooks/useSkillsAndEquipment";
+import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
 import { parseActions, executeAction } from "@/lib/naviActions";
 
@@ -97,6 +97,7 @@ export default function MavisChat() {
   const { achievements } = useAchievements();
   const { skills, refetch: refetchSkills } = useOperatorSkills();
   const { items: equipment, refetch: refetchEquipment } = useEquipment();
+  const { effects: buffs, refetch: refetchEffects } = useActiveEffects();
   const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -237,6 +238,10 @@ export default function MavisChat() {
           bond_trust: profile.bond_trust,
           bond_loyalty: profile.bond_loyalty,
           operator_level: profile.operator_level ?? 1,
+          perception: (profile as any).perception ?? 10,
+          luck: (profile as any).luck ?? 10,
+          codex_points: (profile as any).codex_points ?? 0,
+          cali_coins: (profile as any).cali_coins ?? 0,
           // Full objects with IDs so AI can reference them in actions
           quests: quests.map((q) => ({
             id: q.id, name: q.name, type: q.type, progress: q.progress,
@@ -256,6 +261,11 @@ export default function MavisChat() {
           })),
           achievements: achievements.slice(0, 15).map((a) => ({
             name: a.name, unlocked: a.unlocked,
+          })),
+          buffs: buffs.map((b) => ({
+            id: b.id, name: b.name, effect_type: (b as any).effect_type || "buff",
+            stat_affected: (b as any).stat_affected || "", modifier_value: (b as any).modifier_value || 0,
+            source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,
           })),
         },
         onDelta: (chunk) => {
@@ -297,7 +307,8 @@ export default function MavisChat() {
                 refetchJournal(),
                 refetchSkills(),
                 refetchEquipment(),
-                updateProfile({}), // triggers profile re-read
+                refetchEffects(),
+                updateProfile({}),
               ]);
             }
           } catch (err) {
@@ -311,7 +322,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, conversationId, messages, profile, quests, skills, equipment, entries, achievements, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, updateProfile]);
+  }, [input, isLoading, user, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,

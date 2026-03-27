@@ -119,7 +119,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       break;
     }
     case "update_profile": {
-      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass"];
+      const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception", "luck", "codex_points", "cali_coins", "operator_level", "operator_xp"];
       const updates: any = {};
       for (const key of allowed) {
         if (params[key] !== undefined) updates[key] = params[key];
@@ -221,6 +221,20 @@ export async function executeAction(userId: string, action: NaviAction): Promise
         await supabase.from("buffs" as any).delete().eq("id", params.buff_id).eq("user_id", userId);
       } else if (params.name) {
         await supabase.from("buffs" as any).delete().eq("user_id", userId).ilike("name", params.name);
+      }
+      break;
+    }
+    case "delete_skill": {
+      if (params.skill_id) {
+        await supabase.from("skills" as any).delete().eq("id", params.skill_id).eq("user_id", userId);
+        await logActivity(userId, "skill_deleted", `Skill deleted`, 0);
+      }
+      break;
+    }
+    case "delete_equipment": {
+      if (params.item_id) {
+        await supabase.from("equipment" as any).delete().eq("id", params.item_id).eq("user_id", userId);
+        await logActivity(userId, "equipment_deleted", `Equipment deleted`, 0);
       }
       break;
     }

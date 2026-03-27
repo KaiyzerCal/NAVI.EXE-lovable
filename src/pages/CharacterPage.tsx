@@ -3,7 +3,7 @@ import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
 import { motion } from "framer-motion";
-import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins } from "lucide-react";
 import { useState, useCallback } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { useQuests } from "@/hooks/useQuests";
@@ -24,7 +24,9 @@ function computeBaseStats(
   currentStreak: number,
   xpTotal: number,
   naviLevel: number,
-  operatorLevel: number
+  operatorLevel: number,
+  perception: number,
+  luck: number,
 ) {
   const clamp = (v: number, min = 1, max = 100) => Math.max(min, Math.min(max, v));
   return [
@@ -33,6 +35,8 @@ function computeBaseStats(
     { name: "VIT", label: "Vitality",     value: clamp(currentStreak * 2 + operatorLevel),                       icon: <Heart size={12} />,  desc: "Consistency & endurance" },
     { name: "AGI", label: "Agility",      value: clamp(Math.floor(questsCompleted / 2) + naviLevel),             icon: <Zap size={12} />,    desc: "Speed of execution" },
     { name: "RES", label: "Resonance",    value: clamp(naviLevel * 2 + Math.floor(currentStreak / 2)),           icon: <Shield size={12} />, desc: "Navi bond strength" },
+    { name: "PER", label: "Perception",   value: clamp(perception),                                              icon: <ScanEye size={12} />, desc: "Awareness & insight" },
+    { name: "LCK", label: "Luck",         value: clamp(luck),                                                    icon: <Clover size={12} />,  desc: "Fortune & loot quality" },
   ];
 }
 
@@ -76,7 +80,9 @@ export default function CharacterPage() {
     profile.current_streak,
     operatorXp,
     profile.navi_level,
-    operatorLevel
+    operatorLevel,
+    (profile as any).perception ?? 10,
+    (profile as any).luck ?? 10,
   );
 
   const handleQuizComplete = (mbti: string, charClass: string) => {
@@ -145,8 +151,12 @@ export default function CharacterPage() {
                 MBTI: <span className="text-primary">{mbtiType}</span> // {classInfo?.desc}
               </p>
             )}
-            <p className="text-[10px] font-mono text-muted-foreground mb-2">
+            <p className="text-[10px] font-mono text-muted-foreground mb-1">
               OPERATOR LV{operatorLevel} · NAVI LV{profile.navi_level} · {operatorXp.toLocaleString()} XP
+            </p>
+            <p className="text-[10px] font-mono text-muted-foreground mb-2 flex items-center gap-3">
+              <span><Coins size={10} className="inline mr-0.5 text-accent" />{((profile as any).codex_points ?? 0).toLocaleString()} CP</span>
+              <span><Coins size={10} className="inline mr-0.5 text-secondary" />{((profile as any).cali_coins ?? 0).toLocaleString()} CC</span>
             </p>
             <ProgressBar value={operatorXp % xpForLevel(1) || operatorXp} max={xpToNext} variant="cyan" showValue={false} size="sm" />
             <p className="text-[9px] font-mono text-muted-foreground mt-0.5">

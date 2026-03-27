@@ -9,7 +9,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useQuests } from "@/hooks/useQuests";
 import { useJournal } from "@/hooks/useJournal";
 import { useAchievements } from "@/hooks/useAchievements";
-import { useOperatorSkills, useEquipment } from "@/hooks/useSkillsAndEquipment";
+import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
 import { parseActions, executeAction } from "@/lib/naviActions";
 

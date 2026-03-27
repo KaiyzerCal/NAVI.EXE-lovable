@@ -14,8 +14,8 @@ serve(async (req) => {
 
   try {
     const { media_id, file_url, file_type, file_name } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not set");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API secret not set");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

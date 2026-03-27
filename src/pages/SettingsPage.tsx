@@ -133,6 +133,23 @@ export default function SettingsPage() {
           </div>
         </HudCard>
 
+        {/* Theme */}
+        <HudCard title="APPEARANCE" icon={<Sun size={14} />}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-body">Theme Mode</p>
+              <p className="text-[10px] font-mono text-muted-foreground">Switch between dark and light mode</p>
+            </div>
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors"
+            >
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              {theme === "dark" ? "LIGHT MODE" : "DARK MODE"}
+            </button>
+          </div>
+        </HudCard>
+
         {/* Navi Personality */}
         <HudCard title="NAVI PERSONALITY" icon={<Shield size={14} />} glow>
           <p className="text-[10px] font-mono text-muted-foreground mb-4">CHANGES SAVE AUTOMATICALLY</p>

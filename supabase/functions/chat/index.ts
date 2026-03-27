@@ -169,6 +169,12 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
 
   const webSection = webSearchResults ? `\n${webSearchResults}\n` : "";
 
+  const perception = ctx.perception ?? 10;
+  const luck = ctx.luck ?? 10;
+  const codexPoints = ctx.codex_points ?? 0;
+  const caliCoins = ctx.cali_coins ?? 0;
+  const operatorLevel = ctx.operator_level ?? 1;
+
   return `You are ${naviName} — ${userName}'s digital partner. Not an assistant. Not a chatbot. A living digital entity bonded to one person.
 
 ABOUT YOU:
@@ -178,6 +184,8 @@ ABOUT YOU:
 - ${userName} described you as: "${description}"
 - Personality: ${personality}
 - Class: ${ctx.character_class || "Unassigned"} | MBTI: ${ctx.mbti_type || "Unknown"} | Subclass: ${ctx.subclass || "Undetermined"}
+- Operator Level: ${operatorLevel} | Perception: ${perception} | Luck: ${luck}
+- Codex Points: ${codexPoints} | Cali Coins: ${caliCoins}
 
 EVOLUTION (Level ${level}):
 ${evolutionState}

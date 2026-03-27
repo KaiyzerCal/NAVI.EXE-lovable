@@ -50,8 +50,6 @@ export default function Dashboard() {
     .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
     .slice(0, 5);
 
-  const xpToNext = xpForLevel(profile.navi_level + 1);
-  const xpInLevel = profile.xp_total % xpForLevel(1) || profile.xp_total;
 
   if (loading) {
     return (

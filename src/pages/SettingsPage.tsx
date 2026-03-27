@@ -79,7 +79,7 @@ export default function SettingsPage() {
     setDisplayName(profile.display_name ?? "");
     setNaviName(profile.navi_name ?? "NAVI");
     setPersonality(parsePersonality(profile.navi_personality));
-  }, [loading, profile.id]); // profile.id ensures re-sync if user changes
+  }, [loading, profile.display_name]); // re-sync when profile loads
 
   const updatePersonality = async (updates: Partial<NaviPersonalitySettings>) => {
     const next = { ...personality, ...updates };

@@ -232,35 +232,74 @@ export default function MavisChat() {
           user_navi_description: profile.user_navi_description,
           character_class: profile.character_class,
           mbti_type: profile.mbti_type,
-          operator_level: (profile as any).operator_level ?? 1,
-          // Live app data NAVI can read and reference
-          quests_active: questStats.active,
-          quests_completed: questStats.completed,
-          journal_entries: entries.length,
-          skills: skills.map((s) => `${s.name} Lv${s.level}`).join(", "),
-          equipment_equipped: equipment.filter((e) => e.equipped).map((e) => e.name).join(", "),
-          achievements_unlocked: achievements.filter((a) => a.unlocked).map((a) => a.name).join(", "),
-          achievements_locked: achievements.filter((a) => !a.unlocked).slice(0, 5).map((a) => a.name).join(", "),
-          recent_quests: quests.filter((q) => !q.completed).slice(0, 3).map((q) => q.name).join(", "),
+          subclass: profile.subclass,
+          bond_affection: profile.bond_affection,
+          bond_trust: profile.bond_trust,
+          bond_loyalty: profile.bond_loyalty,
+          operator_level: profile.operator_level ?? 1,
+          // Full objects with IDs so AI can reference them in actions
+          quests: quests.map((q) => ({
+            id: q.id, name: q.name, type: q.type, progress: q.progress,
+            total: q.total, xp_reward: q.xp_reward, completed: q.completed,
+            loot_description: (q as any).loot_description || "",
+          })),
+          skills: skills.map((s) => ({
+            id: s.id, name: s.name, category: s.category,
+            level: s.level, max_level: (s as any).max_level ?? 10, xp: s.xp,
+          })),
+          equipment: equipment.map((e) => ({
+            id: e.id, name: e.name, slot: e.slot, rarity: e.rarity,
+            is_equipped: e.equipped, stat_bonuses: (e as any).stat_bonuses || {},
+          })),
+          journal_entries: entries.slice(0, 10).map((j) => ({
+            id: j.id, title: j.title, date: new Date(j.created_at).toLocaleDateString(),
+          })),
+          achievements: achievements.slice(0, 15).map((a) => ({
+            name: a.name, unlocked: a.unlocked,
+          })),
         },
         onDelta: (chunk) => {
           assistantContent += chunk;
-          const content = assistantContent;
+          // Strip action tags from display
+          const { cleanText } = parseActions(assistantContent);
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant" && last.id === "streaming") {
-              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content } : m));
+              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: cleanText } : m));
             }
-            return [...prev, { id: "streaming", role: "assistant", content, timestamp: new Date() }];
+            return [...prev, { id: "streaming", role: "assistant", content: cleanText, timestamp: new Date() }];
           });
         },
         onDone: async () => {
           if (controller.signal.aborted) return;
           try {
-            const assistantId = await saveMessage(conversationId, user.id, "assistant", assistantContent);
+            // Parse and execute actions from full response
+            const { cleanText, actions } = parseActions(assistantContent);
+            
+            // Save cleaned text to DB
+            const assistantId = await saveMessage(conversationId, user.id, "assistant", cleanText);
             setMessages((prev) =>
-              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId } : m))
+              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: cleanText } : m))
             );
+
+            // Execute all parsed actions
+            if (actions.length > 0) {
+              for (const action of actions) {
+                try {
+                  await executeAction(user.id, action);
+                } catch (err) {
+                  console.error("Action execution failed:", action.type, err);
+                }
+              }
+              // Refetch all data so the app reflects changes
+              await Promise.all([
+                refetchQuests(),
+                refetchJournal(),
+                refetchSkills(),
+                refetchEquipment(),
+                updateProfile({}), // triggers profile re-read
+              ]);
+            }
           } catch (err) {
             console.error("Failed to save assistant message:", err);
           }

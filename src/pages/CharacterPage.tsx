@@ -158,7 +158,6 @@ export default function CharacterPage() {
               <span><Coins size={10} className="inline mr-0.5 text-accent" />{((profile as any).codex_points ?? 0).toLocaleString()} CP</span>
               <span><Coins size={10} className="inline mr-0.5 text-secondary" />{((profile as any).cali_coins ?? 0).toLocaleString()} CC</span>
             </p>
-            </p>
             <ProgressBar value={operatorXp % xpForLevel(1) || operatorXp} max={xpToNext} variant="cyan" showValue={false} size="sm" />
             <p className="text-[9px] font-mono text-muted-foreground mt-0.5">
               {operatorXp.toLocaleString()} / {xpToNext.toLocaleString()} XP TO LEVEL {operatorLevel + 1}

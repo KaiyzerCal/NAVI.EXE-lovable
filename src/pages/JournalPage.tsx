@@ -4,7 +4,8 @@ import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { useJournal, type JournalEntry } from "@/hooks/useJournal";
+import { useAppData } from "@/contexts/AppDataContext";
+import type { JournalEntry } from "@/hooks/useJournal";
 
 const TAG_COLORS: Record<string, string> = {
   reflection: "bg-neon-cyan/10 text-neon-cyan",

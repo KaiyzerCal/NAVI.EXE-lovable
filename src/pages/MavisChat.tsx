@@ -11,7 +11,7 @@ import { useJournal } from "@/hooks/useJournal";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { parseActions } from "@/lib/naviActions";
+import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 
 interface DisplayMessage {
   id: string;
@@ -22,6 +22,63 @@ interface DisplayMessage {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
+
+const CLIENT_FALLBACK_ACTION_TYPES = new Set([
+  "create_journal",
+  "update_journal",
+  "delete_journal",
+  "create_quest",
+  "update_quest",
+  "update_quest_progress",
+  "delete_quest",
+  "create_skill",
+  "update_skill",
+  "delete_skill",
+  "create_subskill",
+  "update_subskill",
+  "delete_subskill",
+  "create_equipment",
+  "update_equipment",
+  "equip_item",
+  "unequip_item",
+  "delete_equipment",
+  "create_buff",
+  "update_buff",
+  "remove_buff",
+]);
+
+function isJournalIntent(message: string): boolean {
+  return /(journal|vault)/i.test(message) && /(create|write|save|log|record|add|make)/i.test(message);
+}
+
+function deriveJournalTitle(userMessage: string, cleanText: string): string {
+  const quoted = `${userMessage} ${cleanText}`.match(/["“](.+?)["”]/);
+  if (quoted?.[1]) return quoted[1].trim().slice(0, 80);
+
+  const source = cleanText.trim() || userMessage.trim();
+  const normalized = source.replace(/\s+/g, " ").trim();
+  return normalized.slice(0, 60) || "NAVI Entry";
+}
+
+function inferFallbackActions(userMessage: string, cleanText: string): NaviAction[] {
+  if (!isJournalIntent(userMessage)) return [];
+
+  const content = cleanText.trim().length >= 24
+    ? cleanText.trim()
+    : `Operator request: ${userMessage.trim()}`;
+
+  return [{
+    type: "create_journal",
+    params: {
+      title: deriveJournalTitle(userMessage, cleanText),
+      content,
+      tags: ["navi"],
+      category: "personal",
+      importance: "medium",
+      xp_earned: 10,
+    },
+  }];
+}
 
 async function streamChat({
   messages,
@@ -288,9 +345,12 @@ export default function MavisChat() {
         onDone: async () => {
           if (controller.signal.aborted) return;
 
-          const { cleanText, actions } = parseActions(assistantContent);
+          const { cleanText, actions: parsedActions } = parseActions(assistantContent);
+          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText);
 
           if (actions.length > 0) {
+            let failedActions: NaviAction[] = [];
+
             try {
               const actionResp = await fetch(NAVI_ACTIONS_URL, {
                 method: "POST",
@@ -308,14 +368,30 @@ export default function MavisChat() {
               }
 
               const failures = Array.isArray(actionJson.results)
-                ? actionJson.results.filter((result: { success: boolean }) => !result.success)
+                ? actionJson.results
+                    .map((result: { success: boolean }, index: number) => (!result.success ? actions[index] : null))
+                    .filter((result): result is NaviAction => Boolean(result))
                 : [];
 
               if (failures.length > 0) {
                 console.error("[NAVI] Action failures:", failures);
+                failedActions = failures;
               }
             } catch (err) {
               console.error("[NAVI] Backend action execution failed:", err);
+              failedActions = actions;
+            }
+
+            if (failedActions.length > 0) {
+              const fallbackActions = failedActions.filter((action) => CLIENT_FALLBACK_ACTION_TYPES.has(action.type));
+
+              for (const action of fallbackActions) {
+                try {
+                  await executeClientAction(user.id, action);
+                } catch (fallbackError) {
+                  console.error("[NAVI] Client fallback failed:", action.type, fallbackError);
+                }
+              }
             }
 
             await Promise.all([

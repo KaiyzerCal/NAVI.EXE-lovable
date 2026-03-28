@@ -5,7 +5,7 @@ import { BarChart3, TrendingUp, Target, Flame, BookOpen, Loader2, Trophy } from 
 import { useAppData } from "@/contexts/AppDataContext";
 import { useEffect } from "react";
 
-function buildWeeklyData(quests: ReturnType<typeof useQuests>["quests"]) {
+function buildWeeklyData(quests: { completed: boolean; updated_at: string; xp_reward: number }[]) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const now = new Date();
   const week = Array.from({ length: 7 }, (_, i) => {

@@ -8,7 +8,8 @@ import {
   Layers, Pencil, Copy, RotateCcw, Eye, Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { useQuests, type Quest, type QuestType, type CreateQuestInput } from "@/hooks/useQuests";
+import { useAppData } from "@/contexts/AppDataContext";
+import type { Quest, QuestType, CreateQuestInput } from "@/hooks/useQuests";
 
 const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
   Main:   { color: "text-accent",       bg: "bg-accent/10",       border: "border-accent/40",       icon: <Star size={10} />,     label: "MAIN" },

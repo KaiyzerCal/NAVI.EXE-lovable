@@ -348,6 +348,10 @@ export default function MavisChat() {
           const { cleanText, actions: parsedActions } = parseActions(assistantContent);
           const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText);
 
+          console.log("[NAVI] Raw response length:", assistantContent.length);
+          console.log("[NAVI] Parsed actions count:", parsedActions.length);
+          console.log("[NAVI] Actions:", JSON.stringify(parsedActions, null, 2));
+
           if (actions.length > 0) {
             let failedActions: NaviAction[] = [];
 
@@ -363,6 +367,9 @@ export default function MavisChat() {
               });
 
               const actionJson = await actionResp.json().catch(() => ({ results: [] }));
+              console.log("[NAVI] Action response status:", actionResp.status);
+              console.log("[NAVI] Action response body:", JSON.stringify(actionJson));
+
               if (!actionResp.ok) {
                 throw new Error(actionJson.error || `Action request failed (${actionResp.status})`);
               }

@@ -238,6 +238,8 @@ RULES FOR ACTIONS:
 - If the user asks you to create, edit, update, modify, delete, save, log, or change app data, you MUST include the matching :::ACTION tag.
 - Never say you created, saved, updated, modified, or deleted something unless you included the matching :::ACTION tag in the same reply.
 - For vault or journal requests, always use create_journal, update_journal, or delete_journal.
+- For any request to write or save something to the vault/journal, include exactly one journal action tag even if the user phrases it casually.
+- Put action tags in plain text, never in a code block, and include them before your visible confirmation sentence.
 - Always confirm in your visible text what you did.
 - Use the exact quest/skill/equipment/buff IDs from the app state below when referencing existing items.
 - You can chain multiple actions in one response.

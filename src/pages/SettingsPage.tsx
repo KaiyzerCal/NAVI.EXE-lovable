@@ -3,7 +3,7 @@ import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
 import { User, Bell, Database, Shield, Check, Sun, Moon } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useProfile } from "@/hooks/useProfile";
+import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
 

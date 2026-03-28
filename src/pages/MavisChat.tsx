@@ -188,7 +188,7 @@ export default function MavisChat() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading || !user || !conversationId) return;
+    if (!input.trim() || isLoading || !user || !session?.access_token || !conversationId) return;
 
     const userContent = input.trim();
     setInput("");

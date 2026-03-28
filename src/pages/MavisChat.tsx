@@ -141,18 +141,21 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user, session } = useAuth();
-  const { profile, updateProfile, refetchProfile } = useProfile();
-  const { quests, stats: questStats, refetch: refetchQuests } = useQuests();
-  const { entries, refetch: refetchJournal } = useJournal();
-  const { achievements } = useAchievements();
-  const { skills, refetch: refetchSkills } = useOperatorSkills();
-  const { items: equipment, refetch: refetchEquipment } = useEquipment();
-  const { effects: buffs, refetch: refetchEffects } = useActiveEffects();
-  const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
+  const {
+    profile, updateProfile, refetchProfile,
+    quests, questStats, refetchQuests,
+    entries, refetchJournal,
+    achievements,
+    skills, refetchSkills,
+    items: equipment, refetchEquipment,
+    effects: buffs, refetchEffects,
+    chatMessages: messages, setChatMessages: setMessages,
+    conversationId, setConversationId,
+    chatDbLoaded, setChatDbLoaded,
+  } = useAppData();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [dbLoading, setDbLoading] = useState(true);
+  const dbLoading = !chatDbLoaded;
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);

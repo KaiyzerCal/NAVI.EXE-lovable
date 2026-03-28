@@ -40,6 +40,22 @@ const profileAllowedKeys = [
   "last_active",
 ] as const;
 
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  if (error && typeof error === "object") {
+    return JSON.parse(JSON.stringify(error, Object.getOwnPropertyNames(error)));
+  }
+
+  return { message: String(error) };
+}
+
 function asStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
   if (typeof value === "string") {
@@ -479,7 +495,7 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -489,7 +505,11 @@ serve(async (req) => {
 
     const { data: userData, error: userError } = await userClient.auth.getUser(token);
     if (userError || !userData?.user?.id) {
-      console.error("navi-actions auth error:", userError);
+      console.error("navi-actions auth error:", {
+        error: serializeError(userError),
+        hasPublishableKey: Boolean(Deno.env.get("SUPABASE_PUBLISHABLE_KEY")),
+        hasAnonKey: Boolean(Deno.env.get("SUPABASE_ANON_KEY")),
+      });
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -510,7 +530,11 @@ serve(async (req) => {
         await executeAction(adminClient, userId, action);
         results.push({ type: action.type, success: true });
       } catch (error) {
-        console.error(`navi-actions FAILED [${action.type}] params:`, JSON.stringify(action.params), "error:", error);
+        console.error("navi-actions action failed:", {
+          type: action.type,
+          params: action.params,
+          error: serializeError(error),
+        });
         results.push({
           type: action.type,
           success: false,
@@ -523,7 +547,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("navi-actions fatal error:", error);
+    console.error("navi-actions fatal error:", serializeError(error));
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -100,6 +100,16 @@ export async function executeAction(userId: string, action: NaviAction): Promise
       }
       break;
     }
+    case "update_quest": {
+      if (params.quest_id) {
+        const updates: any = {};
+        for (const key of ["name", "description", "type", "total", "xp_reward", "progress", "completed", "linked_skill_id", "loot_description"]) {
+          if (params[key] !== undefined) updates[key] = params[key];
+        }
+        await supabase.from("quests").update(updates).eq("id", params.quest_id).eq("user_id", userId);
+      }
+      break;
+    }
     case "delete_quest": {
       if (params.quest_id) {
         await supabase.from("quests").delete().eq("id", params.quest_id).eq("user_id", userId);

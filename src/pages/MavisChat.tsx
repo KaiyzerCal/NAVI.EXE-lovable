@@ -288,17 +288,33 @@ export default function MavisChat() {
           if (controller.signal.aborted) return;
 
           const { cleanText, actions } = parseActions(assistantContent);
-          console.log("[NAVI] parseActions result:", { cleanText: cleanText.substring(0, 100), actionCount: actions.length, actions: actions.map(a => a.type) });
 
           if (actions.length > 0) {
-            for (const action of actions) {
-              try {
-                console.log("[NAVI] Executing action:", action.type, JSON.stringify(action.params).substring(0, 200));
-                await executeAction(user.id, action);
-                console.log("[NAVI] Action succeeded:", action.type);
-              } catch (err) {
-                console.error("[NAVI] Action execution failed:", action.type, err);
+            try {
+              const actionResp = await fetch(NAVI_ACTIONS_URL, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ actions }),
+              });
+
+              const actionJson = await actionResp.json().catch(() => ({ results: [] }));
+              if (!actionResp.ok) {
+                throw new Error(actionJson.error || `Action request failed (${actionResp.status})`);
               }
+
+              const failures = Array.isArray(actionJson.results)
+                ? actionJson.results.filter((result: { success: boolean }) => !result.success)
+                : [];
+
+              if (failures.length > 0) {
+                console.error("[NAVI] Action failures:", failures);
+              }
+            } catch (err) {
+              console.error("[NAVI] Backend action execution failed:", err);
             }
 
             await Promise.all([

@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AppDataProvider } from "@/contexts/AppDataContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
 import AuthPage from "./pages/AuthPage";
@@ -48,10 +49,11 @@ function AppContent() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <AppSidebar />
-      <main className="flex-1 p-6 overflow-y-auto">
-        <Routes>
+    <AppDataProvider>
+      <div className="flex min-h-screen">
+        <AppSidebar />
+        <main className="flex-1 p-6 overflow-y-auto">
+          <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/navi" element={<NaviPage />} />
           <Route path="/mavis" element={<MavisChat />} />
@@ -61,9 +63,10 @@ function AppContent() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </main>
-    </div>
+          </Routes>
+        </main>
+      </div>
+    </AppDataProvider>
   );
 }
 

@@ -5,20 +5,9 @@ import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown } from "luc
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProfile } from "@/hooks/useProfile";
-import { useQuests } from "@/hooks/useQuests";
-import { useJournal } from "@/hooks/useJournal";
-import { useAchievements } from "@/hooks/useAchievements";
-import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
+import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
 import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
-
-interface DisplayMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
@@ -152,18 +141,21 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user, session } = useAuth();
-  const { profile, updateProfile, refetchProfile } = useProfile();
-  const { quests, stats: questStats, refetch: refetchQuests } = useQuests();
-  const { entries, refetch: refetchJournal } = useJournal();
-  const { achievements } = useAchievements();
-  const { skills, refetch: refetchSkills } = useOperatorSkills();
-  const { items: equipment, refetch: refetchEquipment } = useEquipment();
-  const { effects: buffs, refetch: refetchEffects } = useActiveEffects();
-  const [messages, setMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
+  const {
+    profile, updateProfile, refetchProfile,
+    quests, questStats, refetchQuests,
+    entries, refetchJournal,
+    achievements,
+    skills, refetchSkills,
+    items: equipment, refetchEquipment,
+    effects: buffs, refetchEffects,
+    chatMessages: messages, setChatMessages: setMessages,
+    conversationId, setConversationId,
+    chatDbLoaded, setChatDbLoaded,
+  } = useAppData();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [dbLoading, setDbLoading] = useState(true);
+  const dbLoading = !chatDbLoaded;
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -172,7 +164,7 @@ export default function MavisChat() {
 
   // ── Load conversation ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    if (!user || chatDbLoaded) return;
     let cancelled = false;
     (async () => {
       try {
@@ -194,11 +186,11 @@ export default function MavisChat() {
       } catch (err) {
         console.error("Failed to load chat history:", err);
       } finally {
-        if (!cancelled) setDbLoading(false);
+        if (!cancelled) setChatDbLoaded(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, chatDbLoaded]);
 
   // ── Auto-scroll & scroll button ───────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {

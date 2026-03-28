@@ -2,13 +2,10 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
 import { BarChart3, TrendingUp, Target, Flame, BookOpen, Loader2, Trophy } from "lucide-react";
-import { useProfile } from "@/hooks/useProfile";
-import { useQuests } from "@/hooks/useQuests";
-import { useJournal } from "@/hooks/useJournal";
-import { useAchievements } from "@/hooks/useAchievements";
+import { useAppData } from "@/contexts/AppDataContext";
 import { useEffect } from "react";
 
-function buildWeeklyData(quests: ReturnType<typeof useQuests>["quests"]) {
+function buildWeeklyData(quests: { completed: boolean; updated_at: string; xp_reward: number }[]) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const now = new Date();
   const week = Array.from({ length: 7 }, (_, i) => {
@@ -33,10 +30,7 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export default function StatsPage() {
-  const { profile, loading: profileLoading } = useProfile();
-  const { quests, loading: questsLoading, stats } = useQuests();
-  const { entries, loading: journalLoading } = useJournal();
-  const { achievements, loading: achLoading, checkAchievements, stats: achStats } = useAchievements();
+  const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading, achievements, achievementsLoading: achLoading, checkAchievements, achievementStats: achStats } = useAppData();
 
   const loading = profileLoading || questsLoading || journalLoading || achLoading;
 

@@ -4,7 +4,8 @@ import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { useJournal, type JournalEntry } from "@/hooks/useJournal";
+import { useAppData } from "@/contexts/AppDataContext";
+import type { JournalEntry } from "@/hooks/useJournal";
 
 const TAG_COLORS: Record<string, string> = {
   reflection: "bg-neon-cyan/10 text-neon-cyan",
@@ -117,7 +118,7 @@ function EntryModal({
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function JournalPage() {
-  const { entries, loading, createEntry, updateEntry, deleteEntry } = useJournal();
+  const { entries, journalLoading: loading, createEntry, updateEntry, deleteEntry } = useAppData();
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);

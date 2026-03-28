@@ -3,9 +3,7 @@ import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
 import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2 } from "lucide-react";
-import { useProfile } from "@/hooks/useProfile";
-import { useQuests } from "@/hooks/useQuests";
-import { useJournal } from "@/hooks/useJournal";
+import { useAppData } from "@/contexts/AppDataContext";
 import { useNavigate } from "react-router-dom";
 import { Suspense } from "react";
 import { getNaviCharacter } from "@/components/navi-characters";
@@ -17,9 +15,7 @@ const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/pub
 const xpForLevel = (level: number) => level * 500;
 
 export default function Dashboard() {
-  const { profile, loading: profileLoading } = useProfile();
-  const { quests, loading: questsLoading, stats } = useQuests();
-  const { entries, loading: journalLoading } = useJournal();
+  const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading } = useAppData();
   const navigate = useNavigate();
 
   const loading = profileLoading || questsLoading || journalLoading;

@@ -5,10 +5,7 @@ import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
 import { motion } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins } from "lucide-react";
 import { useState, useCallback } from "react";
-import { useProfile } from "@/hooks/useProfile";
-import { useQuests } from "@/hooks/useQuests";
-import { useJournal } from "@/hooks/useJournal";
-import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
+import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
@@ -50,12 +47,7 @@ const RARITY_COLORS: Record<string, string> = {
 
 export default function CharacterPage() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("CHARACTER INFO");
-  const { profile, updateProfile, loading: profileLoading } = useProfile();
-  const { quests, stats: questStats } = useQuests();
-  const { entries } = useJournal();
-  const { skills, loading: skillsLoading, addSkill, updateSkill, deleteSkill } = useOperatorSkills();
-  const { items, loading: equipLoading, addItem, equipItem, deleteItem } = useEquipment();
-  const { effects, loading: effectsLoading, addEffect, removeEffect } = useActiveEffects();
+  const { profile, updateProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
 
   const [editMode, setEditMode] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");

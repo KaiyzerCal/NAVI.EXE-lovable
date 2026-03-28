@@ -479,7 +479,7 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -510,11 +510,11 @@ serve(async (req) => {
         await executeAction(adminClient, userId, action);
         results.push({ type: action.type, success: true });
       } catch (error) {
-        console.error("navi-actions error:", action.type, error);
+        console.error(`navi-actions FAILED [${action.type}] params:`, JSON.stringify(action.params), "error:", error);
         results.push({
           type: action.type,
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : String(error),
         });
       }
     }

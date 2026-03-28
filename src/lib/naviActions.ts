@@ -29,8 +29,8 @@ export function parseActions(text: string): { cleanText: string; actions: NaviAc
     if (jsonEnd === -1) break;
     const jsonStr = cleanText.slice(jsonStart, jsonEnd + 1);
     // Find the trailing :::
-    const afterJson = cleanText.indexOf(endMarker, jsonEnd + 1);
-    const removeEnd = afterJson !== -1 && afterJson <= jsonEnd + 4 ? afterJson + endMarker.length : jsonEnd + 1;
+    const afterJson = cleanText.indexOf(":::", jsonEnd + 1);
+    const removeEnd = afterJson !== -1 ? afterJson + 3 : jsonEnd + 1;
     try {
       actions.push(JSON.parse(jsonStr));
     } catch (e) {
@@ -97,6 +97,16 @@ export async function executeAction(userId: string, action: NaviAction): Promise
     case "update_quest_progress": {
       if (params.quest_id) {
         await supabase.from("quests").update({ progress: params.progress }).eq("id", params.quest_id).eq("user_id", userId);
+      }
+      break;
+    }
+    case "update_quest": {
+      if (params.quest_id) {
+        const updates: any = {};
+        for (const key of ["name", "description", "type", "total", "xp_reward", "progress", "completed", "linked_skill_id", "loot_description"]) {
+          if (params[key] !== undefined) updates[key] = params[key];
+        }
+        await supabase.from("quests").update(updates).eq("id", params.quest_id).eq("user_id", userId);
       }
       break;
     }

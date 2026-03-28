@@ -5,10 +5,7 @@ import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
 import { motion } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins } from "lucide-react";
 import { useState, useCallback } from "react";
-import { useProfile } from "@/hooks/useProfile";
-import { useQuests } from "@/hooks/useQuests";
-import { useJournal } from "@/hooks/useJournal";
-import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
+import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 

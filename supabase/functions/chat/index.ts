@@ -209,27 +209,31 @@ ${webSection}
 ACTIONS — You can perform actions on the app. When you do, include action tags that will be parsed and executed automatically. The user will NOT see these tags. Always confirm what you did in your visible reply.
 
 Available actions (embed in your response):
-:::ACTION{"type":"create_quest","params":{"name":"...","type":"Daily|Weekly|Main|Side|Minor|Epic","total":1,"xp_reward":50}}:::
-:::ACTION{"type":"complete_quest","params":{"quest_id":"..."}}:::
+:::ACTION{"type":"create_quest","params":{"name":"...","description":"...","type":"Daily|Weekly|Main|Side|Minor|Epic","total":1,"xp_reward":50,"linked_skill_id":"..."}}:::
+:::ACTION{"type":"update_quest","params":{"quest_id":"...","name":"...","description":"...","type":"Daily|Weekly|Main|Side|Minor|Epic","total":1,"xp_reward":50,"progress":0,"completed":false,"linked_skill_id":"...","loot_description":"..."}}:::
+:::ACTION{"type":"complete_quest","params":{"quest_id":"...","skill_xp":25}}:::
 :::ACTION{"type":"update_quest_progress","params":{"quest_id":"...","progress":5}}:::
 :::ACTION{"type":"delete_quest","params":{"quest_id":"..."}}:::
 :::ACTION{"type":"award_xp","params":{"amount":100}}:::
 :::ACTION{"type":"create_skill","params":{"name":"...","description":"...","category":"General|Combat|Knowledge|Social|Fitness|Creative|Technical","max_level":10}}:::
+:::ACTION{"type":"update_skill","params":{"skill_id":"...","name":"...","description":"...","category":"...","level":5,"max_level":10,"xp":0}}:::
 :::ACTION{"type":"level_up_skill","params":{"skill_id":"..."}}:::
-:::ACTION{"type":"update_skill","params":{"skill_id":"...","name":"...","level":5}}:::
-:::ACTION{"type":"create_subskill","params":{"skill_id":"...","name":"...","description":"..."}}:::
-:::ACTION{"type":"update_profile","params":{"display_name":"...","xp_total":100,"navi_level":5,"bond_affection":60,"subclass":"...","perception":15,"luck":12,"codex_points":100,"cali_coins":50,"operator_level":5,"operator_xp":2000,"character_class":"...","mbti_type":"...","navi_name":"...","navi_personality":"GUARDIAN|HYPE|SHADOW|ROGUE|SAGE|COMPANION|ANALYTICAL|WILDCARD|STRATEGIST|MENTOR"}}:::
+:::ACTION{"type":"delete_skill","params":{"skill_id":"..."}}:::
+:::ACTION{"type":"create_subskill","params":{"skill_id":"...","name":"...","description":"...","level":1}}:::
+:::ACTION{"type":"update_subskill","params":{"subskill_id":"...","name":"...","description":"...","level":2}}:::
+:::ACTION{"type":"delete_subskill","params":{"subskill_id":"..."}}:::
+:::ACTION{"type":"update_profile","params":{"display_name":"...","xp_total":100,"navi_level":5,"bond_affection":60,"bond_trust":60,"bond_loyalty":60,"subclass":"...","perception":15,"luck":12,"codex_points":100,"cali_coins":50,"operator_level":5,"operator_xp":2000,"character_class":"...","mbti_type":"...","navi_name":"...","navi_personality":"GUARDIAN|HYPE|SHADOW|ROGUE|SAGE|COMPANION|ANALYTICAL|WILDCARD|STRATEGIST|MENTOR","notification_settings":{"questReminders":true,"streakWarnings":true,"xpMilestones":false,"dailySummary":true},"onboarding_done":true,"user_navi_description":"..."}}:::
 :::ACTION{"type":"create_journal","params":{"title":"...","content":"...","tags":["tag1"],"category":"personal|business|legal|evidence|achievement","importance":"low|medium|high|critical","xp_earned":10}}:::
 :::ACTION{"type":"update_journal","params":{"entry_id":"...","title":"...","content":"...","tags":["tag1"],"category":"personal|business|legal|evidence|achievement","importance":"low|medium|high|critical"}}:::
 :::ACTION{"type":"delete_journal","params":{"entry_id":"..."}}:::
-:::ACTION{"type":"create_equipment","params":{"name":"...","description":"...","slot":"head|chest|hands|legs|feet|weapon|offhand|accessory","rarity":"common|rare|epic|legendary","stat_bonuses":{"str":5,"perception":3,"luck":2},"obtained_from":"quest_reward|manual|navi"}}:::
+:::ACTION{"type":"create_equipment","params":{"name":"...","description":"...","slot":"head|chest|hands|legs|feet|weapon|offhand|accessory","rarity":"common|rare|epic|legendary","stat_bonuses":{"str":5,"perception":3,"luck":2},"obtained_from":"quest_reward|manual|navi","is_equipped":false}}:::
+:::ACTION{"type":"update_equipment","params":{"item_id":"...","name":"...","description":"...","slot":"accessory","rarity":"epic","stat_bonuses":{"luck":3},"obtained_from":"navi","is_equipped":true}}:::
 :::ACTION{"type":"equip_item","params":{"item_id":"...","name":"..."}}:::
 :::ACTION{"type":"unequip_item","params":{"item_id":"...","name":"..."}}:::
-:::ACTION{"type":"create_buff","params":{"name":"...","effect_type":"buff|debuff","stat_affected":"str|int|vit|agi|res|perception|luck","modifier_value":5,"duration_hours":24,"source":"quest|navi|equipment"}}:::
-:::ACTION{"type":"remove_buff","params":{"buff_id":"...","name":"..."}}:::
-:::ACTION{"type":"delete_skill","params":{"skill_id":"..."}}:::
 :::ACTION{"type":"delete_equipment","params":{"item_id":"..."}}:::
-
+:::ACTION{"type":"create_buff","params":{"name":"...","description":"...","effect_type":"buff|debuff","stat_affected":"str|int|vit|agi|res|perception|luck","modifier_value":5,"duration_hours":24,"source":"quest|navi|equipment"}}:::
+:::ACTION{"type":"update_buff","params":{"buff_id":"...","name":"...","description":"...","effect_type":"buff|debuff","stat_affected":"luck","modifier_value":3,"duration_hours":12,"source":"navi"}}:::
+:::ACTION{"type":"remove_buff","params":{"buff_id":"...","name":"..."}}:::
 RULES FOR ACTIONS:
 - If the user asks you to create, edit, update, modify, delete, save, log, or change app data, you MUST include the matching :::ACTION tag.
 - Never say you created, saved, updated, modified, or deleted something unless you included the matching :::ACTION tag in the same reply.

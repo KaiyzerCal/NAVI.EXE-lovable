@@ -11,7 +11,7 @@ import { useJournal } from "@/hooks/useJournal";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { parseActions, executeAction } from "@/lib/naviActions";
+import { parseActions } from "@/lib/naviActions";
 
 interface DisplayMessage {
   id: string;
@@ -21,17 +21,20 @@ interface DisplayMessage {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
 
 async function streamChat({
   messages,
   context,
   signal,
+  accessToken,
   onDelta,
   onDone,
 }: {
   messages: { role: string; content: string }[];
   context?: Record<string, any>;
   signal: AbortSignal;
+  accessToken: string;
   onDelta: (text: string) => void;
   onDone: () => void;
 }) {
@@ -39,7 +42,8 @@ async function streamChat({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ messages, context }),
     signal,
@@ -90,7 +94,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 };
 
 export default function MavisChat() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { profile, updateProfile, refetchProfile } = useProfile();
   const { quests, stats: questStats, refetch: refetchQuests } = useQuests();
   const { entries, refetch: refetchJournal } = useJournal();
@@ -184,7 +188,7 @@ export default function MavisChat() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading || !user || !conversationId) return;
+    if (!input.trim() || isLoading || !user || !session?.access_token || !conversationId) return;
 
     const userContent = input.trim();
     setInput("");
@@ -222,6 +226,7 @@ export default function MavisChat() {
       await streamChat({
         messages: chatHistory,
         signal: controller.signal,
+        accessToken: session.access_token,
         context: {
           navi_name: profile.navi_name,
           display_name: profile.display_name,
@@ -284,17 +289,33 @@ export default function MavisChat() {
           if (controller.signal.aborted) return;
 
           const { cleanText, actions } = parseActions(assistantContent);
-          console.log("[NAVI] parseActions result:", { cleanText: cleanText.substring(0, 100), actionCount: actions.length, actions: actions.map(a => a.type) });
 
           if (actions.length > 0) {
-            for (const action of actions) {
-              try {
-                console.log("[NAVI] Executing action:", action.type, JSON.stringify(action.params).substring(0, 200));
-                await executeAction(user.id, action);
-                console.log("[NAVI] Action succeeded:", action.type);
-              } catch (err) {
-                console.error("[NAVI] Action execution failed:", action.type, err);
+            try {
+              const actionResp = await fetch(NAVI_ACTIONS_URL, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ actions }),
+              });
+
+              const actionJson = await actionResp.json().catch(() => ({ results: [] }));
+              if (!actionResp.ok) {
+                throw new Error(actionJson.error || `Action request failed (${actionResp.status})`);
               }
+
+              const failures = Array.isArray(actionJson.results)
+                ? actionJson.results.filter((result: { success: boolean }) => !result.success)
+                : [];
+
+              if (failures.length > 0) {
+                console.error("[NAVI] Action failures:", failures);
+              }
+            } catch (err) {
+              console.error("[NAVI] Backend action execution failed:", err);
             }
 
             await Promise.all([
@@ -327,7 +348,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,

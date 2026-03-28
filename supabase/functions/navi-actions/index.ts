@@ -1,0 +1,531 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+type NaviAction = {
+  type: string;
+  params: Record<string, unknown>;
+};
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+const xpForLevel = (lv: number) => lv * 500;
+
+const profileAllowedKeys = [
+  "display_name",
+  "character_class",
+  "mbti_type",
+  "xp_total",
+  "navi_level",
+  "navi_name",
+  "navi_personality",
+  "equipped_skin",
+  "bond_affection",
+  "bond_trust",
+  "bond_loyalty",
+  "current_streak",
+  "longest_streak",
+  "subclass",
+  "perception",
+  "luck",
+  "codex_points",
+  "cali_coins",
+  "operator_level",
+  "operator_xp",
+  "onboarding_done",
+  "notification_settings",
+  "user_navi_description",
+  "last_active",
+] as const;
+
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+async function logActivity(sb: ReturnType<typeof createClient>, userId: string, eventType: string, description: string, xpAmount: number) {
+  const { error } = await sb.from("activity_log").insert({
+    user_id: userId,
+    event_type: eventType,
+    description,
+    xp_amount: xpAmount,
+  });
+
+  if (error) {
+    console.error("logActivity error:", error);
+  }
+}
+
+async function awardXP(sb: ReturnType<typeof createClient>, userId: string, amount: number) {
+  const { data: profile, error } = await sb
+    .from("profiles")
+    .select("xp_total, operator_xp, operator_level")
+    .eq("id", userId)
+    .single();
+
+  if (error || !profile) {
+    console.error("awardXP profile read error:", error);
+    return;
+  }
+
+  const newXpTotal = (profile.xp_total || 0) + amount;
+  let opXp = (profile.operator_xp || 0) + amount;
+  let opLevel = profile.operator_level || 1;
+
+  while (opXp >= xpForLevel(opLevel + 1)) {
+    opXp -= xpForLevel(opLevel + 1);
+    opLevel++;
+  }
+
+  const { error: updateError } = await sb
+    .from("profiles")
+    .update({
+      xp_total: newXpTotal,
+      operator_xp: opXp,
+      operator_level: opLevel,
+    })
+    .eq("id", userId);
+
+  if (updateError) {
+    console.error("awardXP update error:", updateError);
+  }
+}
+
+async function executeAction(sb: ReturnType<typeof createClient>, userId: string, action: NaviAction) {
+  const params = action.params || {};
+
+  switch (action.type) {
+    case "create_quest": {
+      const { error } = await sb.from("quests").insert({
+        user_id: userId,
+        name: String(params.name || "New Quest"),
+        description: params.description ? String(params.description) : null,
+        type: String(params.type || "Daily"),
+        total: Number(params.total || 1),
+        xp_reward: Number(params.xp_reward || 50),
+        progress: Number(params.progress || 0),
+        completed: Boolean(params.completed || false),
+        linked_skill_id: params.linked_skill_id ? String(params.linked_skill_id) : null,
+        loot_description: String(params.loot_description || ""),
+        equipment_reward_id: params.equipment_reward_id ? String(params.equipment_reward_id) : null,
+        buff_reward_id: params.buff_reward_id ? String(params.buff_reward_id) : null,
+        debuff_penalty_id: params.debuff_penalty_id ? String(params.debuff_penalty_id) : null,
+      });
+      if (error) throw error;
+      await logActivity(sb, userId, "quest_created", `Quest created: ${String(params.name || "New Quest")}`, 0);
+      return;
+    }
+
+    case "update_quest": {
+      if (!params.quest_id) return;
+      const updates: Record<string, unknown> = {};
+      for (const key of ["name", "description", "type", "total", "xp_reward", "progress", "completed", "linked_skill_id", "loot_description", "equipment_reward_id", "buff_reward_id", "debuff_penalty_id"]) {
+        if (params[key] !== undefined) updates[key] = params[key];
+      }
+      const { error } = await sb.from("quests").update(updates).eq("id", String(params.quest_id)).eq("user_id", userId);
+      if (error) throw error;
+      await logActivity(sb, userId, "quest_updated", `Quest updated: ${String(params.quest_id)}`, 0);
+      return;
+    }
+
+    case "complete_quest": {
+      if (!params.quest_id) return;
+      const { data: quest, error } = await sb
+        .from("quests")
+        .select("xp_reward, name, total, linked_skill_id")
+        .eq("id", String(params.quest_id))
+        .eq("user_id", userId)
+        .single();
+      if (error) throw error;
+      if (!quest) return;
+
+      const { error: questUpdateError } = await sb
+        .from("quests")
+        .update({ completed: true, progress: quest.total })
+        .eq("id", String(params.quest_id))
+        .eq("user_id", userId);
+      if (questUpdateError) throw questUpdateError;
+
+      await awardXP(sb, userId, Number(quest.xp_reward || 0));
+
+      if (quest.linked_skill_id) {
+        const { data: skill } = await sb
+          .from("skills")
+          .select("id, name, level, max_level, xp")
+          .eq("id", quest.linked_skill_id)
+          .eq("user_id", userId)
+          .single();
+
+        if (skill) {
+          const currentXp = Number(skill.xp || 0) + Number(params.skill_xp || 25);
+          let nextLevel = Number(skill.level || 1);
+          let remainingXp = currentXp;
+          const maxLevel = Number(skill.max_level || 10);
+
+          while (nextLevel < maxLevel && remainingXp >= nextLevel * 100) {
+            remainingXp -= nextLevel * 100;
+            nextLevel += 1;
+          }
+
+          await sb
+            .from("skills")
+            .update({ level: nextLevel, xp: remainingXp })
+            .eq("id", quest.linked_skill_id)
+            .eq("user_id", userId);
+        }
+      }
+
+      await logActivity(sb, userId, "quest_completed", `Quest completed: ${quest.name}`, Number(quest.xp_reward || 0));
+      return;
+    }
+
+    case "update_quest_progress": {
+      if (!params.quest_id) return;
+      const { error } = await sb
+        .from("quests")
+        .update({ progress: Number(params.progress || 0) })
+        .eq("id", String(params.quest_id))
+        .eq("user_id", userId);
+      if (error) throw error;
+      return;
+    }
+
+    case "delete_quest": {
+      if (!params.quest_id) return;
+      const { error } = await sb.from("quests").delete().eq("id", String(params.quest_id)).eq("user_id", userId);
+      if (error) throw error;
+      await logActivity(sb, userId, "quest_deleted", "Quest deleted", 0);
+      return;
+    }
+
+    case "award_xp": {
+      const amount = Number(params.amount || 0);
+      await awardXP(sb, userId, amount);
+      await logActivity(sb, userId, "xp_gained", `Gained ${amount} XP`, amount);
+      return;
+    }
+
+    case "create_skill": {
+      const { error } = await sb.from("skills").insert({
+        user_id: userId,
+        name: String(params.name || "New Skill"),
+        description: String(params.description || ""),
+        category: String(params.category || "General"),
+        max_level: Number(params.max_level || 10),
+        level: Number(params.level || 1),
+        xp: Number(params.xp || 0),
+      });
+      if (error) throw error;
+      await logActivity(sb, userId, "skill_created", `Skill created: ${String(params.name || "New Skill")}`, 0);
+      return;
+    }
+
+    case "update_skill": {
+      if (!params.skill_id) return;
+      const updates: Record<string, unknown> = {};
+      for (const key of ["name", "description", "category", "level", "max_level", "xp"]) {
+        if (params[key] !== undefined) updates[key] = params[key];
+      }
+      const { error } = await sb.from("skills").update(updates).eq("id", String(params.skill_id)).eq("user_id", userId);
+      if (error) throw error;
+      return;
+    }
+
+    case "level_up_skill": {
+      if (!params.skill_id) return;
+      const { data: skill, error } = await sb.from("skills").select("level, max_level, name").eq("id", String(params.skill_id)).eq("user_id", userId).single();
+      if (error) throw error;
+      if (skill && Number(skill.level) < Number(skill.max_level)) {
+        const { error: updateError } = await sb.from("skills").update({ level: Number(skill.level) + 1 }).eq("id", String(params.skill_id)).eq("user_id", userId);
+        if (updateError) throw updateError;
+        await logActivity(sb, userId, "skill_levelup", `${skill.name} leveled up to ${Number(skill.level) + 1}`, 0);
+      }
+      return;
+    }
+
+    case "delete_skill": {
+      if (!params.skill_id) return;
+      const { error } = await sb.from("skills").delete().eq("id", String(params.skill_id)).eq("user_id", userId);
+      if (error) throw error;
+      await logActivity(sb, userId, "skill_deleted", "Skill deleted", 0);
+      return;
+    }
+
+    case "create_subskill": {
+      if (!params.skill_id) return;
+      const { error } = await sb.from("subskills").insert({
+        user_id: userId,
+        skill_id: String(params.skill_id),
+        name: String(params.name || "New Subskill"),
+        description: String(params.description || ""),
+        level: Number(params.level || 1),
+      });
+      if (error) throw error;
+      return;
+    }
+
+    case "update_subskill": {
+      if (!params.subskill_id) return;
+      const updates: Record<string, unknown> = {};
+      for (const key of ["name", "description", "level", "skill_id"]) {
+        if (params[key] !== undefined) updates[key] = params[key];
+      }
+      const { error } = await sb.from("subskills").update(updates).eq("id", String(params.subskill_id)).eq("user_id", userId);
+      if (error) throw error;
+      return;
+    }
+
+    case "delete_subskill": {
+      if (!params.subskill_id) return;
+      const { error } = await sb.from("subskills").delete().eq("id", String(params.subskill_id)).eq("user_id", userId);
+      if (error) throw error;
+      return;
+    }
+
+    case "update_profile": {
+      const updates: Record<string, unknown> = {};
+      for (const key of profileAllowedKeys) {
+        if (params[key] !== undefined) updates[key] = params[key];
+      }
+      if (Object.keys(updates).length === 0) return;
+      const { error } = await sb.from("profiles").update(updates).eq("id", userId);
+      if (error) throw error;
+      await logActivity(sb, userId, "profile_updated", `Profile updated: ${Object.keys(updates).join(", ")}`, 0);
+      return;
+    }
+
+    case "create_journal": {
+      const title = String(params.title || "New Entry");
+      const xpEarned = Number(params.xp_earned || 10);
+      const { error } = await sb.from("journal_entries").insert({
+        user_id: userId,
+        title,
+        content: String(params.content || ""),
+        tags: asStringArray(params.tags),
+        xp_earned: xpEarned,
+        category: String(params.category || "personal"),
+        importance: String(params.importance || "medium"),
+      });
+      if (error) throw error;
+      await awardXP(sb, userId, xpEarned);
+      await logActivity(sb, userId, "journal_created", `Journal entry: ${title}`, xpEarned);
+      return;
+    }
+
+    case "update_journal": {
+      if (!params.entry_id) return;
+      const updates: Record<string, unknown> = {};
+      if (params.title !== undefined) updates.title = params.title;
+      if (params.content !== undefined) updates.content = params.content;
+      if (params.tags !== undefined) updates.tags = asStringArray(params.tags);
+      if (params.category !== undefined) updates.category = params.category;
+      if (params.importance !== undefined) updates.importance = params.importance;
+      const { error } = await sb.from("journal_entries").update(updates).eq("id", String(params.entry_id)).eq("user_id", userId);
+      if (error) throw error;
+      return;
+    }
+
+    case "delete_journal": {
+      if (!params.entry_id) return;
+      const { error } = await sb.from("journal_entries").delete().eq("id", String(params.entry_id)).eq("user_id", userId);
+      if (error) throw error;
+      await logActivity(sb, userId, "journal_deleted", "Journal entry deleted", 0);
+      return;
+    }
+
+    case "create_equipment": {
+      const { error } = await sb.from("equipment").insert({
+        user_id: userId,
+        name: String(params.name || "New Item"),
+        description: String(params.description || ""),
+        slot: String(params.slot || "accessory"),
+        rarity: String(params.rarity || "common"),
+        stat_bonuses: (params.stat_bonuses as Record<string, unknown>) || {},
+        obtained_from: String(params.obtained_from || "manual"),
+        buff_id: params.buff_id ? String(params.buff_id) : null,
+        is_equipped: Boolean(params.is_equipped || false),
+      });
+      if (error) throw error;
+      await logActivity(sb, userId, "equipment_created", `Equipment created: ${String(params.name || "New Item")}`, 0);
+      return;
+    }
+
+    case "update_equipment": {
+      if (!params.item_id) return;
+      const updates: Record<string, unknown> = {};
+      for (const key of ["name", "description", "slot", "rarity", "stat_bonuses", "obtained_from", "buff_id", "is_equipped"]) {
+        if (params[key] !== undefined) updates[key] = params[key];
+      }
+      const { error } = await sb.from("equipment").update(updates).eq("id", String(params.item_id)).eq("user_id", userId);
+      if (error) throw error;
+      return;
+    }
+
+    case "equip_item": {
+      let itemId = params.item_id ? String(params.item_id) : null;
+      let slot: string | null = null;
+      let name = "Item";
+
+      if (itemId) {
+        const { data: item, error } = await sb.from("equipment").select("id, slot, name").eq("id", itemId).eq("user_id", userId).single();
+        if (error) throw error;
+        if (!item) return;
+        slot = item.slot;
+        name = item.name;
+      } else if (params.name) {
+        const { data: item, error } = await sb.from("equipment").select("id, slot, name").eq("user_id", userId).ilike("name", String(params.name)).single();
+        if (error) throw error;
+        if (!item) return;
+        itemId = item.id;
+        slot = item.slot;
+        name = item.name;
+      }
+
+      if (!itemId || !slot) return;
+
+      await sb.from("equipment").update({ is_equipped: false }).eq("user_id", userId).eq("slot", slot).eq("is_equipped", true);
+      const { error } = await sb.from("equipment").update({ is_equipped: true }).eq("id", itemId).eq("user_id", userId);
+      if (error) throw error;
+      await logActivity(sb, userId, "item_equipped", `Equipped: ${name}`, 0);
+      return;
+    }
+
+    case "unequip_item": {
+      if (params.item_id) {
+        const { error } = await sb.from("equipment").update({ is_equipped: false }).eq("id", String(params.item_id)).eq("user_id", userId);
+        if (error) throw error;
+      } else if (params.name) {
+        const { error } = await sb.from("equipment").update({ is_equipped: false }).eq("user_id", userId).ilike("name", String(params.name));
+        if (error) throw error;
+      }
+      return;
+    }
+
+    case "delete_equipment": {
+      if (!params.item_id) return;
+      const { error } = await sb.from("equipment").delete().eq("id", String(params.item_id)).eq("user_id", userId);
+      if (error) throw error;
+      await logActivity(sb, userId, "equipment_deleted", "Equipment deleted", 0);
+      return;
+    }
+
+    case "create_buff": {
+      const expiresAt = params.duration_hours ? new Date(Date.now() + Number(params.duration_hours) * 3600000).toISOString() : null;
+      const effectType = String(params.effect_type || "buff");
+      const { error } = await sb.from("buffs").insert({
+        user_id: userId,
+        name: String(params.name || "Buff"),
+        description: String(params.description || ""),
+        effect_type: effectType,
+        stat_affected: String(params.stat_affected || ""),
+        modifier_value: Number(params.modifier_value || 0),
+        duration_hours: params.duration_hours ? Number(params.duration_hours) : null,
+        source: String(params.source || "navi"),
+        expires_at: expiresAt,
+      });
+      if (error) throw error;
+      await logActivity(sb, userId, effectType === "debuff" ? "debuff_applied" : "buff_applied", `${effectType === "debuff" ? "Debuff" : "Buff"}: ${String(params.name || "Buff")}`, 0);
+      return;
+    }
+
+    case "update_buff": {
+      if (!params.buff_id) return;
+      const updates: Record<string, unknown> = {};
+      for (const key of ["name", "description", "effect_type", "stat_affected", "modifier_value", "duration_hours", "source", "expires_at"]) {
+        if (params[key] !== undefined) updates[key] = params[key];
+      }
+      const { error } = await sb.from("buffs").update(updates).eq("id", String(params.buff_id)).eq("user_id", userId);
+      if (error) throw error;
+      return;
+    }
+
+    case "remove_buff": {
+      if (params.buff_id) {
+        const { error } = await sb.from("buffs").delete().eq("id", String(params.buff_id)).eq("user_id", userId);
+        if (error) throw error;
+      } else if (params.name) {
+        const { error } = await sb.from("buffs").delete().eq("user_id", userId).ilike("name", String(params.name));
+        if (error) throw error;
+      }
+      return;
+    }
+
+    default:
+      throw new Error(`Unknown Navi action: ${action.type}`);
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = String(claimsData.claims.sub);
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+    const body = await req.json();
+    const actions = Array.isArray(body?.actions) ? (body.actions as NaviAction[]) : [];
+
+    const results: Array<{ type: string; success: boolean; error?: string }> = [];
+    for (const action of actions) {
+      try {
+        await executeAction(adminClient, userId, action);
+        results.push({ type: action.type, success: true });
+      } catch (error) {
+        console.error("navi-actions error:", action.type, error);
+        results.push({
+          type: action.type,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("navi-actions fatal error:", error);
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

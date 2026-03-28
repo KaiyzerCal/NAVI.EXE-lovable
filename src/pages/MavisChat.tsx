@@ -11,7 +11,7 @@ import { useJournal } from "@/hooks/useJournal";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { parseActions, executeAction } from "@/lib/naviActions";
+import { parseActions } from "@/lib/naviActions";
 
 interface DisplayMessage {
   id: string;
@@ -21,6 +21,7 @@ interface DisplayMessage {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
 
 async function streamChat({
   messages,

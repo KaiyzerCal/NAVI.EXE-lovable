@@ -226,6 +226,7 @@ export default function MavisChat() {
       await streamChat({
         messages: chatHistory,
         signal: controller.signal,
+        accessToken: session.access_token,
         context: {
           navi_name: profile.navi_name,
           display_name: profile.display_name,

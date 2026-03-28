@@ -29,8 +29,8 @@ export function parseActions(text: string): { cleanText: string; actions: NaviAc
     if (jsonEnd === -1) break;
     const jsonStr = cleanText.slice(jsonStart, jsonEnd + 1);
     // Find the trailing :::
-    const afterJson = cleanText.indexOf(endMarker, jsonEnd + 1);
-    const removeEnd = afterJson !== -1 && afterJson <= jsonEnd + 4 ? afterJson + endMarker.length : jsonEnd + 1;
+    const afterJson = cleanText.indexOf(":::", jsonEnd + 1);
+    const removeEnd = afterJson !== -1 ? afterJson + 3 : jsonEnd + 1;
     try {
       actions.push(JSON.parse(jsonStr));
     } catch (e) {

@@ -2,10 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
 import { BarChart3, TrendingUp, Target, Flame, BookOpen, Loader2, Trophy } from "lucide-react";
-import { useProfile } from "@/hooks/useProfile";
-import { useQuests } from "@/hooks/useQuests";
-import { useJournal } from "@/hooks/useJournal";
-import { useAchievements } from "@/hooks/useAchievements";
+import { useAppData } from "@/contexts/AppDataContext";
 import { useEffect } from "react";
 
 function buildWeeklyData(quests: ReturnType<typeof useQuests>["quests"]) {

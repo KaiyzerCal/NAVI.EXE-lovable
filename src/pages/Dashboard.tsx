@@ -15,9 +15,7 @@ const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/pub
 const xpForLevel = (level: number) => level * 500;
 
 export default function Dashboard() {
-  const { profile, loading: profileLoading } = useProfile();
-  const { quests, loading: questsLoading, stats } = useQuests();
-  const { entries, loading: journalLoading } = useJournal();
+  const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading } = useAppData();
   const navigate = useNavigate();
 
   const loading = profileLoading || questsLoading || journalLoading;

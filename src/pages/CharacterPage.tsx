@@ -47,12 +47,7 @@ const RARITY_COLORS: Record<string, string> = {
 
 export default function CharacterPage() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("CHARACTER INFO");
-  const { profile, updateProfile, loading: profileLoading } = useProfile();
-  const { quests, stats: questStats } = useQuests();
-  const { entries } = useJournal();
-  const { skills, loading: skillsLoading, addSkill, updateSkill, deleteSkill } = useOperatorSkills();
-  const { items, loading: equipLoading, addItem, equipItem, deleteItem } = useEquipment();
-  const { effects, loading: effectsLoading, addEffect, removeEffect } = useActiveEffects();
+  const { profile, updateProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
 
   const [editMode, setEditMode] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");

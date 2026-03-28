@@ -160,7 +160,7 @@ const CATEGORIES: SkinCategory[] = ["ELEMENTAL", "CLASS", "MYTHIC", "COSMIC", "N
 export default function NaviPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { profile, updateProfile } = useProfile();
+  const { profile, updateProfile } = useAppData();
   const isOwner = useOwner();
   const [selectedCategory, setSelectedCategory] = useState<SkinCategory | "ALL">("ALL");
   const [equippedSkin, setEquippedSkin] = useState("NETOP");

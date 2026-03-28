@@ -30,10 +30,7 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export default function StatsPage() {
-  const { profile, loading: profileLoading } = useProfile();
-  const { quests, loading: questsLoading, stats } = useQuests();
-  const { entries, loading: journalLoading } = useJournal();
-  const { achievements, loading: achLoading, checkAchievements, stats: achStats } = useAchievements();
+  const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading, achievements, achievementsLoading: achLoading, checkAchievements, achievementStats: achStats } = useAppData();
 
   const loading = profileLoading || questsLoading || journalLoading || achLoading;
 

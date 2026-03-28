@@ -63,9 +63,10 @@ function AppContent() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </main>
-    </div>
+          </Routes>
+        </main>
+      </div>
+    </AppDataProvider>
   );
 }
 

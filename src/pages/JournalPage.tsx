@@ -118,7 +118,7 @@ function EntryModal({
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function JournalPage() {
-  const { entries, loading, createEntry, updateEntry, deleteEntry } = useJournal();
+  const { entries, journalLoading: loading, createEntry, updateEntry, deleteEntry } = useAppData();
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);

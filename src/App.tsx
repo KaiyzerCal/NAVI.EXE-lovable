@@ -49,10 +49,11 @@ function AppContent() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <AppSidebar />
-      <main className="flex-1 p-6 overflow-y-auto">
-        <Routes>
+    <AppDataProvider>
+      <div className="flex min-h-screen">
+        <AppSidebar />
+        <main className="flex-1 p-6 overflow-y-auto">
+          <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/navi" element={<NaviPage />} />
           <Route path="/mavis" element={<MavisChat />} />

@@ -5,20 +5,9 @@ import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown } from "luc
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProfile } from "@/hooks/useProfile";
-import { useQuests } from "@/hooks/useQuests";
-import { useJournal } from "@/hooks/useJournal";
-import { useAchievements } from "@/hooks/useAchievements";
-import { useOperatorSkills, useEquipment, useActiveEffects } from "@/hooks/useSkillsAndEquipment";
+import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
 import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
-
-interface DisplayMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;

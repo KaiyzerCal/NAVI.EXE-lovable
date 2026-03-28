@@ -164,7 +164,7 @@ export default function MavisChat() {
 
   // ── Load conversation ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    if (!user || chatDbLoaded) return;
     let cancelled = false;
     (async () => {
       try {
@@ -186,11 +186,11 @@ export default function MavisChat() {
       } catch (err) {
         console.error("Failed to load chat history:", err);
       } finally {
-        if (!cancelled) setDbLoading(false);
+        if (!cancelled) setChatDbLoaded(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, chatDbLoaded]);
 
   // ── Auto-scroll & scroll button ───────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {

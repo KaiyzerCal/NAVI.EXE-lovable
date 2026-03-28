@@ -282,38 +282,40 @@ export default function MavisChat() {
         },
         onDone: async () => {
           if (controller.signal.aborted) return;
+
+          const { cleanText, actions } = parseActions(assistantContent);
+
+          if (actions.length > 0) {
+            for (const action of actions) {
+              try {
+                await executeAction(user.id, action);
+              } catch (err) {
+                console.error("Action execution failed:", action.type, err);
+              }
+            }
+
+            await Promise.all([
+              refetchQuests(),
+              refetchJournal(),
+              refetchSkills(),
+              refetchEquipment(),
+              refetchEffects(),
+              refetchProfile(),
+            ]);
+          }
+
           try {
-            // Parse and execute actions from full response
-            const { cleanText, actions } = parseActions(assistantContent);
-            
-            // Save cleaned text to DB
             const assistantId = await saveMessage(conversationId, user.id, "assistant", cleanText);
             setMessages((prev) =>
               prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: cleanText } : m))
             );
-
-            // Execute all parsed actions
-            if (actions.length > 0) {
-              for (const action of actions) {
-                try {
-                  await executeAction(user.id, action);
-                } catch (err) {
-                  console.error("Action execution failed:", action.type, err);
-                }
-              }
-              // Refetch all data so the app reflects changes
-              await Promise.all([
-                refetchQuests(),
-                refetchJournal(),
-                refetchSkills(),
-                refetchEquipment(),
-                refetchEffects(),
-                refetchProfile(),
-              ]);
-            }
           } catch (err) {
             console.error("Failed to save assistant message:", err);
+            setMessages((prev) =>
+              prev.map((m) => (m.id === "streaming" ? { ...m, content: cleanText } : m))
+            );
           }
+
           setIsLoading(false);
         },
       });

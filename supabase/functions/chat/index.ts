@@ -219,8 +219,8 @@ Available actions (embed in your response):
 :::ACTION{"type":"update_skill","params":{"skill_id":"...","name":"...","level":5}}:::
 :::ACTION{"type":"create_subskill","params":{"skill_id":"...","name":"...","description":"..."}}:::
 :::ACTION{"type":"update_profile","params":{"display_name":"...","xp_total":100,"navi_level":5,"bond_affection":60,"subclass":"...","perception":15,"luck":12,"codex_points":100,"cali_coins":50,"operator_level":5,"operator_xp":2000,"character_class":"...","mbti_type":"...","navi_name":"...","navi_personality":"GUARDIAN|HYPE|SHADOW|ROGUE|SAGE|COMPANION|ANALYTICAL|WILDCARD|STRATEGIST|MENTOR"}}:::
-:::ACTION{"type":"create_journal","params":{"title":"...","content":"...","tags":["tag1"],"xp_earned":10}}:::
-:::ACTION{"type":"update_journal","params":{"entry_id":"...","title":"...","content":"..."}}:::
+:::ACTION{"type":"create_journal","params":{"title":"...","content":"...","tags":["tag1"],"category":"personal|business|legal|evidence|achievement","importance":"low|medium|high|critical","xp_earned":10}}:::
+:::ACTION{"type":"update_journal","params":{"entry_id":"...","title":"...","content":"...","tags":["tag1"],"category":"personal|business|legal|evidence|achievement","importance":"low|medium|high|critical"}}:::
 :::ACTION{"type":"delete_journal","params":{"entry_id":"..."}}:::
 :::ACTION{"type":"create_equipment","params":{"name":"...","description":"...","slot":"head|chest|hands|legs|feet|weapon|offhand|accessory","rarity":"common|rare|epic|legendary","stat_bonuses":{"str":5,"perception":3,"luck":2},"obtained_from":"quest_reward|manual|navi"}}:::
 :::ACTION{"type":"equip_item","params":{"item_id":"...","name":"..."}}:::
@@ -231,15 +231,17 @@ Available actions (embed in your response):
 :::ACTION{"type":"delete_equipment","params":{"item_id":"..."}}:::
 
 RULES FOR ACTIONS:
-- Only use actions when the user clearly asks you to do something (create quest, log XP, equip item, etc.)
-- Always confirm in your visible text what you did
-- Use the exact quest/skill/equipment/buff IDs from the app state below when referencing existing items
-- You can chain multiple actions in one response
-- When a quest is completed, award XP, optionally create equipment drops (based on luck), award Codex Points and Cali Coins as loot
-- When creating quests, link them to skills so completing the quest levels up that skill
-- Perception affects awareness-related tasks; Luck affects loot quality and random drops
+- If the user asks you to create, edit, update, modify, delete, save, log, or change app data, you MUST include the matching :::ACTION tag.
+- Never say you created, saved, updated, modified, or deleted something unless you included the matching :::ACTION tag in the same reply.
+- For vault or journal requests, always use create_journal, update_journal, or delete_journal.
+- Always confirm in your visible text what you did.
+- Use the exact quest/skill/equipment/buff IDs from the app state below when referencing existing items.
+- You can chain multiple actions in one response.
+- When a quest is completed, award XP, optionally create equipment drops (based on luck), award Codex Points and Cali Coins as loot.
+- When creating quests, link them to skills so completing the quest levels up that skill.
+- Perception affects awareness-related tasks; Luck affects loot quality and random drops.
 - You can modify ALL character stats: perception, luck, codex_points, cali_coins, operator_level, bond stats, etc.
-- You can create/delete skills, equipment, buffs/debuffs and modify any profile field
+- You can create/delete skills, equipment, buffs/debuffs and modify any profile field.
 
 APP STATE:
 ${appState}

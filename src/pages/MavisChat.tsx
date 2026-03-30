@@ -264,10 +264,34 @@ export default function MavisChat() {
   }, []);
 
   // ── Clear thread ──────────────────────────────────────────────────────────
-  const clearThread = useCallback(() => {
+  const clearThread = useCallback(async () => {
+    if (!user || !conversationId) {
+      setMessages([INITIAL_MESSAGE]);
+      toast({ title: "Thread cleared", description: "Neural link refreshed." });
+      return;
+    }
+
+    // Extract memories from last 20 user messages before clearing
+    const userMsgs = messages.filter(m => m.role === "user").slice(-20);
+    const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
+
+    if (allMemories.length > 0) {
+      const memoryRows = allMemories.map(item => ({
+        user_id: user.id,
+        memory_type: item.category,
+        content: item.detail,
+        importance: item.importance,
+      }));
+      await supabase.from("navi_core_memory").insert(memoryRows as any);
+    }
+
+    // Delete chat messages from DB (keep conversation shell)
+    await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
+
+    // Clear UI
     setMessages([INITIAL_MESSAGE]);
-    toast({ title: "Thread cleared", description: "Neural link refreshed." });
-  }, []);
+    toast({ title: "Thread cleared", description: "Memories saved to long-term storage." });
+  }, [user, conversationId, messages]);
 
   // ── Copy message ──────────────────────────────────────────────────────────
   const copyMessage = useCallback((content: string) => {

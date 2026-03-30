@@ -11,7 +11,6 @@ import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatSe
 import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
-import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;

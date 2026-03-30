@@ -639,6 +639,15 @@ export default function MavisChat() {
             {voiceEnabled ? "VOICE ON" : "VOICE OFF"}
           </button>
           <button
+            onClick={omniSync}
+            disabled={isSyncing || messages.length <= 1}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors disabled:opacity-30"
+            title="Save full thread + app state to NAVI long-term memory"
+          >
+            <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+            OMNISYNC
+          </button>
+          <button
             onClick={clearThread}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
           >

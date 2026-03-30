@@ -1,7 +1,8 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX } from "lucide-react";
+import VoiceInput from "@/components/VoiceInput";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";

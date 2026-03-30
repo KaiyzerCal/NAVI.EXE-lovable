@@ -1,7 +1,8 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX } from "lucide-react";
+import VoiceInput from "@/components/VoiceInput";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -162,6 +163,42 @@ export default function MavisChat() {
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── TTS state ──────────────────────────────────────────────────────────────
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
+
+  const stopSpeaking = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setCurrentlySpokenId(null);
+  }, []);
+
+  const speakMessage = useCallback((msgId: string, content: string) => {
+    if (currentlySpokenId === msgId) { stopSpeaking(); return; }
+    stopSpeaking();
+    const cleaned = content.replace(/[#*_`~>|[\](){}]/g, "").slice(0, 1000);
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v => /female|samantha|karen|victoria/i.test(v.name));
+    if (preferred) utterance.voice = preferred;
+    utterance.onend = () => setCurrentlySpokenId(null);
+    utterance.onerror = () => setCurrentlySpokenId(null);
+    setCurrentlySpokenId(msgId);
+    window.speechSynthesis.speak(utterance);
+  }, [currentlySpokenId, stopSpeaking]);
+
+  // Auto-speak new assistant messages when voice is enabled
+  const lastMessageRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!voiceEnabled) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role === "assistant" && lastMsg.id !== "streaming" && lastMsg.id !== "initial" && lastMsg.id !== lastMessageRef.current) {
+      lastMessageRef.current = lastMsg.id;
+      speakMessage(lastMsg.id, lastMsg.content);
+    }
+  }, [messages, voiceEnabled, speakMessage]);
+
   // ── Load conversation ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!user || chatDbLoaded) return;
@@ -242,6 +279,7 @@ export default function MavisChat() {
     const userContent = input.trim();
     setInput("");
     setIsLoading(true);
+    stopSpeaking();
 
     // abort any previous stream
     abortRef.current?.abort();
@@ -451,13 +489,22 @@ export default function MavisChat() {
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
       <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
-        <button
-          onClick={clearThread}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
-        >
-          <Trash2 size={12} />
-          CLEAR THREAD
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
+          >
+            {voiceEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+            {voiceEnabled ? "VOICE ON" : "VOICE OFF"}
+          </button>
+          <button
+            onClick={clearThread}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
+          >
+            <Trash2 size={12} />
+            CLEAR THREAD
+          </button>
+        </div>
       </PageHeader>
 
       {/* Message list */}
@@ -507,14 +554,26 @@ export default function MavisChat() {
                 <p className="text-[10px] font-mono text-muted-foreground">
                   {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </p>
-                {/* Copy button — visible on hover */}
-                <button
-                  onClick={() => copyMessage(msg.content)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                  title="Copy message"
-                >
-                  <Copy size={11} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {/* Speak button — assistant messages only */}
+                  {msg.role === "assistant" && msg.id !== "streaming" && (
+                    <button
+                      onClick={() => speakMessage(msg.id, msg.content)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                      title={currentlySpokenId === msg.id ? "Stop speaking" : "Speak message"}
+                    >
+                      {currentlySpokenId === msg.id ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                    </button>
+                  )}
+                  {/* Copy button — visible on hover */}
+                  <button
+                    onClick={() => copyMessage(msg.content)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                    title="Copy message"
+                  >
+                    <Copy size={11} />
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -571,6 +630,11 @@ export default function MavisChat() {
             transition={isLoading ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : {}}
           />
         </div>
+        {/* Voice input */}
+        <VoiceInput
+          onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
+          disabled={isLoading}
+        />
         {/* Textarea — clearly visible, grows with content */}
         <textarea
           ref={textareaRef}

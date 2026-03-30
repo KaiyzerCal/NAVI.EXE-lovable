@@ -68,7 +68,7 @@ const STEPS = [
     title: "SYSTEMS ONLINE",
     subtitle: "// INITIALIZATION COMPLETE",
     body: null,
-    cta: "ENTER THE DIGITAL WORLD",
+    cta: "ENTER THE APP",
     tour: true,
   },
 ];

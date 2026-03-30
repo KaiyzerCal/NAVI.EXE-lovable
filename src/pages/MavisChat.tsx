@@ -489,13 +489,22 @@ export default function MavisChat() {
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
       <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
-        <button
-          onClick={clearThread}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
-        >
-          <Trash2 size={12} />
-          CLEAR THREAD
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
+          >
+            {voiceEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+            {voiceEnabled ? "VOICE ON" : "VOICE OFF"}
+          </button>
+          <button
+            onClick={clearThread}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
+          >
+            <Trash2 size={12} />
+            CLEAR THREAD
+          </button>
+        </div>
       </PageHeader>
 
       {/* Message list */}

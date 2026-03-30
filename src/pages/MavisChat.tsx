@@ -241,7 +241,7 @@ export default function MavisChat() {
         .select("memory_type, content, importance")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
-        .limit(30);
+        .limit(50);
       if (data && data.length > 0) {
         const blocks = compressMemories(data as any);
         setMemoryContext(buildMemoryContext(blocks));

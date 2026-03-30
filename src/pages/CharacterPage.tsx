@@ -4,6 +4,7 @@ import ProgressBar from "@/components/ProgressBar";
 import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
 import { motion } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins } from "lucide-react";
+import GuildPanel from "@/components/GuildPanel";
 import { useState, useCallback } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ const RARITY_COLORS: Record<string, string> = {
 
 export default function CharacterPage() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("CHARACTER INFO");
-  const { profile, updateProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
+  const { profile, updateProfile, refetchProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
 
   const [editMode, setEditMode] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");
@@ -212,12 +213,15 @@ export default function CharacterPage() {
             </div>
           </HudCard>
 
-          {/* Character Info (was "Class Info") */}
+          {/* Guild Panel */}
+          <GuildPanel guildId={(profile as any).guild_id} onGuildChange={() => refetchProfile()} />
+
+          {/* Character Info */}
           <HudCard title="CHARACTER INFO" icon={<Star size={14} />} glow>
             <div className="space-y-3">
               <div className="flex justify-between items-center py-1.5 border-b border-border">
                 <div>
-                  <p className="text-[10px] font-mono text-muted-foreground">GUILD</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">CLASS</p>
                   <p className="text-sm font-body">{characterClass}</p>
                 </div>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">RARE</span>

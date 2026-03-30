@@ -53,7 +53,7 @@ const STEPS = [
     title: "SELECT PERSONALITY MODE",
     subtitle: "// STEP 4 OF 4",
     body: "Choose how I engage with you by default. You can change this anytime.",
-    cta: "JACK IN",
+    cta: "BEGIN",
     input: "navi_personality" as const,
     options: [
       { id: "GUARDIAN", label: "Guardian", desc: "Loyal, steady, always in your corner" },
@@ -68,7 +68,7 @@ const STEPS = [
     title: "SYSTEMS ONLINE",
     subtitle: "// INITIALIZATION COMPLETE",
     body: null,
-    cta: "ENTER THE DIGITAL WORLD",
+    cta: "ENTER THE APP",
     tour: true,
   },
 ];

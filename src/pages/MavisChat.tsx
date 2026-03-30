@@ -231,7 +231,23 @@ export default function MavisChat() {
     return () => { cancelled = true; };
   }, [user, chatDbLoaded]);
 
-  // ── Auto-scroll & scroll button ───────────────────────────────────────────
+  // ── Load long-term memory context ──────────────────────────────────────────
+  const [memoryContext, setMemoryContext] = useState("");
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("navi_core_memory")
+        .select("memory_type, content, importance")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(30);
+      if (data && data.length > 0) {
+        const blocks = compressMemories(data as any);
+        setMemoryContext(buildMemoryContext(blocks));
+      }
+    })();
+  }, [user]);
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
     setShowScrollBtn(false);

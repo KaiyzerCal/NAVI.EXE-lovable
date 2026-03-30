@@ -60,6 +60,7 @@ function AppContent() {
           <Route path="/mavis" element={<MavisChat />} />
           <Route path="/character" element={<CharacterPage />} />
           <Route path="/quests" element={<QuestsPage />} />
+          <Route path="/party" element={<PartyPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

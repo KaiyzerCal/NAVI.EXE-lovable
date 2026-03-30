@@ -288,8 +288,8 @@ export default function MavisChat() {
       return;
     }
 
-    // Extract memories from last 20 user messages before clearing
-    const userMsgs = messages.filter(m => m.role === "user").slice(-20);
+    // Extract memories from last 50 user messages before clearing
+    const userMsgs = messages.filter(m => m.role === "user").slice(-50);
     const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
 
     if (allMemories.length > 0) {

@@ -279,6 +279,7 @@ export default function MavisChat() {
     const userContent = input.trim();
     setInput("");
     setIsLoading(true);
+    stopSpeaking();
 
     // abort any previous stream
     abortRef.current?.abort();

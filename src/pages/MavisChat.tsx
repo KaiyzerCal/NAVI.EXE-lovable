@@ -401,6 +401,7 @@ export default function MavisChat() {
             stat_affected: (b as any).stat_affected || "", modifier_value: (b as any).modifier_value || 0,
             source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,
           })),
+          memory_context: memoryContext || undefined,
         },
         onDelta: (chunk) => {
           assistantContent += chunk;

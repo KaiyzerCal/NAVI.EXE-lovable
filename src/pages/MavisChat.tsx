@@ -630,6 +630,11 @@ export default function MavisChat() {
             transition={isLoading ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : {}}
           />
         </div>
+        {/* Voice input */}
+        <VoiceInput
+          onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
+          disabled={isLoading}
+        />
         {/* Textarea — clearly visible, grows with content */}
         <textarea
           ref={textareaRef}

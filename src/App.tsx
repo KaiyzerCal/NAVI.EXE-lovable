@@ -16,6 +16,7 @@ import CharacterPage from "./pages/CharacterPage";
 import QuestsPage from "./pages/QuestsPage";
 import JournalPage from "./pages/JournalPage";
 import StatsPage from "./pages/StatsPage";
+import PartyPage from "./pages/PartyPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";

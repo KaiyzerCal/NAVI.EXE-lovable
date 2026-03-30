@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, MessageSquare, User, Swords, BookOpen, 
-  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut 
+  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,6 +13,7 @@ const navItems = [
   { to: "/mavis", icon: MessageSquare, label: "Navi AI" },
   { to: "/character", icon: User, label: "Character" },
   { to: "/quests", icon: Swords, label: "Quests" },
+  { to: "/party", icon: Users, label: "Party" },
   { to: "/journal", icon: BookOpen, label: "Journal" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
   { to: "/settings", icon: Settings, label: "Settings" },

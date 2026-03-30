@@ -16,6 +16,7 @@ import CharacterPage from "./pages/CharacterPage";
 import QuestsPage from "./pages/QuestsPage";
 import JournalPage from "./pages/JournalPage";
 import StatsPage from "./pages/StatsPage";
+import PartyPage from "./pages/PartyPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -59,6 +60,7 @@ function AppContent() {
           <Route path="/mavis" element={<MavisChat />} />
           <Route path="/character" element={<CharacterPage />} />
           <Route path="/quests" element={<QuestsPage />} />
+          <Route path="/party" element={<PartyPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

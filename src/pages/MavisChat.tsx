@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw } from "lucide-react";
 import VoiceInput from "@/components/VoiceInput";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
@@ -241,7 +241,7 @@ export default function MavisChat() {
         .select("memory_type, content, importance")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
-        .limit(30);
+        .limit(50);
       if (data && data.length > 0) {
         const blocks = compressMemories(data as any);
         setMemoryContext(buildMemoryContext(blocks));
@@ -288,8 +288,8 @@ export default function MavisChat() {
       return;
     }
 
-    // Extract memories from last 20 user messages before clearing
-    const userMsgs = messages.filter(m => m.role === "user").slice(-20);
+    // Extract memories from last 50 user messages before clearing
+    const userMsgs = messages.filter(m => m.role === "user").slice(-50);
     const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
 
     if (allMemories.length > 0) {
@@ -309,6 +309,102 @@ export default function MavisChat() {
     setMessages([INITIAL_MESSAGE]);
     toast({ title: "Thread cleared", description: "Memories saved to long-term storage." });
   }, [user, conversationId, messages]);
+
+  // ── OmniSync — snapshot app state + condense full thread into memory ───────
+  const [isSyncing, setIsSyncing] = useState(false);
+  const omniSync = useCallback(async () => {
+    if (!user || isSyncing) return;
+    setIsSyncing(true);
+
+    try {
+      // 1. Extract memories from ALL user messages in the thread
+      const userMsgs = messages.filter(m => m.role === "user" && m.id !== "initial");
+      const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
+
+      // 2. Condense the full conversation into a summary block
+      const assistantMsgs = messages.filter(m => m.role === "assistant" && m.id !== "initial" && m.id !== "streaming");
+      const threadSummaryParts: string[] = [];
+      
+      // Take key exchanges (user question + navi response pairs)
+      const pairs = Math.min(userMsgs.length, 25);
+      for (let i = 0; i < pairs; i++) {
+        const uMsg = userMsgs[i];
+        threadSummaryParts.push(`User: ${uMsg.content.substring(0, 120)}`);
+        // Find the assistant reply that came after this user message
+        const uIdx = messages.indexOf(uMsg);
+        const nextAssistant = messages.slice(uIdx + 1).find(m => m.role === "assistant");
+        if (nextAssistant) {
+          threadSummaryParts.push(`Navi: ${nextAssistant.content.substring(0, 120)}`);
+        }
+      }
+
+      const condensedThread = threadSummaryParts.join("\n").substring(0, 3000);
+
+      // 3. Build app state snapshot
+      const stateSnapshot = [
+        `Level: ${profile.navi_level} | XP: ${profile.xp_total} | Streak: ${profile.current_streak}d`,
+        `Bond: A${profile.bond_affection}/T${profile.bond_trust}/L${profile.bond_loyalty}`,
+        `Class: ${profile.character_class || "None"} | MBTI: ${profile.mbti_type || "None"} | Subclass: ${profile.subclass || "None"}`,
+        `Active Quests: ${quests.filter(q => !q.completed).map(q => q.name).join(", ") || "None"}`,
+        `Skills: ${skills.map(s => `${s.name} L${s.level}`).join(", ") || "None"}`,
+        `Recent Journal: ${entries.slice(0, 5).map(j => j.title).join(", ") || "None"}`,
+      ].join(" | ");
+
+      // 4. Save to navi_core_memory as condensed entries
+      const memoryRows: Array<{ user_id: string; memory_type: string; content: string; importance: number }> = [];
+
+      // Add extracted pattern memories
+      for (const item of allMemories) {
+        memoryRows.push({
+          user_id: user.id,
+          memory_type: item.category,
+          content: item.detail,
+          importance: item.importance,
+        });
+      }
+
+      // Add condensed thread summary
+      if (condensedThread.length > 50) {
+        memoryRows.push({
+          user_id: user.id,
+          memory_type: "thread_summary",
+          content: condensedThread,
+          importance: 3,
+        });
+      }
+
+      // Add app state snapshot
+      memoryRows.push({
+        user_id: user.id,
+        memory_type: "app_snapshot",
+        content: `[${new Date().toISOString().split("T")[0]}] ${stateSnapshot}`,
+        importance: 2,
+      });
+
+      if (memoryRows.length > 0) {
+        await supabase.from("navi_core_memory").insert(memoryRows as any);
+      }
+
+      // Refresh memory context
+      const { data } = await supabase
+        .from("navi_core_memory")
+        .select("memory_type, content, importance")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(50);
+      if (data && data.length > 0) {
+        const blocks = compressMemories(data as any);
+        setMemoryContext(buildMemoryContext(blocks));
+      }
+
+      toast({ title: "⚡ OmniSync Complete", description: `Saved ${memoryRows.length} memory entries. NAVI's long-term memory updated.` });
+    } catch (err) {
+      console.error("[OMNISYNC] Error:", err);
+      toast({ title: "Sync Failed", description: "Could not complete OmniSync.", variant: "destructive" });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [user, isSyncing, messages, profile, quests, skills, entries]);
 
   // ── Copy message ──────────────────────────────────────────────────────────
   const copyMessage = useCallback((content: string) => {
@@ -541,6 +637,15 @@ export default function MavisChat() {
           >
             {voiceEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
             {voiceEnabled ? "VOICE ON" : "VOICE OFF"}
+          </button>
+          <button
+            onClick={omniSync}
+            disabled={isSyncing || messages.length <= 1}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors disabled:opacity-30"
+            title="Save full thread + app state to NAVI long-term memory"
+          >
+            <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+            OMNISYNC
           </button>
           <button
             onClick={clearThread}

@@ -554,14 +554,26 @@ export default function MavisChat() {
                 <p className="text-[10px] font-mono text-muted-foreground">
                   {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </p>
-                {/* Copy button — visible on hover */}
-                <button
-                  onClick={() => copyMessage(msg.content)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                  title="Copy message"
-                >
-                  <Copy size={11} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {/* Speak button — assistant messages only */}
+                  {msg.role === "assistant" && msg.id !== "streaming" && (
+                    <button
+                      onClick={() => speakMessage(msg.id, msg.content)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                      title={currentlySpokenId === msg.id ? "Stop speaking" : "Speak message"}
+                    >
+                      {currentlySpokenId === msg.id ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                    </button>
+                  )}
+                  {/* Copy button — visible on hover */}
+                  <button
+                    onClick={() => copyMessage(msg.content)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                    title="Copy message"
+                  >
+                    <Copy size={11} />
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>

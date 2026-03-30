@@ -163,6 +163,42 @@ export default function MavisChat() {
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── TTS state ──────────────────────────────────────────────────────────────
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
+
+  const stopSpeaking = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setCurrentlySpokenId(null);
+  }, []);
+
+  const speakMessage = useCallback((msgId: string, content: string) => {
+    if (currentlySpokenId === msgId) { stopSpeaking(); return; }
+    stopSpeaking();
+    const cleaned = content.replace(/[#*_`~>|[\](){}]/g, "").slice(0, 1000);
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v => /female|samantha|karen|victoria/i.test(v.name));
+    if (preferred) utterance.voice = preferred;
+    utterance.onend = () => setCurrentlySpokenId(null);
+    utterance.onerror = () => setCurrentlySpokenId(null);
+    setCurrentlySpokenId(msgId);
+    window.speechSynthesis.speak(utterance);
+  }, [currentlySpokenId, stopSpeaking]);
+
+  // Auto-speak new assistant messages when voice is enabled
+  const lastMessageRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!voiceEnabled) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role === "assistant" && lastMsg.id !== "streaming" && lastMsg.id !== "initial" && lastMsg.id !== lastMessageRef.current) {
+      lastMessageRef.current = lastMsg.id;
+      speakMessage(lastMsg.id, lastMsg.content);
+    }
+  }, [messages, voiceEnabled, speakMessage]);
+
   // ── Load conversation ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!user || chatDbLoaded) return;

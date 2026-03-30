@@ -213,12 +213,15 @@ export default function CharacterPage() {
             </div>
           </HudCard>
 
-          {/* Character Info (was "Class Info") */}
+          {/* Guild Panel */}
+          <GuildPanel guildId={(profile as any).guild_id} onGuildChange={() => refetchProfile()} />
+
+          {/* Character Info */}
           <HudCard title="CHARACTER INFO" icon={<Star size={14} />} glow>
             <div className="space-y-3">
               <div className="flex justify-between items-center py-1.5 border-b border-border">
                 <div>
-                  <p className="text-[10px] font-mono text-muted-foreground">GUILD</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">CLASS</p>
                   <p className="text-sm font-body">{characterClass}</p>
                 </div>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">RARE</span>

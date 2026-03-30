@@ -248,6 +248,8 @@ export default function MavisChat() {
       }
     })();
   }, [user]);
+
+  // ── Auto-scroll & scroll button ───────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
     setShowScrollBtn(false);

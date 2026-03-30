@@ -240,6 +240,71 @@ export type Database = {
           },
         ]
       }
+      guild_members: {
+        Row: {
+          guild_id: string
+          id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          guild_id: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          guild_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guild_members_guild_id_fkey"
+            columns: ["guild_id"]
+            isOneToOne: false
+            referencedRelation: "guilds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guilds: {
+        Row: {
+          banner_color: string
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          name: string
+          tag: string
+          updated_at: string
+        }
+        Insert: {
+          banner_color?: string
+          created_at?: string
+          created_by: string
+          description?: string
+          id?: string
+          name: string
+          tag?: string
+          updated_at?: string
+        }
+        Update: {
+          banner_color?: string
+          created_at?: string
+          created_by?: string
+          description?: string
+          id?: string
+          name?: string
+          tag?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       journal_entries: {
         Row: {
           category: string
@@ -348,6 +413,79 @@ export type Database = {
         }
         Relationships: []
       }
+      parties: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          max_members: number
+          name: string
+          quest_id: string | null
+          status: string
+          xp_pool: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          max_members?: number
+          name?: string
+          quest_id?: string | null
+          status?: string
+          xp_pool?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          max_members?: number
+          name?: string
+          quest_id?: string | null
+          status?: string
+          xp_pool?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parties_quest_id_fkey"
+            columns: ["quest_id"]
+            isOneToOne: false
+            referencedRelation: "quests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      party_members: {
+        Row: {
+          id: string
+          joined_at: string
+          party_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          party_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          party_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_members_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           bond_affection: number
@@ -360,6 +498,7 @@ export type Database = {
           current_streak: number
           display_name: string | null
           equipped_skin: string
+          guild_id: string | null
           id: string
           last_active: string | null
           longest_streak: number
@@ -388,6 +527,7 @@ export type Database = {
           current_streak?: number
           display_name?: string | null
           equipped_skin?: string
+          guild_id?: string | null
           id: string
           last_active?: string | null
           longest_streak?: number
@@ -416,6 +556,7 @@ export type Database = {
           current_streak?: number
           display_name?: string | null
           equipped_skin?: string
+          guild_id?: string | null
           id?: string
           last_active?: string | null
           longest_streak?: number
@@ -433,7 +574,15 @@ export type Database = {
           user_navi_description?: string | null
           xp_total?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_guild_id_fkey"
+            columns: ["guild_id"]
+            isOneToOne: false
+            referencedRelation: "guilds"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quests: {
         Row: {

@@ -117,7 +117,7 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
 
   const personalityDesc = personalityBlocks[personality] || personalityBlocks.GUARDIAN;
 
-  const memorySection = ctx.memory_context ? `\n${ctx.memory_context}\n` : "";
+  const memorySection = ctx.memory_context ? `\n${ctx.memory_context}\n\nIMPORTANT: If memory_context exists above, reference at least one specific thing from it in your first response to show continuity. Connect what you remember to the current conversation naturally.\n` : "";
   const recentSection = ctx.recent_context ? `\n[RECENT CONVERSATION]\n${ctx.recent_context}\n` : "";
 
   let appState = "";

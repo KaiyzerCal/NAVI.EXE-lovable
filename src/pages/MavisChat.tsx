@@ -9,6 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
 import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
+import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
+import { supabase } from "@/integrations/supabase/client";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
@@ -229,6 +231,24 @@ export default function MavisChat() {
     return () => { cancelled = true; };
   }, [user, chatDbLoaded]);
 
+  // ── Load long-term memory context ──────────────────────────────────────────
+  const [memoryContext, setMemoryContext] = useState("");
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("navi_core_memory")
+        .select("memory_type, content, importance")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(30);
+      if (data && data.length > 0) {
+        const blocks = compressMemories(data as any);
+        setMemoryContext(buildMemoryContext(blocks));
+      }
+    })();
+  }, [user]);
+
   // ── Auto-scroll & scroll button ───────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
@@ -261,10 +281,34 @@ export default function MavisChat() {
   }, []);
 
   // ── Clear thread ──────────────────────────────────────────────────────────
-  const clearThread = useCallback(() => {
+  const clearThread = useCallback(async () => {
+    if (!user || !conversationId) {
+      setMessages([INITIAL_MESSAGE]);
+      toast({ title: "Thread cleared", description: "Neural link refreshed." });
+      return;
+    }
+
+    // Extract memories from last 20 user messages before clearing
+    const userMsgs = messages.filter(m => m.role === "user").slice(-20);
+    const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
+
+    if (allMemories.length > 0) {
+      const memoryRows = allMemories.map(item => ({
+        user_id: user.id,
+        memory_type: item.category,
+        content: item.detail,
+        importance: item.importance,
+      }));
+      await supabase.from("navi_core_memory").insert(memoryRows as any);
+    }
+
+    // Delete chat messages from DB (keep conversation shell)
+    await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
+
+    // Clear UI
     setMessages([INITIAL_MESSAGE]);
-    toast({ title: "Thread cleared", description: "Neural link refreshed." });
-  }, []);
+    toast({ title: "Thread cleared", description: "Memories saved to long-term storage." });
+  }, [user, conversationId, messages]);
 
   // ── Copy message ──────────────────────────────────────────────────────────
   const copyMessage = useCallback((content: string) => {
@@ -359,6 +403,7 @@ export default function MavisChat() {
             stat_affected: (b as any).stat_affected || "", modifier_value: (b as any).modifier_value || 0,
             source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,
           })),
+          memory_context: memoryContext || undefined,
         },
         onDelta: (chunk) => {
           assistantContent += chunk;

@@ -75,20 +75,80 @@ function extractNameFromMessage(message: string): string {
   return message.replace(/^(create|make|add|new|start|give me)\s+(a\s+)?(quest|task|skill|mission)\s*/i, "").trim().slice(0, 60) || "New Item";
 }
 
-function inferFallbackActions(userMessage: string, cleanText: string): NaviAction[] {
+function inferQuestType(msg: string): string {
+  const m = msg.toLowerCase();
+  if (/\bepic\b/i.test(m)) return "Epic";
+  if (/\bmain\b/i.test(m)) return "Main";
+  if (/\bweekly\b/i.test(m)) return "Weekly";
+  if (/\bside\b/i.test(m)) return "Side";
+  if (/\bminor\b/i.test(m)) return "Minor";
+  return "Daily";
+}
+
+function inferXpReward(type: string): number {
+  const map: Record<string, number> = { Daily: 50, Weekly: 150, Main: 300, Side: 100, Minor: 25, Epic: 500 };
+  return map[type] || 50;
+}
+
+function inferTotalSteps(msg: string): number {
+  const match = msg.match(/(\d+)\s*(?:steps?|parts?|phases?|stages?|tasks?)/i);
+  if (match) return parseInt(match[1], 10);
+  return 1;
+}
+
+function inferFallbackActions(userMessage: string, cleanText: string, appData?: any): NaviAction[] {
   const msg = userMessage.toLowerCase();
 
-  // Quest intent
+  // Delete quest/skill/journal intent
+  if (/(delete|remove|destroy|trash|get rid of)\s/i.test(msg)) {
+    if (/(quest|task|mission)/i.test(msg) && appData?.quests) {
+      const quest = appData.quests.find((q: any) => msg.includes(q.name?.toLowerCase()));
+      if (quest) return [{ type: "delete_quest", params: { quest_id: quest.id } }];
+    }
+    if (/(skill|ability)/i.test(msg) && appData?.skills) {
+      const skill = appData.skills.find((s: any) => msg.includes(s.name?.toLowerCase()));
+      if (skill) return [{ type: "delete_skill", params: { skill_id: skill.id } }];
+    }
+    if (/(journal|entry|vault|note|log)/i.test(msg) && appData?.entries) {
+      const entry = appData.entries.find((e: any) => msg.includes(e.title?.toLowerCase()));
+      if (entry) return [{ type: "delete_journal", params: { entry_id: entry.id } }];
+    }
+  }
+
+  // Complete/finish quest intent
+  if (/(finish|complete|done|did it|finished|completed|mark.*done|close)/i.test(msg)) {
+    if (appData?.quests) {
+      // Try to find the quest by name
+      const activeQuests = appData.quests.filter((q: any) => !q.completed);
+      let quest = activeQuests.find((q: any) => msg.includes(q.name?.toLowerCase()));
+      // If no name match, complete the most recent active quest
+      if (!quest && activeQuests.length > 0) quest = activeQuests[0];
+      if (quest) return [{ type: "complete_quest", params: { quest_id: quest.id } }];
+    }
+  }
+
+  // Update quest type intent (e.g., "make X an epic quest", "change X to weekly")
+  if (/(make|change|set|convert|switch)\s.*(daily|weekly|main|side|minor|epic)/i.test(msg)) {
+    if (appData?.quests) {
+      const newType = inferQuestType(msg);
+      const quest = appData.quests.find((q: any) => msg.includes(q.name?.toLowerCase()));
+      if (quest) return [{ type: "update_quest", params: { quest_id: quest.id, type: newType } }];
+    }
+  }
+
+  // Quest create intent
   if (isQuestIntent(userMessage)) {
     const name = extractNameFromMessage(userMessage);
+    const type = inferQuestType(userMessage);
+    const total = inferTotalSteps(userMessage);
     return [{
       type: "create_quest",
       params: {
         name,
         description: cleanText.trim().slice(0, 200) || "",
-        type: "Daily",
-        total: 1,
-        xp_reward: 50,
+        type,
+        total,
+        xp_reward: inferXpReward(type),
       },
     }];
   }
@@ -126,10 +186,26 @@ function inferFallbackActions(userMessage: string, cleanText: string): NaviActio
     }];
   }
 
-  // Complete quest intent
-  if (/(finish|complete|done|did it|finished|completed)/i.test(msg) && /(quest|task|mission|it)/i.test(msg)) {
-    // Can't complete without an ID from context, but log the intent
-    console.log("[NAVI] Detected complete intent but no action tag from AI — needs quest ID from context");
+  // Equipment create intent
+  if (/(create|make|add|give|craft|forge)\s.*(equipment|item|weapon|armor|gear|sword|shield)/i.test(msg)) {
+    const name = extractNameFromMessage(userMessage);
+    return [{
+      type: "create_equipment",
+      params: {
+        name,
+        description: cleanText.trim().slice(0, 200) || "",
+        slot: "accessory",
+        rarity: "common",
+        stat_bonuses: {},
+        obtained_from: "navi",
+      },
+    }];
+  }
+
+  // XP award intent
+  if (/(give|award|add|grant)\s.*(\d+)\s*xp/i.test(msg)) {
+    const match = msg.match(/(\d+)\s*xp/i);
+    if (match) return [{ type: "award_xp", params: { amount: parseInt(match[1], 10) } }];
   }
 
   return [];
@@ -580,7 +656,7 @@ export default function MavisChat() {
           if (controller.signal.aborted) return;
 
           const { cleanText, actions: parsedActions } = parseActions(assistantContent);
-          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText);
+          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText, { quests, entries, skills });
 
           console.log("[NAVI] Raw response length:", assistantContent.length);
           console.log("[NAVI] Raw response preview:", assistantContent.slice(0, 500));

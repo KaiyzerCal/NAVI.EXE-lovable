@@ -99,8 +99,8 @@ export function useOperatorSkills() {
 
   const refetch = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("skills").select("*").eq("user_id", user.id).order("created_at", { ascending: true });
-    if (data) setSkills(data.map(mapSkillRow));
+    const { data, error } = await supabase.from("skills").select("*").eq("user_id", user.id).order("created_at", { ascending: true });
+    if (!error && data) setSkills(data.map(mapSkillRow));
   }, [user]);
 
   return { skills, loading, addSkill, updateSkill, deleteSkill, levelUpByName, refetch };

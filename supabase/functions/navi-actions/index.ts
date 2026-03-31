@@ -38,9 +38,9 @@ async function awardXP(sb: ReturnType<typeof createClient>, userId: string, amou
   const { data: profile, error } = await sb
     .from("profiles").select("xp_total, operator_xp, operator_level").eq("id", userId).single();
   if (error || !profile) { console.error("[navi-actions] awardXP read error:", error); return; }
-  const newXpTotal = (profile.xp_total || 0) + amount;
-  let opXp = (profile.operator_xp || 0) + amount;
-  let opLevel = profile.operator_level || 1;
+  const newXpTotal = (Number(profile.xp_total) || 0) + amount;
+  let opXp = (Number(profile.operator_xp) || 0) + amount;
+  let opLevel = Number(profile.operator_level) || 1;
   while (opXp >= xpForLevel(opLevel + 1)) { opXp -= xpForLevel(opLevel + 1); opLevel++; }
   const { error: updateError } = await sb.from("profiles").update({
     xp_total: newXpTotal, operator_xp: opXp, operator_level: opLevel,

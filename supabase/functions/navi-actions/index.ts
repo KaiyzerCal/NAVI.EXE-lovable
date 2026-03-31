@@ -319,7 +319,7 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
           .eq("user_id", userId).ilike("name", String(params.name)).single();
         if (error) throw error;
         if (!item) throw new Error("Item not found");
-        itemId = item.id; slot = item.slot; name = item.name;
+        itemId = item.id as string; slot = item.slot as string; name = item.name as string;
       }
       if (!itemId || !slot) throw new Error("No item to equip");
       await sb.from("equipment").update({ is_equipped: false }).eq("user_id", userId).eq("slot", slot).eq("is_equipped", true);

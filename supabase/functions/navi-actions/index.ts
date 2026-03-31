@@ -38,9 +38,9 @@ async function awardXP(sb: ReturnType<typeof createClient>, userId: string, amou
   const { data: profile, error } = await sb
     .from("profiles").select("xp_total, operator_xp, operator_level").eq("id", userId).single();
   if (error || !profile) { console.error("[navi-actions] awardXP read error:", error); return; }
-  const newXpTotal = (profile.xp_total || 0) + amount;
-  let opXp = (profile.operator_xp || 0) + amount;
-  let opLevel = profile.operator_level || 1;
+  const newXpTotal = (Number(profile.xp_total) || 0) + amount;
+  let opXp = (Number(profile.operator_xp) || 0) + amount;
+  let opLevel = Number(profile.operator_level) || 1;
   while (opXp >= xpForLevel(opLevel + 1)) { opXp -= xpForLevel(opLevel + 1); opLevel++; }
   const { error: updateError } = await sb.from("profiles").update({
     xp_total: newXpTotal, operator_xp: opXp, operator_level: opLevel,
@@ -313,13 +313,13 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
           .eq("id", itemId).eq("user_id", userId).single();
         if (error) throw error;
         if (!item) throw new Error("Item not found");
-        slot = item.slot; name = item.name;
+        slot = item.slot as string; name = item.name as string;
       } else if (params.name) {
         const { data: item, error } = await sb.from("equipment").select("id, slot, name")
           .eq("user_id", userId).ilike("name", String(params.name)).single();
         if (error) throw error;
         if (!item) throw new Error("Item not found");
-        itemId = item.id; slot = item.slot; name = item.name;
+        itemId = item.id as string; slot = item.slot as string; name = item.name as string;
       }
       if (!itemId || !slot) throw new Error("No item to equip");
       await sb.from("equipment").update({ is_equipped: false }).eq("user_id", userId).eq("slot", slot).eq("is_equipped", true);
@@ -465,7 +465,7 @@ serve(async (req) => {
     const results: Array<{ type: string; success: boolean; error?: string }> = [];
     for (const action of actions) {
       try {
-        await executeAction(adminClient, userId, action);
+        await executeAction(adminClient as any, userId, action);
         results.push({ type: action.type, success: true });
         console.log(`[navi-actions] ✓ ${action.type} succeeded`);
       } catch (error) {

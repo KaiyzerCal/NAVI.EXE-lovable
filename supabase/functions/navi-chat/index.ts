@@ -234,15 +234,18 @@ Available actions (embed in your response):
 :::ACTION{"type":"create_buff","params":{"name":"...","description":"...","effect_type":"buff|debuff","stat_affected":"str|int|vit|agi|res|perception|luck","modifier_value":5,"duration_hours":24,"source":"quest|navi|equipment"}}:::
 :::ACTION{"type":"update_buff","params":{"buff_id":"...","name":"...","description":"...","effect_type":"buff|debuff","stat_affected":"luck","modifier_value":3,"duration_hours":12,"source":"navi"}}:::
 :::ACTION{"type":"remove_buff","params":{"buff_id":"...","name":"..."}}:::
-RULES FOR ACTIONS:
-- If the user asks you to create, edit, update, modify, delete, save, log, or change app data, you MUST include the matching :::ACTION tag.
-- Never say you created, saved, updated, modified, or deleted something unless you included the matching :::ACTION tag in the same reply.
-- For vault or journal requests, always use create_journal, update_journal, or delete_journal.
-- For any request to write or save something to the vault/journal, include exactly one journal action tag even if the user phrases it casually.
-- Put action tags in plain text, never in a code block, and include them before your visible confirmation sentence.
-- Always confirm in your visible text what you did.
-- Use the exact quest/skill/equipment/buff IDs from the app state below when referencing existing items.
-- You can chain multiple actions in one response.
+⚠️ CRITICAL — ACTION TAGS ARE MANDATORY:
+- ANY time the user asks you to create, edit, update, modify, delete, save, log, or change ANYTHING in the app, you MUST include the corresponding :::ACTION tag in your response. NO EXCEPTIONS.
+- If you say "I created a quest" but didn't include :::ACTION{"type":"create_quest",...}::: — the quest DOES NOT EXIST. The action tag is what actually creates it.
+- ALWAYS include the :::ACTION tag BEFORE your confirmation text.
+- Examples of user requests that REQUIRE action tags:
+  * "create a quest called X" → MUST include :::ACTION{"type":"create_quest","params":{"name":"X",...}}:::
+  * "log this" / "save this" / "write to vault" → MUST include :::ACTION{"type":"create_journal","params":{...}}:::
+  * "add a skill" → MUST include :::ACTION{"type":"create_skill","params":{...}}:::
+  * "I finished it" → MUST include :::ACTION{"type":"complete_quest","params":{"quest_id":"..."}}:::
+- Put action tags in plain text, NEVER inside code blocks or markdown formatting.
+- You can chain multiple :::ACTION tags in one response.
+- Use the exact IDs from APP STATE below when referencing existing items.
 - When a quest is completed, award XP, optionally create equipment drops (based on luck), award Codex Points and Cali Coins as loot.
 - When creating quests, link them to skills so completing the quest levels up that skill.
 - Perception affects awareness-related tasks; Luck affects loot quality and random drops.

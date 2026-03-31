@@ -583,8 +583,11 @@ export default function MavisChat() {
           const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText);
 
           console.log("[NAVI] Raw response length:", assistantContent.length);
+          console.log("[NAVI] Raw response preview:", assistantContent.slice(0, 500));
+          console.log("[NAVI] Contains :::ACTION:", assistantContent.includes(":::ACTION"));
           console.log("[NAVI] Parsed actions count:", parsedActions.length);
-          console.log("[NAVI] Actions:", JSON.stringify(parsedActions, null, 2));
+          console.log("[NAVI] Fallback actions used:", parsedActions.length === 0 && actions.length > 0);
+          console.log("[NAVI] Actions:", JSON.stringify(actions, null, 2));
 
           if (actions.length > 0) {
             let failedActions: NaviAction[] = [];

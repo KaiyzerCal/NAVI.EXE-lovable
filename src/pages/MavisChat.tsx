@@ -656,7 +656,7 @@ export default function MavisChat() {
           if (controller.signal.aborted) return;
 
           const { cleanText, actions: parsedActions } = parseActions(assistantContent);
-          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText);
+          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText, { quests, entries, skills: skillsAndEquipment?.skills });
 
           console.log("[NAVI] Raw response length:", assistantContent.length);
           console.log("[NAVI] Raw response preview:", assistantContent.slice(0, 500));

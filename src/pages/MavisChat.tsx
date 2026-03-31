@@ -419,7 +419,7 @@ export default function MavisChat() {
     setIsLoading(false);
   }, []);
 
-  // ── Clear thread ──────────────────────────────────────────────────────────
+  // ── Clear thread (auto-triggers OmniSync) ───────────────────────────────
   const clearThread = useCallback(async () => {
     if (!user || !conversationId) {
       setMessages([INITIAL_MESSAGE]);
@@ -427,27 +427,104 @@ export default function MavisChat() {
       return;
     }
 
-    // Extract memories from last 50 user messages before clearing
-    const userMsgs = messages.filter(m => m.role === "user").slice(-50);
-    const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
+    setIsSyncing(true);
+    try {
+      // ─── Full OmniSync before clearing ───
+      const realMessages = messages.filter(m => m.id !== "initial" && m.id !== "streaming");
+      const userMsgs = realMessages.filter(m => m.role === "user");
+      const assistantMsgs = realMessages.filter(m => m.role === "assistant");
 
-    if (allMemories.length > 0) {
-      const memoryRows = allMemories.map(item => ({
+      // 1. Extract pattern-based memories from ALL user messages
+      const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
+
+      // 2. Build detailed thread summary — capture full conversation pairs
+      const threadParts: string[] = [];
+      for (let i = 0; i < userMsgs.length; i++) {
+        const uMsg = userMsgs[i];
+        threadParts.push(`U: ${uMsg.content.substring(0, 200)}`);
+        const uIdx = realMessages.indexOf(uMsg);
+        const reply = realMessages.slice(uIdx + 1).find(m => m.role === "assistant");
+        if (reply) {
+          // Keep more detail — actions taken, key info shared
+          threadParts.push(`N: ${reply.content.substring(0, 300)}`);
+        }
+      }
+      const condensedThread = threadParts.join("\n").substring(0, 5000);
+
+      // 3. Also save raw assistant insights — things NAVI told the user
+      const naviInsights = assistantMsgs
+        .filter(m => m.content.length > 80)
+        .slice(-15)
+        .map(m => m.content.substring(0, 250))
+        .join(" | ")
+        .substring(0, 2000);
+
+      // 4. Build app state snapshot
+      const stateSnapshot = [
+        `Level: ${profile.navi_level} | XP: ${profile.xp_total} | Streak: ${profile.current_streak}d`,
+        `Bond: A${profile.bond_affection}/T${profile.bond_trust}/L${profile.bond_loyalty}`,
+        `Class: ${profile.character_class || "None"} | MBTI: ${profile.mbti_type || "None"} | Subclass: ${profile.subclass || "None"}`,
+        `Active Quests: ${quests.filter(q => !q.completed).map(q => q.name).join(", ") || "None"}`,
+        `Completed Quests: ${quests.filter(q => q.completed).length}`,
+        `Skills: ${skills.map(s => `${s.name} L${s.level}`).join(", ") || "None"}`,
+        `Recent Journal: ${entries.slice(0, 5).map(j => j.title).join(", ") || "None"}`,
+        `Equipment: ${equipment.filter(e => e.equipped).map(e => e.name).join(", ") || "None"}`,
+      ].join(" | ");
+
+      // 5. Save all memory rows
+      const memoryRows: Array<{ user_id: string; memory_type: string; content: string; importance: number }> = [];
+
+      for (const item of allMemories) {
+        memoryRows.push({ user_id: user.id, memory_type: item.category, content: item.detail, importance: item.importance });
+      }
+
+      if (condensedThread.length > 50) {
+        memoryRows.push({ user_id: user.id, memory_type: "thread_summary", content: condensedThread, importance: 4 });
+      }
+
+      if (naviInsights.length > 50) {
+        memoryRows.push({ user_id: user.id, memory_type: "navi_insights", content: naviInsights, importance: 3 });
+      }
+
+      memoryRows.push({
         user_id: user.id,
-        memory_type: item.category,
-        content: item.detail,
-        importance: item.importance,
-      }));
-      await supabase.from("navi_core_memory").insert(memoryRows as any);
+        memory_type: "app_snapshot",
+        content: `[${new Date().toISOString().split("T")[0]}] ${stateSnapshot}`,
+        importance: 2,
+      });
+
+      if (memoryRows.length > 0) {
+        await supabase.from("navi_core_memory").insert(memoryRows as any);
+      }
+
+      // 6. Refresh memory context for next conversation
+      const { data } = await supabase
+        .from("navi_core_memory")
+        .select("memory_type, content, importance")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(50);
+      if (data && data.length > 0) {
+        const blocks = compressMemories(data as any);
+        setMemoryContext(buildMemoryContext(blocks));
+      }
+
+      // 7. Delete chat messages from DB (keep conversation shell)
+      await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
+
+      // 8. Clear UI
+      setMessages([INITIAL_MESSAGE]);
+      toast({ title: "⚡ Thread Cleared + OmniSync", description: `Saved ${memoryRows.length} memories. NAVI will remember everything.` });
+    } catch (err) {
+      console.error("[CLEAR_THREAD] OmniSync error:", err);
+      // Still clear even if sync fails
+      await supabase.from("chat_messages").delete().eq("conversation_id", conversationId).catch(() => {});
+      setMessages([INITIAL_MESSAGE]);
+      toast({ title: "Thread cleared", description: "Some memories may not have saved.", variant: "destructive" });
+    } finally {
+      setIsSyncing(false);
     }
-
-    // Delete chat messages from DB (keep conversation shell)
-    await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
-
-    // Clear UI
-    setMessages([INITIAL_MESSAGE]);
-    toast({ title: "Thread cleared", description: "Memories saved to long-term storage." });
-  }, [user, conversationId, messages]);
+  }, [user, conversationId, messages, profile, quests, skills, entries, equipment]);
 
   // ── OmniSync — snapshot app state + condense full thread into memory ───────
   const [isSyncing, setIsSyncing] = useState(false);

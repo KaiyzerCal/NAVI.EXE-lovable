@@ -211,7 +211,7 @@ export default function MavisChat() {
     profile, updateProfile, refetchProfile,
     quests, questStats, refetchQuests,
     entries, refetchJournal,
-    achievements,
+    achievements, refetchAchievements,
     skills, refetchSkills,
     items: equipment, refetchEquipment,
     effects: buffs, refetchEffects,

@@ -110,12 +110,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [chatDbLoaded, setChatDbLoaded] = useState(false);
 
+  const isReady = !profileLoading;
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <AppDataContext.Provider value={{
+      isReady,
       profile, profileLoading, updateProfile, refetchProfile,
       quests, questsLoading, questStats, createQuest, updateQuest, toggleQuest, deleteQuest, refetchQuests,
       entries, journalLoading, createEntry, updateEntry, deleteEntry, refetchJournal,
-      achievements, achievementsLoading, checkAchievements, achievementStats,
+      achievements, achievementsLoading, checkAchievements, achievementStats, refetchAchievements,
       skills, skillsLoading, addSkill, updateSkill, deleteSkill, refetchSkills,
       items, equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetchEquipment,
       effects, effectsLoading, addEffect, removeEffect, refetchEffects,

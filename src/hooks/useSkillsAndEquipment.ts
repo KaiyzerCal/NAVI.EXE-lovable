@@ -329,8 +329,8 @@ export function useActiveEffects() {
 
   const refetch = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("buffs").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    if (data) setEffects(data.map(mapBuffRow));
+    const { data, error } = await supabase.from("buffs").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    if (!error && data) setEffects(data.map(mapBuffRow));
   }, [user]);
 
   return { effects, loading, addEffect, removeEffect, refetch };

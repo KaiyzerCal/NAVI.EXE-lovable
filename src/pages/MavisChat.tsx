@@ -40,11 +40,19 @@ const CLIENT_FALLBACK_ACTION_TYPES = new Set([
 ]);
 
 function isJournalIntent(message: string): boolean {
-  return /(journal|vault)/i.test(message) && /(create|write|save|log|record|add|make)/i.test(message);
+  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)/i.test(message);
+}
+
+function isQuestIntent(message: string): boolean {
+  return /(quest|task|mission|objective|goal|challenge|todo|to-do)/i.test(message) && /(create|make|add|new|start|set up|give me)/i.test(message);
+}
+
+function isSkillIntent(message: string): boolean {
+  return /(skill|ability|talent|proficiency)/i.test(message) && /(create|add|new|make|start|track)/i.test(message);
 }
 
 function deriveJournalTitle(userMessage: string, cleanText: string): string {
-  const quoted = `${userMessage} ${cleanText}`.match(/["“](.+?)["”]/);
+  const quoted = `${userMessage} ${cleanText}`.match(/[""](.+?)[""]/);
   if (quoted?.[1]) return quoted[1].trim().slice(0, 80);
 
   const source = cleanText.trim() || userMessage.trim();
@@ -52,24 +60,79 @@ function deriveJournalTitle(userMessage: string, cleanText: string): string {
   return normalized.slice(0, 60) || "NAVI Entry";
 }
 
+function extractNameFromMessage(message: string): string {
+  // Try to extract a name from patterns like "called X", "named X", "make X", "create X"
+  const patterns = [
+    /called\s+[""]?([^"".,!?]+)[""]?/i,
+    /named\s+[""]?([^"".,!?]+)[""]?/i,
+    /(?:create|make|add|new|start)\s+(?:a\s+)?(?:quest|task|skill|mission|entry|note)?\s*(?:called|named|:)?\s*[""]?([^"".,!?]{3,})[""]?/i,
+  ];
+  for (const p of patterns) {
+    const match = message.match(p);
+    if (match?.[1]) return match[1].trim().slice(0, 80);
+  }
+  // Fallback: use the message itself (trimmed)
+  return message.replace(/^(create|make|add|new|start|give me)\s+(a\s+)?(quest|task|skill|mission)\s*/i, "").trim().slice(0, 60) || "New Item";
+}
+
 function inferFallbackActions(userMessage: string, cleanText: string): NaviAction[] {
-  if (!isJournalIntent(userMessage)) return [];
+  const msg = userMessage.toLowerCase();
 
-  const content = cleanText.trim().length >= 24
-    ? cleanText.trim()
-    : `Operator request: ${userMessage.trim()}`;
+  // Quest intent
+  if (isQuestIntent(userMessage)) {
+    const name = extractNameFromMessage(userMessage);
+    return [{
+      type: "create_quest",
+      params: {
+        name,
+        description: cleanText.trim().slice(0, 200) || "",
+        type: "Daily",
+        total: 1,
+        xp_reward: 50,
+      },
+    }];
+  }
 
-  return [{
-    type: "create_journal",
-    params: {
-      title: deriveJournalTitle(userMessage, cleanText),
-      content,
-      tags: ["navi"],
-      category: "personal",
-      importance: "medium",
-      xp_earned: 10,
-    },
-  }];
+  // Skill intent
+  if (isSkillIntent(userMessage)) {
+    const name = extractNameFromMessage(userMessage);
+    return [{
+      type: "create_skill",
+      params: {
+        name,
+        description: cleanText.trim().slice(0, 200) || "",
+        category: "General",
+        max_level: 10,
+      },
+    }];
+  }
+
+  // Journal/vault intent
+  if (isJournalIntent(userMessage)) {
+    const content = cleanText.trim().length >= 24
+      ? cleanText.trim()
+      : `Operator request: ${userMessage.trim()}`;
+
+    return [{
+      type: "create_journal",
+      params: {
+        title: deriveJournalTitle(userMessage, cleanText),
+        content,
+        tags: ["navi"],
+        category: "personal",
+        importance: "medium",
+        xp_earned: 10,
+      },
+    }];
+  }
+
+  // Complete quest intent
+  if (/(finish|complete|done|did it|finished|completed)/i.test(msg) && /(quest|task|mission|it)/i.test(msg)) {
+    // Can't complete without an ID from context, but log the intent
+    console.log("[NAVI] Detected complete intent but no action tag from AI — needs quest ID from context");
+  }
+
+  return [];
 }
 
 async function streamChat({

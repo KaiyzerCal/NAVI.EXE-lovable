@@ -13,6 +13,9 @@ export interface DisplayMessage {
 }
 
 interface AppDataContextType {
+  // Ready flag
+  isReady: boolean;
+
   // Profile
   profile: ProfileData;
   profileLoading: boolean;
@@ -42,6 +45,7 @@ interface AppDataContextType {
   achievementsLoading: boolean;
   checkAchievements: (stats: any) => Promise<void>;
   achievementStats: { total: number; unlocked: number };
+  refetchAchievements: () => Promise<void>;
 
   // Skills
   skills: OperatorSkill[];

@@ -645,6 +645,7 @@ export default function MavisChat() {
               refetchEquipment(),
               refetchEffects(),
               refetchProfile(),
+              refetchAchievements(),
             ]);
           }
 

@@ -106,7 +106,7 @@ export default function UploadZone({ linkedEntityType, linkedEntityId, onUploadC
 
     // Trigger AI analysis via edge function (fire and forget)
     if (category === "image" || category === "document") {
-      supabase.functions.invoke("analyze-media", {
+      supabase.functions.invoke("navi-analyze-media", {
         body: { media_id: (mediaRow as any).id, file_url: fileUrl, file_type: category, file_name: file.name },
       }).catch(() => {});
     }

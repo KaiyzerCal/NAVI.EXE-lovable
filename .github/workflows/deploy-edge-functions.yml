@@ -1,0 +1,43 @@
+$workflowContent = @"
+name: Deploy NAVI.EXE Edge Functions
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "supabase/functions/navi-chat/**"
+      - "supabase/functions/navi-actions/**"
+      - "supabase/functions/navi-analyze-media/**"
+      - "supabase/functions/navi-generate-skin/**"
+      - ".github/workflows/deploy-edge-functions.yml"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+      - name: Deploy navi-chat
+        run: supabase functions deploy navi-chat --project-ref "`$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: `${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: `${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Deploy navi-actions
+        run: supabase functions deploy navi-actions --project-ref "`$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: `${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: `${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Deploy navi-analyze-media
+        run: supabase functions deploy navi-analyze-media --project-ref "`$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: `${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: `${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Deploy navi-generate-skin
+        run: supabase functions deploy navi-generate-skin --project-ref "`$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: `${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: `${{ secrets.SUPABASE_PROJECT_REF }}
+"@
+
+# Write the string to the file
+Set-Content -Path ".github\workflows\deploy-edge-functions.yml" -Value $workflowContent

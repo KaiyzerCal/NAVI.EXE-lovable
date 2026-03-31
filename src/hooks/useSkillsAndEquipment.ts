@@ -99,8 +99,8 @@ export function useOperatorSkills() {
 
   const refetch = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("skills").select("*").eq("user_id", user.id).order("created_at", { ascending: true });
-    if (data) setSkills(data.map(mapSkillRow));
+    const { data, error } = await supabase.from("skills").select("*").eq("user_id", user.id).order("created_at", { ascending: true });
+    if (!error && data) setSkills(data.map(mapSkillRow));
   }, [user]);
 
   return { skills, loading, addSkill, updateSkill, deleteSkill, levelUpByName, refetch };
@@ -234,8 +234,8 @@ export function useEquipment() {
 
   const refetch = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("equipment").select("*").eq("user_id", user.id).order("obtained_at", { ascending: false });
-    if (data) setItems(data.map(mapEquipRow));
+    const { data, error } = await supabase.from("equipment").select("*").eq("user_id", user.id).order("id", { ascending: false });
+    if (!error && data) setItems(data.map(mapEquipRow));
   }, [user]);
 
   return { items, loading, addItem, equipItem, updateItem, deleteItem, refetch };
@@ -329,8 +329,8 @@ export function useActiveEffects() {
 
   const refetch = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("buffs").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    if (data) setEffects(data.map(mapBuffRow));
+    const { data, error } = await supabase.from("buffs").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    if (!error && data) setEffects(data.map(mapBuffRow));
   }, [user]);
 
   return { effects, loading, addEffect, removeEffect, refetch };

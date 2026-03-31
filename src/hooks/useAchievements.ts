@@ -169,10 +169,20 @@ export function useAchievements() {
     [user, achievements]
   );
 
+  const refetch = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("achievements")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true });
+    if (!error && data) setAchievements(data as Achievement[]);
+  }, [user]);
+
   const stats = {
     total: achievements.length,
     unlocked: achievements.filter((a) => a.unlocked).length,
   };
 
-  return { achievements, loading, checkAchievements, stats };
+  return { achievements, loading, checkAchievements, stats, refetch };
 }

@@ -13,6 +13,9 @@ export interface DisplayMessage {
 }
 
 interface AppDataContextType {
+  // Ready flag
+  isReady: boolean;
+
   // Profile
   profile: ProfileData;
   profileLoading: boolean;
@@ -42,6 +45,7 @@ interface AppDataContextType {
   achievementsLoading: boolean;
   checkAchievements: (stats: any) => Promise<void>;
   achievementStats: { total: number; unlocked: number };
+  refetchAchievements: () => Promise<void>;
 
   // Skills
   skills: OperatorSkill[];
@@ -96,7 +100,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { profile, loading: profileLoading, updateProfile, refetchProfile } = useProfile();
   const { quests, loading: questsLoading, stats: questStats, createQuest, updateQuest, toggleQuest, deleteQuest, refetch: refetchQuests } = useQuests();
   const { entries, loading: journalLoading, createEntry, updateEntry, deleteEntry, refetch: refetchJournal } = useJournal();
-  const { achievements, loading: achievementsLoading, checkAchievements, stats: achievementStats } = useAchievements();
+  const { achievements, loading: achievementsLoading, checkAchievements, stats: achievementStats, refetch: refetchAchievements } = useAchievements();
   const { skills, loading: skillsLoading, addSkill, updateSkill, deleteSkill, refetch: refetchSkills } = useOperatorSkills();
   const { items, loading: equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetch: refetchEquipment } = useEquipment();
   const { effects, loading: effectsLoading, addEffect, removeEffect, refetch: refetchEffects } = useActiveEffects();
@@ -106,12 +110,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [chatDbLoaded, setChatDbLoaded] = useState(false);
 
+  const isReady = !profileLoading;
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <AppDataContext.Provider value={{
+      isReady,
       profile, profileLoading, updateProfile, refetchProfile,
       quests, questsLoading, questStats, createQuest, updateQuest, toggleQuest, deleteQuest, refetchQuests,
       entries, journalLoading, createEntry, updateEntry, deleteEntry, refetchJournal,
-      achievements, achievementsLoading, checkAchievements, achievementStats,
+      achievements, achievementsLoading, checkAchievements, achievementStats, refetchAchievements,
       skills, skillsLoading, addSkill, updateSkill, deleteSkill, refetchSkills,
       items, equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetchEquipment,
       effects, effectsLoading, addEffect, removeEffect, refetchEffects,

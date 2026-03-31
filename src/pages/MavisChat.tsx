@@ -518,7 +518,7 @@ export default function MavisChat() {
     } catch (err) {
       console.error("[CLEAR_THREAD] OmniSync error:", err);
       // Still clear even if sync fails
-      await supabase.from("chat_messages").delete().eq("conversation_id", conversationId).catch(() => {});
+      await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
       setMessages([INITIAL_MESSAGE]);
       toast({ title: "Thread cleared", description: "Some memories may not have saved.", variant: "destructive" });
     } finally {

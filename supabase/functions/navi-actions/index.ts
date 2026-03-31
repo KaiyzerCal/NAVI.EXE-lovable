@@ -313,7 +313,7 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
           .eq("id", itemId).eq("user_id", userId).single();
         if (error) throw error;
         if (!item) throw new Error("Item not found");
-        slot = item.slot; name = item.name;
+        slot = item.slot as string; name = item.name as string;
       } else if (params.name) {
         const { data: item, error } = await sb.from("equipment").select("id, slot, name")
           .eq("user_id", userId).ilike("name", String(params.name)).single();

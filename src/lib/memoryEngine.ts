@@ -84,8 +84,8 @@ export function buildMemoryContext(blocks: CompressedMemoryBlock[]): string {
     lines.push(`[${category}]`);
 
     // Thread summaries get more space but are truncated; snapshots are compact
-    const maxDetails = category === 'THREAD_SUMMARY' ? 3 : category === 'APP_SNAPSHOT' ? 3 : block.importance >= 3 ? 10 : 5;
-    const maxLen = category === 'THREAD_SUMMARY' ? 500 : 150;
+    const maxDetails = category === 'THREAD_SUMMARY' ? 3 : category === 'NAVI_INSIGHTS' ? 3 : category === 'APP_SNAPSHOT' ? 3 : block.importance >= 3 ? 10 : 5;
+    const maxLen = category === 'THREAD_SUMMARY' ? 800 : category === 'NAVI_INSIGHTS' ? 500 : 150;
 
     for (const detail of block.details.slice(-maxDetails)) {
       lines.push(`- ${detail.substring(0, maxLen)}`);

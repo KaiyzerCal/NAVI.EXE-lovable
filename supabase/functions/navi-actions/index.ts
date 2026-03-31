@@ -465,7 +465,7 @@ serve(async (req) => {
     const results: Array<{ type: string; success: boolean; error?: string }> = [];
     for (const action of actions) {
       try {
-        await executeAction(adminClient, userId, action);
+        await executeAction(adminClient as any, userId, action);
         results.push({ type: action.type, success: true });
         console.log(`[navi-actions] ✓ ${action.type} succeeded`);
       } catch (error) {

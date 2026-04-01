@@ -661,9 +661,11 @@ export default function MavisChat() {
     setMessages(updatedMessages);
 
     let assistantContent = "";
-    const chatHistory = updatedMessages
+    const allHistory = updatedMessages
       .filter((m) => m.id !== "initial")
       .map((m) => ({ role: m.role, content: m.content }));
+    // Keep last 20 messages to avoid token overload / rate limits
+    const chatHistory = allHistory.length > 20 ? allHistory.slice(-20) : allHistory;
 
     try {
       await streamChat({

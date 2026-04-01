@@ -238,6 +238,51 @@ async function streamChat({
   });
 
   if (!resp.ok) {
+    if (resp.status === 429) {
+      // Retry once after a short delay
+      await new Promise((r) => setTimeout(r, 3000));
+      const retry = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ messages, context }),
+        signal,
+      });
+      if (!retry.ok) {
+        const err = await retry.json().catch(() => ({ error: "Rate limited" }));
+        throw new Error(err.error || "Rate limit exceeded. Please wait a moment.");
+      }
+      // Use retry response going forward
+      const retryBody = retry.body;
+      if (!retryBody) throw new Error("No response body");
+      const retryReader = retryBody.getReader();
+      const retryDecoder = new TextDecoder();
+      let retryBuffer = "";
+      while (true) {
+        const { done, value } = await retryReader.read();
+        if (done) break;
+        retryBuffer += retryDecoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = retryBuffer.indexOf("\n")) !== -1) {
+          let line = retryBuffer.slice(0, idx);
+          retryBuffer = retryBuffer.slice(idx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+          const json = line.slice(6).trim();
+          if (json === "[DONE]") { onDone(); return; }
+          try {
+            const parsed = JSON.parse(json);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) onDelta(content);
+          } catch { /* partial chunk */ }
+        }
+      }
+      onDone();
+      return;
+    }
     const err = await resp.json().catch(() => ({ error: "Request failed" }));
     throw new Error(err.error || `Request failed (${resp.status})`);
   }
@@ -661,9 +706,11 @@ export default function MavisChat() {
     setMessages(updatedMessages);
 
     let assistantContent = "";
-    const chatHistory = updatedMessages
+    const allHistory = updatedMessages
       .filter((m) => m.id !== "initial")
       .map((m) => ({ role: m.role, content: m.content }));
+    // Keep last 20 messages to avoid token overload / rate limits
+    const chatHistory = allHistory.length > 20 ? allHistory.slice(-20) : allHistory;
 
     try {
       await streamChat({

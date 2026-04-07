@@ -1067,6 +1067,8 @@ export default function MavisChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
           placeholder="Message NAVI... (Enter to send, Shift+Enter for new line)"
           disabled={isLoading}
           rows={1}

@@ -215,7 +215,7 @@ function QuestDetailModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function QuestsPage() {
   const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest } = useAppData();
-  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "completed">("active");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
   const [viewingQuest, setViewingQuest] = useState<Quest | null>(null);

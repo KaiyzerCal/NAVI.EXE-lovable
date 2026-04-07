@@ -896,7 +896,7 @@ export default function MavisChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
+      <PageHeader title="NAVI.EXE" subtitle="// NEURAL LINK ACTIVE">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}

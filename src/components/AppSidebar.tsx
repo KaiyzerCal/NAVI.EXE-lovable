@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/navi", icon: Compass, label: "Navi" },
-  { to: "/mavis", icon: MessageSquare, label: "Navi AI" },
+  { to: "/mavis", icon: MessageSquare, label: "Navi.EXE" },
   { to: "/character", icon: User, label: "Character" },
   { to: "/quests", icon: Swords, label: "Quests" },
   { to: "/party", icon: Users, label: "Party" },

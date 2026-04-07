@@ -215,7 +215,7 @@ function QuestDetailModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function QuestsPage() {
   const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest } = useAppData();
-  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "completed">("active");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
   const [viewingQuest, setViewingQuest] = useState<Quest | null>(null);
@@ -406,7 +406,12 @@ export default function QuestsPage() {
                           {quest.completed && <Check size={12} />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-body truncate mb-1 ${quest.completed ? "line-through text-muted-foreground" : ""}`}>{quest.name}</p>
+                          <p className={`text-sm font-body truncate ${quest.completed ? "line-through text-muted-foreground" : ""}`}>{quest.name}</p>
+                          {quest.completed && quest.updated_at && (
+                            <p className="text-[9px] font-mono text-neon-green/70">
+                              Completed {new Date(quest.updated_at).toLocaleDateString()}
+                            </p>
+                          )}
                           <div className="h-1 bg-muted rounded-full overflow-hidden">
                             <div className={`h-full rounded-full transition-all ${quest.completed ? "bg-neon-green" : "bg-neon-amber"}`} style={{ width: `${Math.min(100, (quest.progress / quest.total) * 100)}%` }} />
                           </div>

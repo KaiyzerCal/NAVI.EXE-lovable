@@ -40,11 +40,14 @@ const CLIENT_FALLBACK_ACTION_TYPES = new Set([
 ]);
 
 function isJournalIntent(message: string): boolean {
-  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)/i.test(message);
+  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)\s/i.test(message);
 }
 
 function isQuestIntent(message: string): boolean {
-  return /(quest|task|mission|objective|goal|challenge|todo|to-do)/i.test(message) && /(create|make|add|new|start|set up|give me)/i.test(message);
+  // Require explicit action words — casual mentions of goals/tasks should NOT trigger quest creation
+  const hasActionWord = /(create|make|add|new|start|set up|give me|track)\s/i.test(message);
+  const hasQuestWord = /(quest|mission)/i.test(message);
+  return hasActionWord && hasQuestWord;
 }
 
 function isSkillIntent(message: string): boolean {
@@ -874,13 +877,19 @@ export default function MavisChat() {
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,
   // emoji picker, CJK input) which was causing the "sends before I'm done" bug.
+  const composingRef = useRef(false);
+  const handleCompositionStart = useCallback(() => { composingRef.current = true; }, []);
+  const handleCompositionEnd = useCallback(() => {
+    // Small delay to let the compositionend event settle before allowing Enter
+    setTimeout(() => { composingRef.current = false; }, 100);
+  }, []);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !composingRef.current) {
         e.preventDefault();
         sendMessage();
       }
-      // Shift+Enter or isComposing → fall through, textarea inserts character naturally
     },
     [sendMessage]
   );
@@ -896,7 +905,7 @@ export default function MavisChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
+      <PageHeader title="NAVI.EXE" subtitle="// NEURAL LINK ACTIVE">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
@@ -1058,6 +1067,8 @@ export default function MavisChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
           placeholder="Message NAVI... (Enter to send, Shift+Enter for new line)"
           disabled={isLoading}
           rows={1}

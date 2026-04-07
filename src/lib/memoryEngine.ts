@@ -38,7 +38,7 @@ export function extractMemoriesFromMessage(content: string): MemoryItem[] {
       const detail = match[0].trim();
       if (detail.length >= 15 && detail.length <= 200) {
         memories.push({ category: p.category, detail, importance: p.importance });
-        if (memories.length >= 3) return memories;
+        if (memories.length >= 5) return memories;
       }
     }
   }

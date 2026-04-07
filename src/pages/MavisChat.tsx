@@ -40,11 +40,14 @@ const CLIENT_FALLBACK_ACTION_TYPES = new Set([
 ]);
 
 function isJournalIntent(message: string): boolean {
-  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)/i.test(message);
+  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)\s/i.test(message);
 }
 
 function isQuestIntent(message: string): boolean {
-  return /(quest|task|mission|objective|goal|challenge|todo|to-do)/i.test(message) && /(create|make|add|new|start|set up|give me)/i.test(message);
+  // Require explicit action words — casual mentions of goals/tasks should NOT trigger quest creation
+  const hasActionWord = /(create|make|add|new|start|set up|give me|track)\s/i.test(message);
+  const hasQuestWord = /(quest|mission)/i.test(message);
+  return hasActionWord && hasQuestWord;
 }
 
 function isSkillIntent(message: string): boolean {

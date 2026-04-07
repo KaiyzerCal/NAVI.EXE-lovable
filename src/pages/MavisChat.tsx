@@ -877,13 +877,19 @@ export default function MavisChat() {
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,
   // emoji picker, CJK input) which was causing the "sends before I'm done" bug.
+  const composingRef = useRef(false);
+  const handleCompositionStart = useCallback(() => { composingRef.current = true; }, []);
+  const handleCompositionEnd = useCallback(() => {
+    // Small delay to let the compositionend event settle before allowing Enter
+    setTimeout(() => { composingRef.current = false; }, 100);
+  }, []);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !composingRef.current) {
         e.preventDefault();
         sendMessage();
       }
-      // Shift+Enter or isComposing → fall through, textarea inserts character naturally
     },
     [sendMessage]
   );

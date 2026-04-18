@@ -21,19 +21,28 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useProfile } from "@/hooks/useProfile";
 
 const queryClient = new QueryClient();
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const { profile } = useProfile();
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (user) {
-      const done = localStorage.getItem("navi_onboarding_done");
-      if (!done) setShowOnboarding(true);
+    if (!user) {
+      setShowOnboarding(null);
+      return;
     }
-  }, [user]);
+    const localDone = localStorage.getItem("navi_onboarding_done") === "1";
+    const profileDone = profile?.onboarding_done === true;
+    if (localDone || profileDone) {
+      setShowOnboarding(false);
+    } else if (profile !== undefined) {
+      setShowOnboarding(true);
+    }
+  }, [user, profile]);
 
   if (loading) {
     return (
@@ -44,6 +53,8 @@ function AppContent() {
   }
 
   if (!user) return <AuthPage />;
+
+  if (showOnboarding === null) return null;
 
   if (showOnboarding) {
     return <Onboarding onComplete={() => setShowOnboarding(false)} />;

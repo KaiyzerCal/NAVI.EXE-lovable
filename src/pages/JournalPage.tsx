@@ -258,6 +258,7 @@ export default function JournalPage() {
             <EntryFormCard
               title={editingEntry ? "EDIT ENTRY" : "NEW ENTRY"}
               saving={saving}
+              entryId={editingEntry?.id}
               initial={editingEntry
                 ? { title: editingEntry.title, content: editingEntry.content, tags: editingEntry.tags.join(", ") }
                 : { title: "", content: "", tags: "" }

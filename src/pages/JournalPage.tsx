@@ -270,10 +270,32 @@ export default function JournalPage() {
   return (
     <div>
       <PageHeader title="JOURNAL" subtitle="// VAULT ENTRIES">
-        <button onClick={() => { setShowNewForm(true); setEditingEntry(null); }}
-          className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors">
-          <Plus size={14} /> NEW ENTRY
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex border border-border rounded overflow-hidden">
+            <button
+              onClick={() => setView("entries")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-mono transition-colors ${
+                view === "entries" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BookOpen size={12} /> ENTRIES
+            </button>
+            <button
+              onClick={() => setView("gallery")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-mono border-l border-border transition-colors ${
+                view === "gallery" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Images size={12} /> GALLERY
+            </button>
+          </div>
+          {view === "entries" && (
+            <button onClick={() => { setShowNewForm(true); setEditingEntry(null); }}
+              className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors">
+              <Plus size={14} /> NEW ENTRY
+            </button>
+          )}
+        </div>
       </PageHeader>
 
       {/* New / Edit Form */}

@@ -197,10 +197,34 @@ function EntryModal({
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function JournalPage() {
   const { entries, journalLoading: loading, createEntry, updateEntry, deleteEntry } = useAppData();
+  const { user } = useAuth();
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [view, setView] = useState<"entries" | "gallery">("entries");
+  const [allMedia, setAllMedia] = useState<MediaFile[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<"all" | "image" | "video" | "document">("all");
+  const [galleryLightbox, setGalleryLightbox] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    if (view !== "gallery" || !user) return;
+    setMediaLoading(true);
+    supabase
+      .from("media")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setAllMedia(data as MediaFile[]);
+        setMediaLoading(false);
+      });
+  }, [view, user]);
+
+  const filteredMedia = allMedia.filter((m) =>
+    mediaFilter === "all" ? true : m.file_type === mediaFilter
+  );
 
   const handleCreate = useCallback(async (form: FormState) => {
     if (!form.title.trim()) return;

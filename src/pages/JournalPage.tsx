@@ -2,12 +2,13 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2 } from "lucide-react";
+import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
 import UploadZone, { MediaThumbnail, MediaLightbox } from "@/components/UploadZone";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MediaFile {
   id: string;
@@ -16,6 +17,7 @@ interface MediaFile {
   file_name: string;
   file_size: number;
   ai_description?: string | null;
+  created_at?: string;
 }
 
 const TAG_COLORS: Record<string, string> = {
@@ -196,10 +198,34 @@ function EntryModal({
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function JournalPage() {
   const { entries, journalLoading: loading, createEntry, updateEntry, deleteEntry } = useAppData();
+  const { user } = useAuth();
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [view, setView] = useState<"entries" | "gallery">("entries");
+  const [allMedia, setAllMedia] = useState<MediaFile[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<"all" | "image" | "video" | "document">("all");
+  const [galleryLightbox, setGalleryLightbox] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    if (view !== "gallery" || !user) return;
+    setMediaLoading(true);
+    supabase
+      .from("media")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setAllMedia(data as MediaFile[]);
+        setMediaLoading(false);
+      });
+  }, [view, user]);
+
+  const filteredMedia = allMedia.filter((m) =>
+    mediaFilter === "all" ? true : m.file_type === mediaFilter
+  );
 
   const handleCreate = useCallback(async (form: FormState) => {
     if (!form.title.trim()) return;
@@ -245,15 +271,37 @@ export default function JournalPage() {
   return (
     <div>
       <PageHeader title="JOURNAL" subtitle="// VAULT ENTRIES">
-        <button onClick={() => { setShowNewForm(true); setEditingEntry(null); }}
-          className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors">
-          <Plus size={14} /> NEW ENTRY
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex border border-border rounded overflow-hidden">
+            <button
+              onClick={() => setView("entries")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-mono transition-colors ${
+                view === "entries" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BookOpen size={12} /> ENTRIES
+            </button>
+            <button
+              onClick={() => setView("gallery")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-mono border-l border-border transition-colors ${
+                view === "gallery" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Images size={12} /> GALLERY
+            </button>
+          </div>
+          {view === "entries" && (
+            <button onClick={() => { setShowNewForm(true); setEditingEntry(null); }}
+              className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors">
+              <Plus size={14} /> NEW ENTRY
+            </button>
+          )}
+        </div>
       </PageHeader>
 
       {/* New / Edit Form */}
       <AnimatePresence>
-        {(showNewForm || editingEntry) && (
+        {view === "entries" && (showNewForm || editingEntry) && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-5">
             <EntryFormCard
               title={editingEntry ? "EDIT ENTRY" : "NEW ENTRY"}
@@ -270,8 +318,81 @@ export default function JournalPage() {
         )}
       </AnimatePresence>
 
+      {/* Gallery view */}
+      {view === "gallery" && (
+        <div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {(["all", "image", "video", "document"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setMediaFilter(f)}
+                className={`px-3 py-1.5 text-[10px] font-mono rounded border transition-colors ${
+                  mediaFilter === f
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {f.toUpperCase()}
+                {f !== "all" && (
+                  <span className="ml-1.5 opacity-60">
+                    {allMedia.filter((m) => m.file_type === f).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {mediaLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="animate-spin text-primary" size={20} />
+            </div>
+          ) : filteredMedia.length === 0 ? (
+            <div className="text-center py-16">
+              <Images size={36} className="mx-auto mb-3 opacity-20" />
+              <p className="text-xs font-mono text-muted-foreground">NO MEDIA UPLOADED YET</p>
+              <p className="text-[10px] font-mono text-muted-foreground mt-2">
+                Attach files to journal entries to see them here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {filteredMedia.map((file, i) => (
+                <motion.div
+                  key={file.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.02 }}
+                  className="group cursor-pointer"
+                  onClick={() => setGalleryLightbox(file)}
+                >
+                  <div className="relative aspect-square bg-muted border border-border rounded overflow-hidden group-hover:border-primary/40 transition-colors">
+                    {file.file_type === "image" ? (
+                      <img src={file.file_url} alt={file.file_name} className="w-full h-full object-cover" loading="lazy" />
+                    ) : file.file_type === "video" ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Film size={28} className="text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <FileText size={28} className="text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[9px] font-mono text-muted-foreground truncate mt-1">{file.file_name}</p>
+                  <p className="text-[9px] font-mono text-muted-foreground/60">
+                    {new Date(file.created_at as any).toLocaleDateString()}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          <MediaLightbox file={galleryLightbox} onClose={() => setGalleryLightbox(null)} />
+        </div>
+      )}
+
       {/* Empty state */}
-      {entries.length === 0 ? (
+      {view === "entries" && entries.length === 0 ? (
         <div className="text-center py-16">
           <BookOpen size={36} className="mx-auto mb-3 opacity-20" />
           <p className="text-xs font-mono text-muted-foreground mb-4">NO JOURNAL ENTRIES YET</p>
@@ -279,7 +400,7 @@ export default function JournalPage() {
             WRITE FIRST ENTRY
           </button>
         </div>
-      ) : (
+      ) : view === "entries" ? (
         <div className="space-y-3">
           {entries.map((entry, i) => (
             <motion.div
@@ -322,7 +443,7 @@ export default function JournalPage() {
             </motion.div>
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Detail Modal */}
       <AnimatePresence>

@@ -17,6 +17,7 @@ interface MediaFile {
   file_name: string;
   file_size: number;
   ai_description?: string | null;
+  created_at?: string;
 }
 
 const TAG_COLORS: Record<string, string> = {

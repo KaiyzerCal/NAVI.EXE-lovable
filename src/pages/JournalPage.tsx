@@ -123,6 +123,21 @@ function EntryModal({
 }: {
   entry: JournalEntry; onClose: () => void; onEdit: () => void; onDelete: () => void;
 }) {
+  const [media, setMedia] = useState<MediaFile[]>([]);
+  const [lightbox, setLightbox] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("media")
+      .select("*")
+      .eq("linked_entity_type", "journal")
+      .eq("linked_entity_id", entry.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setMedia(data as MediaFile[]);
+      });
+  }, [entry.id]);
+
   const copyEntry = () => {
     navigator.clipboard.writeText(`${entry.title}\n${new Date(entry.created_at).toLocaleDateString()}\n\n${entry.content}`);
     toast({ title: "Copied", description: "Entry copied to clipboard." });
@@ -151,6 +166,16 @@ function EntryModal({
           ))}
         </div>
         <p className="text-sm font-body text-foreground/85 leading-relaxed mb-5 select-text whitespace-pre-wrap">{entry.content}</p>
+        {media.length > 0 && (
+          <div className="mb-5">
+            <p className="text-[10px] font-mono text-muted-foreground mb-2">ATTACHMENTS</p>
+            <div className="flex flex-wrap gap-2">
+              {media.map((f) => (
+                <MediaThumbnail key={f.id} file={f} onClick={() => setLightbox(f)} />
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <button onClick={copyEntry} className="py-2 rounded border border-border bg-muted text-muted-foreground text-xs font-mono flex items-center justify-center gap-1.5 hover:text-foreground transition-colors">
             <Copy size={12} /> COPY
@@ -163,6 +188,7 @@ function EntryModal({
           </button>
         </div>
       </motion.div>
+      <MediaLightbox file={lightbox} onClose={() => setLightbox(null)} />
     </div>
   );
 }

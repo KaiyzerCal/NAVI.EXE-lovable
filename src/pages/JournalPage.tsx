@@ -2,12 +2,13 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2 } from "lucide-react";
+import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
 import UploadZone, { MediaThumbnail, MediaLightbox } from "@/components/UploadZone";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MediaFile {
   id: string;

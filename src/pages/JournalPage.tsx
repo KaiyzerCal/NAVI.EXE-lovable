@@ -1,11 +1,22 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
+import UploadZone, { MediaThumbnail, MediaLightbox } from "@/components/UploadZone";
+import { supabase } from "@/integrations/supabase/client";
+
+interface MediaFile {
+  id: string;
+  file_url: string;
+  file_type: string;
+  file_name: string;
+  file_size: number;
+  ai_description?: string | null;
+}
 
 const TAG_COLORS: Record<string, string> = {
   reflection: "bg-neon-cyan/10 text-neon-cyan",

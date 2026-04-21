@@ -1,11 +1,22 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
+import UploadZone, { MediaThumbnail, MediaLightbox } from "@/components/UploadZone";
+import { supabase } from "@/integrations/supabase/client";
+
+interface MediaFile {
+  id: string;
+  file_url: string;
+  file_type: string;
+  file_name: string;
+  file_size: number;
+  ai_description?: string | null;
+}
 
 const TAG_COLORS: Record<string, string> = {
   reflection: "bg-neon-cyan/10 text-neon-cyan",
@@ -23,12 +34,29 @@ interface FormState { title: string; content: string; tags: string; }
 
 // ─── Entry Form ────────────────────────────────────────────────────────────────
 function EntryFormCard({
-  title, initial, saving, onSave, onCancel,
+  title, initial, saving, entryId, onSave, onCancel,
 }: {
   title: string; initial: FormState; saving?: boolean;
+  entryId?: string;
   onSave: (f: FormState) => void; onCancel: () => void;
 }) {
   const [form, setForm] = useState<FormState>(initial);
+  const [attached, setAttached] = useState<MediaFile[]>([]);
+  const [lightbox, setLightbox] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    if (!entryId) return;
+    supabase
+      .from("media")
+      .select("*")
+      .eq("linked_entity_type", "journal")
+      .eq("linked_entity_id", entryId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setAttached(data as MediaFile[]);
+      });
+  }, [entryId]);
+
   return (
     <HudCard title={title} icon={<BookOpen size={14} />} glow>
       <div className="space-y-3">
@@ -50,6 +78,28 @@ function EntryFormCard({
             placeholder="focus, coding, insight..."
             className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
         </div>
+        <div>
+          <label className="text-[10px] font-mono text-muted-foreground block mb-1">ATTACHMENTS</label>
+          {attached.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {attached.map((f) => (
+                <MediaThumbnail key={f.id} file={f} onClick={() => setLightbox(f)} />
+              ))}
+            </div>
+          )}
+          {entryId ? (
+            <UploadZone
+              compact
+              linkedEntityType="journal"
+              linkedEntityId={entryId}
+              onUploadComplete={(f) => setAttached((prev) => [f as MediaFile, ...prev])}
+            />
+          ) : (
+            <p className="text-[10px] font-mono text-muted-foreground italic">
+              Save the entry first to attach files.
+            </p>
+          )}
+        </div>
         <div className="flex gap-2 pt-1">
           <button onClick={() => onSave(form)} disabled={!form.title.trim() || saving}
             className="flex-1 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
@@ -62,6 +112,7 @@ function EntryFormCard({
           </button>
         </div>
       </div>
+      <MediaLightbox file={lightbox} onClose={() => setLightbox(null)} />
     </HudCard>
   );
 }
@@ -72,6 +123,21 @@ function EntryModal({
 }: {
   entry: JournalEntry; onClose: () => void; onEdit: () => void; onDelete: () => void;
 }) {
+  const [media, setMedia] = useState<MediaFile[]>([]);
+  const [lightbox, setLightbox] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("media")
+      .select("*")
+      .eq("linked_entity_type", "journal")
+      .eq("linked_entity_id", entry.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setMedia(data as MediaFile[]);
+      });
+  }, [entry.id]);
+
   const copyEntry = () => {
     navigator.clipboard.writeText(`${entry.title}\n${new Date(entry.created_at).toLocaleDateString()}\n\n${entry.content}`);
     toast({ title: "Copied", description: "Entry copied to clipboard." });
@@ -100,6 +166,16 @@ function EntryModal({
           ))}
         </div>
         <p className="text-sm font-body text-foreground/85 leading-relaxed mb-5 select-text whitespace-pre-wrap">{entry.content}</p>
+        {media.length > 0 && (
+          <div className="mb-5">
+            <p className="text-[10px] font-mono text-muted-foreground mb-2">ATTACHMENTS</p>
+            <div className="flex flex-wrap gap-2">
+              {media.map((f) => (
+                <MediaThumbnail key={f.id} file={f} onClick={() => setLightbox(f)} />
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <button onClick={copyEntry} className="py-2 rounded border border-border bg-muted text-muted-foreground text-xs font-mono flex items-center justify-center gap-1.5 hover:text-foreground transition-colors">
             <Copy size={12} /> COPY
@@ -112,6 +188,7 @@ function EntryModal({
           </button>
         </div>
       </motion.div>
+      <MediaLightbox file={lightbox} onClose={() => setLightbox(null)} />
     </div>
   );
 }
@@ -181,6 +258,7 @@ export default function JournalPage() {
             <EntryFormCard
               title={editingEntry ? "EDIT ENTRY" : "NEW ENTRY"}
               saving={saving}
+              entryId={editingEntry?.id}
               initial={editingEntry
                 ? { title: editingEntry.title, content: editingEntry.content, tags: editingEntry.tags.join(", ") }
                 : { title: "", content: "", tags: "" }

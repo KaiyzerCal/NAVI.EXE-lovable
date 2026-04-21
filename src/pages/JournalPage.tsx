@@ -300,7 +300,7 @@ export default function JournalPage() {
 
       {/* New / Edit Form */}
       <AnimatePresence>
-        {(showNewForm || editingEntry) && (
+        {view === "entries" && (showNewForm || editingEntry) && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-5">
             <EntryFormCard
               title={editingEntry ? "EDIT ENTRY" : "NEW ENTRY"}
@@ -317,8 +317,81 @@ export default function JournalPage() {
         )}
       </AnimatePresence>
 
+      {/* Gallery view */}
+      {view === "gallery" && (
+        <div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {(["all", "image", "video", "document"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setMediaFilter(f)}
+                className={`px-3 py-1.5 text-[10px] font-mono rounded border transition-colors ${
+                  mediaFilter === f
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {f.toUpperCase()}
+                {f !== "all" && (
+                  <span className="ml-1.5 opacity-60">
+                    {allMedia.filter((m) => m.file_type === f).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {mediaLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="animate-spin text-primary" size={20} />
+            </div>
+          ) : filteredMedia.length === 0 ? (
+            <div className="text-center py-16">
+              <Images size={36} className="mx-auto mb-3 opacity-20" />
+              <p className="text-xs font-mono text-muted-foreground">NO MEDIA UPLOADED YET</p>
+              <p className="text-[10px] font-mono text-muted-foreground mt-2">
+                Attach files to journal entries to see them here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {filteredMedia.map((file, i) => (
+                <motion.div
+                  key={file.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.02 }}
+                  className="group cursor-pointer"
+                  onClick={() => setGalleryLightbox(file)}
+                >
+                  <div className="relative aspect-square bg-muted border border-border rounded overflow-hidden group-hover:border-primary/40 transition-colors">
+                    {file.file_type === "image" ? (
+                      <img src={file.file_url} alt={file.file_name} className="w-full h-full object-cover" loading="lazy" />
+                    ) : file.file_type === "video" ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Film size={28} className="text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <FileText size={28} className="text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[9px] font-mono text-muted-foreground truncate mt-1">{file.file_name}</p>
+                  <p className="text-[9px] font-mono text-muted-foreground/60">
+                    {new Date(file.created_at as any).toLocaleDateString()}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          <MediaLightbox file={galleryLightbox} onClose={() => setGalleryLightbox(null)} />
+        </div>
+      )}
+
       {/* Empty state */}
-      {entries.length === 0 ? (
+      {view === "entries" && entries.length === 0 ? (
         <div className="text-center py-16">
           <BookOpen size={36} className="mx-auto mb-3 opacity-20" />
           <p className="text-xs font-mono text-muted-foreground mb-4">NO JOURNAL ENTRIES YET</p>
@@ -326,7 +399,7 @@ export default function JournalPage() {
             WRITE FIRST ENTRY
           </button>
         </div>
-      ) : (
+      ) : view === "entries" ? (
         <div className="space-y-3">
           {entries.map((entry, i) => (
             <motion.div
@@ -369,7 +442,7 @@ export default function JournalPage() {
             </motion.div>
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Detail Modal */}
       <AnimatePresence>

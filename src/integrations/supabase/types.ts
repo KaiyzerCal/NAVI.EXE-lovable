@@ -513,6 +513,7 @@ export type Database = {
           operator_xp: number
           perception: number
           subclass: string | null
+          updated_at: string
           user_navi_description: string | null
           xp_total: number
         }
@@ -542,6 +543,7 @@ export type Database = {
           operator_xp?: number
           perception?: number
           subclass?: string | null
+          updated_at?: string
           user_navi_description?: string | null
           xp_total?: number
         }
@@ -571,6 +573,7 @@ export type Database = {
           operator_xp?: number
           perception?: number
           subclass?: string | null
+          updated_at?: string
           user_navi_description?: string | null
           xp_total?: number
         }
@@ -818,6 +821,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      award_xp: { Args: { _amount: number }; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

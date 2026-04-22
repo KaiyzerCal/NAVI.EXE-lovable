@@ -127,16 +127,17 @@ export function useQuests() {
 
       // Award XP to profile when completing
       if (nowCompleted && user) {
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("xp_total")
-          .eq("id", user.id)
-          .single();
-        if (prof) {
-          await supabase
-            .from("profiles")
-            .update({ xp_total: (prof.xp_total || 0) + quest.xp_reward })
-            .eq("id", user.id);
+        // Atomic XP award via RPC — no race condition
+        const { error: xpErr } = await supabase.rpc("award_xp", {
+          _amount: quest.xp_reward,
+        });
+        if (xpErr) {
+          console.error("[useQuests] XP award failed:", xpErr);
+          toast({
+            title: "XP not awarded",
+            description: `Quest completed but ${quest.xp_reward} XP failed to save.`,
+            variant: "destructive",
+          });
         }
       }
     },

@@ -542,7 +542,18 @@ export default function MavisChat() {
       });
 
       if (memoryRows.length > 0) {
-        await supabase.from("navi_core_memory").insert(memoryRows as any);
+        const { error: insErr } = await supabase
+          .from("navi_core_memory")
+          .insert(memoryRows as any);
+        if (insErr) {
+          console.error("[CLEAR_THREAD] memory insert failed:", insErr);
+          toast({
+            title: "Memory save failed",
+            description: `OmniSync could not write to long-term memory: ${insErr.message}. Thread NOT cleared.`,
+            variant: "destructive",
+          });
+          return; // Do NOT clear the thread when memory save fails
+        }
       }
 
       // 6. Refresh memory context for next conversation
@@ -565,10 +576,12 @@ export default function MavisChat() {
       toast({ title: "⚡ Thread Cleared + OmniSync", description: `Saved ${memoryRows.length} memories. NAVI will remember everything.` });
     } catch (err) {
       console.error("[CLEAR_THREAD] OmniSync error:", err);
-      // Still clear even if sync fails
-      await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
-      setMessages([INITIAL_MESSAGE]);
-      toast({ title: "Thread cleared", description: "Some memories may not have saved.", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({
+        title: "OmniSync failed",
+        description: `Memory not saved: ${msg}. Thread preserved — try again.`,
+        variant: "destructive",
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -646,7 +659,18 @@ export default function MavisChat() {
       });
 
       if (memoryRows.length > 0) {
-        await supabase.from("navi_core_memory").insert(memoryRows as any);
+        const { error: insErr } = await supabase
+          .from("navi_core_memory")
+          .insert(memoryRows as any);
+        if (insErr) {
+          console.error("[OMNISYNC] memory insert failed:", insErr);
+          toast({
+            title: "OmniSync failed",
+            description: `Could not save to long-term memory: ${insErr.message}`,
+            variant: "destructive",
+          });
+          return;
+        }
       }
 
       // Refresh memory context
@@ -664,7 +688,12 @@ export default function MavisChat() {
       toast({ title: "⚡ OmniSync Complete", description: `Saved ${memoryRows.length} memory entries. NAVI's long-term memory updated.` });
     } catch (err) {
       console.error("[OMNISYNC] Error:", err);
-      toast({ title: "Sync Failed", description: "Could not complete OmniSync.", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({
+        title: "OmniSync failed",
+        description: msg,
+        variant: "destructive",
+      });
     } finally {
       setIsSyncing(false);
     }

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye } from "lucide-react";
 import { useState, useEffect, Suspense } from "react";
 import { getNaviCharacter } from "@/components/navi-characters";
+import NaviErrorBoundary from "@/components/NaviErrorBoundary";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -262,9 +263,11 @@ export default function NaviPage() {
           title="Open Navi AI Chat"
         >
           {EquippedNaviChar ? (
-            <Suspense fallback={<div className="w-32 h-32" />}>
-              <EquippedNaviChar size={128} animated />
-            </Suspense>
+            <NaviErrorBoundary size={128}>
+              <Suspense fallback={<div className="w-32 h-32" />}>
+                <EquippedNaviChar size={128} animated />
+              </Suspense>
+            </NaviErrorBoundary>
           ) : (
             <img
               src={getSkinUrl(equippedSkin)}

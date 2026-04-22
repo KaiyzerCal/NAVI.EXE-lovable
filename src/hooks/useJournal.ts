@@ -72,22 +72,18 @@ export function useJournal() {
       const entry = data as JournalEntry;
       setEntries((prev) => [entry, ...prev]);
 
-      // Award XP
-      supabase
-        .from("profiles")
-        .select("xp_total")
-        .eq("id", user.id)
-        .single()
-        .then(({ data: p }) => {
-          if (p) {
-            supabase
-              .from("profiles")
-              .update({ xp_total: (p.xp_total || 0) + xp })
-              .eq("id", user.id);
-          }
+      // Award XP atomically via RPC — no race condition
+      const { error: xpErr } = await supabase.rpc("award_xp", { _amount: xp });
+      if (xpErr) {
+        console.error("[useJournal] XP award failed:", xpErr);
+        toast({
+          title: "Entry saved",
+          description: `Entry saved, but ${xp} XP failed to apply.`,
+          variant: "destructive",
         });
-
-      toast({ title: "Entry saved", description: `+${xp} XP earned.` });
+      } else {
+        toast({ title: "Entry saved", description: `+${xp} XP earned.` });
+      }
       return entry;
     },
     [user]

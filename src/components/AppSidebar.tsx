@@ -1,7 +1,8 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, MessageSquare, User, Swords, BookOpen, 
-  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users
+import {
+  LayoutDashboard, MessageSquare, User, Swords, BookOpen,
+  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
+  Gamepad2, Shield, Radio, Inbox, Palette, Zap, Crown, Bot
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +17,13 @@ const navItems = [
   { to: "/party", icon: Users, label: "Party" },
   { to: "/journal", icon: BookOpen, label: "Journal" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
+  { to: "/skins", icon: Palette, label: "Skins" },
+  { to: "/games", icon: Gamepad2, label: "Games" },
+  { to: "/guild", icon: Shield, label: "Guild" },
+  { to: "/social", icon: Radio, label: "Feed" },
+  { to: "/inbox", icon: Inbox, label: "Inbox" },
+  { to: "/agents", icon: Bot, label: "Agents" },
+  { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 

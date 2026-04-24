@@ -10,6 +10,7 @@ import { useAppData } from "@/contexts/AppDataContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
 import EvolutionEvent from "@/components/EvolutionEvent";
+import FeedbackWidget from "@/components/FeedbackWidget";
 import AuthPage from "./pages/AuthPage";
 import Index from "./pages/Index";
 import NaviPage from "./pages/NaviPage";
@@ -20,6 +21,14 @@ import JournalPage from "./pages/JournalPage";
 import StatsPage from "./pages/StatsPage";
 import PartyPage from "./pages/PartyPage";
 import SettingsPage from "./pages/SettingsPage";
+import UpgradePage from "./pages/UpgradePage";
+import AdminPage from "./pages/AdminPage";
+import SkinsPage from "./pages/SkinsPage";
+import GamesPage from "./pages/GamesPage";
+import GuildPage from "./pages/GuildPage";
+import SocialPage from "./pages/SocialPage";
+import InboxPage from "./pages/InboxPage";
+import AgentPage from "./pages/AgentPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -94,6 +103,7 @@ function AppShell() {
           onDismiss={(tier) => updateProfile({ last_evolution_tier: tier } as any)}
         />
       )}
+      <FeedbackWidget />
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">
@@ -106,6 +116,14 @@ function AppShell() {
           <Route path="/party" element={<PartyPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/skins" element={<SkinsPage />} />
+          <Route path="/games" element={<GamesPage />} />
+          <Route path="/guild" element={<GuildPage />} />
+          <Route path="/social" element={<SocialPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
+          <Route path="/upgrade" element={<UpgradePage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/agents" element={<AgentPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>

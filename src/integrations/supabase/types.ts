@@ -496,6 +496,7 @@ export type Database = {
           codex_points: number
           created_at: string
           current_streak: number
+          daily_message_count: number
           display_name: string | null
           equipped_skin: string
           guild_id: string | null
@@ -504,6 +505,7 @@ export type Database = {
           longest_streak: number
           luck: number
           mbti_type: string | null
+          message_count_reset_date: string
           navi_level: number
           navi_name: string
           navi_personality: string
@@ -513,6 +515,7 @@ export type Database = {
           operator_xp: number
           perception: number
           subclass: string | null
+          subscription_tier: string
           updated_at: string
           user_navi_description: string | null
           xp_total: number
@@ -526,6 +529,7 @@ export type Database = {
           codex_points?: number
           created_at?: string
           current_streak?: number
+          daily_message_count?: number
           display_name?: string | null
           equipped_skin?: string
           guild_id?: string | null
@@ -534,6 +538,7 @@ export type Database = {
           longest_streak?: number
           luck?: number
           mbti_type?: string | null
+          message_count_reset_date?: string
           navi_level?: number
           navi_name?: string
           navi_personality?: string
@@ -543,6 +548,7 @@ export type Database = {
           operator_xp?: number
           perception?: number
           subclass?: string | null
+          subscription_tier?: string
           updated_at?: string
           user_navi_description?: string | null
           xp_total?: number
@@ -556,6 +562,7 @@ export type Database = {
           codex_points?: number
           created_at?: string
           current_streak?: number
+          daily_message_count?: number
           display_name?: string | null
           equipped_skin?: string
           guild_id?: string | null
@@ -564,6 +571,7 @@ export type Database = {
           longest_streak?: number
           luck?: number
           mbti_type?: string | null
+          message_count_reset_date?: string
           navi_level?: number
           navi_name?: string
           navi_personality?: string
@@ -573,6 +581,7 @@ export type Database = {
           operator_xp?: number
           perception?: number
           subclass?: string | null
+          subscription_tier?: string
           updated_at?: string
           user_navi_description?: string | null
           xp_total?: number
@@ -736,6 +745,54 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          environment: string
+          id: string
+          price_id: string
+          product_id: string
+          status: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          environment?: string
+          id?: string
+          price_id: string
+          product_id: string
+          status?: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          environment?: string
+          id?: string
+          price_id?: string
+          product_id?: string
+          status?: string
+          stripe_customer_id?: string
+          stripe_subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       subskills: {
         Row: {
           created_at: string
@@ -822,6 +879,10 @@ export type Database = {
     }
     Functions: {
       award_xp: { Args: { _amount: number }; Returns: number }
+      has_active_subscription: {
+        Args: { check_env?: string; user_uuid: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

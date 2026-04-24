@@ -1084,6 +1084,40 @@ export default function MavisChat() {
           </div>
         )}
 
+      {/* Free-tier live "messages left today" indicator */}
+      {!paywall.hasFullAccess &&
+        profile.daily_message_count < paywall.limits.DAILY_AI_MESSAGES && (() => {
+          const used = profile.daily_message_count ?? 0;
+          const total = paywall.limits.DAILY_AI_MESSAGES;
+          const left = Math.max(0, total - used);
+          const pct = Math.min(100, (used / total) * 100);
+          const low = left <= 3;
+          return (
+            <div className="mb-2 px-3 py-2 rounded-md border border-primary/20 bg-card/60 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider mb-1">
+                  <span className={low ? "text-destructive" : "text-muted-foreground"}>
+                    {left} message{left === 1 ? "" : "s"} left today
+                  </span>
+                  <span className="text-muted-foreground/60">{used}/{total}</span>
+                </div>
+                <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${low ? "bg-destructive" : "bg-primary"}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+              <a
+                href="/upgrade"
+                className="text-[10px] font-mono uppercase tracking-wider text-primary hover:underline shrink-0"
+              >
+                Upgrade
+              </a>
+            </div>
+          );
+        })()}
+
       {/* Input box */}
       <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">
         {/* Glowing NAVI orb */}

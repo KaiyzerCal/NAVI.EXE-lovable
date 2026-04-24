@@ -11,6 +11,8 @@ import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatSe
 import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
+import { usePaywall } from "@/hooks/usePaywall";
+import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
@@ -331,6 +333,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user, session } = useAuth();
+  const paywall = usePaywall();
   const {
     profile, updateProfile, refetchProfile,
     quests, questStats, refetchQuests,

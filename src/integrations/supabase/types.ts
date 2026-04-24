@@ -502,6 +502,7 @@ export type Database = {
           guild_id: string | null
           id: string
           last_active: string | null
+          last_evolution_tier: number
           longest_streak: number
           luck: number
           mbti_type: string | null
@@ -535,6 +536,7 @@ export type Database = {
           guild_id?: string | null
           id: string
           last_active?: string | null
+          last_evolution_tier?: number
           longest_streak?: number
           luck?: number
           mbti_type?: string | null
@@ -568,6 +570,7 @@ export type Database = {
           guild_id?: string | null
           id?: string
           last_active?: string | null
+          last_evolution_tier?: number
           longest_streak?: number
           luck?: number
           mbti_type?: string | null

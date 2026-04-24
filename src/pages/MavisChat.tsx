@@ -1073,6 +1073,17 @@ export default function MavisChat() {
         )}
       </AnimatePresence>
 
+      {/* Free-tier daily message limit banner */}
+      {!paywall.hasFullAccess &&
+        profile.daily_message_count >= paywall.limits.DAILY_AI_MESSAGES && (
+          <div className="mb-2">
+            <UnlockWithCoreCard
+              title="DAILY MESSAGE LIMIT REACHED"
+              description={`Free tier: ${paywall.limits.DAILY_AI_MESSAGES} AI messages/day. Resets at midnight. Upgrade to Core for unlimited.`}
+            />
+          </div>
+        )}
+
       {/* Input box */}
       <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">
         {/* Glowing NAVI orb */}

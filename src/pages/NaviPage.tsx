@@ -188,6 +188,10 @@ export default function NaviPage() {
   }, [user]);
 
   const handleEquipSkin = async (skinName: string) => {
+    if (!paywall.canEquipSkin(skinName)) {
+      navigate("/upgrade");
+      return;
+    }
     setEquippedSkin(skinName);
     setPreviewSkin(null);
     if (user) {

@@ -18,7 +18,10 @@ import JournalPage from "./pages/JournalPage";
 import StatsPage from "./pages/StatsPage";
 import PartyPage from "./pages/PartyPage";
 import SettingsPage from "./pages/SettingsPage";
+import UpgradePage from "./pages/UpgradePage";
+import CheckoutReturn from "./pages/CheckoutReturn";
 import NotFound from "./pages/NotFound";
+import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useProfile } from "@/hooks/useProfile";
@@ -62,6 +65,7 @@ function AppContent() {
 
   return (
     <AppDataProvider>
+      <PaymentTestModeBanner />
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">
@@ -74,6 +78,8 @@ function AppContent() {
           <Route path="/party" element={<PartyPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/upgrade" element={<UpgradePage />} />
+          <Route path="/checkout/return" element={<CheckoutReturn />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>

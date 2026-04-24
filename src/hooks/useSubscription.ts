@@ -46,7 +46,7 @@ export function useSubscription() {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    setSubscription((data as SubscriptionRow | null) ?? null);
+    setSubscription((data as unknown as SubscriptionRow | null) ?? null);
     setLoading(false);
   }, [user]);
 

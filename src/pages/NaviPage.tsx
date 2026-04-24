@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useOwner } from "@/hooks/useOwner";
+import { usePaywall } from "@/hooks/usePaywall";
 
 type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TECH" | "SPECIAL";
 
@@ -163,6 +164,7 @@ export default function NaviPage() {
   const navigate = useNavigate();
   const { profile, updateProfile } = useAppData();
   const isOwner = useOwner();
+  const paywall = usePaywall();
   const [selectedCategory, setSelectedCategory] = useState<SkinCategory | "ALL">("ALL");
   const [equippedSkin, setEquippedSkin] = useState("NETOP");
   const [searchQuery, setSearchQuery] = useState("");

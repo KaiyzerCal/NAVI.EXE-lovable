@@ -3,12 +3,24 @@ import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
 import { motion } from "framer-motion";
-import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins } from "lucide-react";
+import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, CheckCircle2, Sparkles } from "lucide-react";
 import GuildPanel from "@/components/GuildPanel";
 import { useState, useCallback } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import {
+  TIER_COLORS,
+  TIER_NAMES,
+  tierFromLevel,
+  tierThreshold,
+  tierProgressPercent,
+  nextTierThreshold,
+  evolutionTitleFromMbtiAndLevel,
+  classNameFromMbti,
+  MBTI_CLASS_MAP as EVO_MAP,
+  type Tier,
+} from "@/lib/xpSystem";
 
 const tabs = ["CHARACTER INFO", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
 
@@ -110,6 +122,17 @@ export default function CharacterPage() {
       </div>
     );
   }
+
+  // ── Evolution Path data ──────────────────────────────────────
+  const currentTier = tierFromLevel(operatorLevel);
+  const currentTierColor = TIER_COLORS[currentTier];
+  const currentTierName = TIER_NAMES[currentTier];
+  const currentEvoTitle = mbtiType
+    ? evolutionTitleFromMbtiAndLevel(mbtiType, operatorLevel)
+    : "Operator";
+  const tierPct = tierProgressPercent(operatorXp);
+  const nextThresholdLevel = nextTierThreshold(operatorLevel);
+  const evoEntry = mbtiType ? EVO_MAP[mbtiType] : null;
 
   return (
     <div>

@@ -35,6 +35,7 @@ export interface ProfileData {
   subscription_tier: string;
   daily_message_count: number;
   message_count_reset_date: string;
+  last_evolution_tier: number;
 }
 
 const defaults: ProfileData = {
@@ -70,6 +71,7 @@ const defaults: ProfileData = {
   subscription_tier: "free",
   daily_message_count: 0,
   message_count_reset_date: new Date().toISOString().slice(0, 10),
+  last_evolution_tier: 1,
 };
 
 export function useProfile() {

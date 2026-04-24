@@ -25,8 +25,42 @@ import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useProfile } from "@/hooks/useProfile";
+import EvolutionEvent from "@/components/EvolutionEvent";
+import { useAppData } from "@/contexts/AppDataContext";
+import { tierFromLevel } from "@/lib/xpSystem";
 
 const queryClient = new QueryClient();
+
+function EvolutionWatcher() {
+  const { profile } = useAppData();
+  const [active, setActive] = useState<{ oldTier: number; newTier: number } | null>(null);
+
+  const operatorLevel = (profile as any)?.operator_level ?? 1;
+  const lastTier = (profile as any)?.last_evolution_tier ?? 1;
+  const currentTier = tierFromLevel(operatorLevel);
+
+  useEffect(() => {
+    if (!profile) return;
+    if (active) return;
+    if (currentTier > lastTier) {
+      setActive({ oldTier: lastTier, newTier: currentTier });
+    }
+  }, [profile, currentTier, lastTier, active]);
+
+  if (!active) return null;
+
+  return (
+    <EvolutionEvent
+      oldTier={active.oldTier}
+      newTier={active.newTier}
+      mbtiType={(profile as any)?.mbti_type || ""}
+      naviLevel={(profile as any)?.navi_level || 1}
+      naviName={(profile as any)?.navi_name || "NAVI"}
+      operatorName={(profile as any)?.display_name || "Operator"}
+      onDismiss={() => setActive(null)}
+    />
+  );
+}
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -66,6 +100,7 @@ function AppContent() {
   return (
     <AppDataProvider>
       <PaymentTestModeBanner />
+      <EvolutionWatcher />
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">

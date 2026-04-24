@@ -1,9 +1,18 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
-import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
+import MbtiQuiz, { SUB_CLASSES } from "@/components/MbtiQuiz";
+import { MBTI_CLASS_MAP } from "@/lib/classEvolution";
+import {
+  tierFromLevel,
+  TIER_NAMES,
+  TIER_THRESHOLDS,
+  evolutionTitleFromMbtiAndLevel,
+  totalXpForLevel,
+  tierProgressPercent,
+} from "@/lib/xpSystem";
 import { motion } from "framer-motion";
-import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins } from "lucide-react";
+import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, ChevronRight } from "lucide-react";
 import GuildPanel from "@/components/GuildPanel";
 import { useState, useCallback } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -66,6 +75,15 @@ export default function CharacterPage() {
   const operatorLevel = (profile as any).operator_level ?? 1;
   const operatorXp = (profile as any).operator_xp ?? profile.xp_total ?? 0;
   const xpToNext = xpForLevel(operatorLevel + 1);
+
+  // Evolution tier data
+  const currentTier = tierFromLevel(operatorLevel);
+  const tierPercent = tierProgressPercent(operatorXp);
+  const { max: tierMax } = TIER_THRESHOLDS[currentTier];
+  const nextTierXp = currentTier < 5 ? totalXpForLevel(TIER_THRESHOLDS[(currentTier + 1) as 2|3|4|5].min) : null;
+  const TIER_COLORS: Record<number, string> = {
+    1: "#38bdf8", 2: "#a78bfa", 3: "#fbbf24", 4: "#f97316", 5: "#ec4899",
+  };
 
   const baseStats = computeBaseStats(
     questStats.completed,
@@ -193,6 +211,116 @@ export default function CharacterPage() {
       {/* ── CHARACTER INFO ───────────────────────────────────────────────── */}
       {activeTab === "CHARACTER INFO" && (
         <div className="space-y-4">
+
+          {/* ── Evolution Path ─────────────────────────────────────────────── */}
+          <HudCard title="EVOLUTION PATH" icon={<Star size={14} />} glow>
+            {/* Current title + tier */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-[10px] font-mono text-muted-foreground mb-1">CURRENT TITLE</p>
+                <motion.p
+                  className="font-display text-xl font-bold"
+                  style={{ color: TIER_COLORS[currentTier] }}
+                  animate={{ textShadow: [`0 0 8px ${TIER_COLORS[currentTier]}40`, `0 0 18px ${TIER_COLORS[currentTier]}80`, `0 0 8px ${TIER_COLORS[currentTier]}40`] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  {mbtiType ? evolutionTitleFromMbtiAndLevel(mbtiType, operatorLevel) : TIER_NAMES[currentTier]}
+                </motion.p>
+                {classInfo && <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{classInfo.className}</p>}
+              </div>
+              <div className="text-right">
+                <span
+                  className="text-xs font-mono px-2 py-1 rounded font-bold"
+                  style={{ color: TIER_COLORS[currentTier], background: `${TIER_COLORS[currentTier]}18`, border: `1px solid ${TIER_COLORS[currentTier]}40` }}
+                >
+                  TIER {currentTier} — {TIER_NAMES[currentTier]}
+                </span>
+                <p className="text-[9px] font-mono text-muted-foreground mt-1">OPERATOR LV{operatorLevel}</p>
+              </div>
+            </div>
+
+            {/* Tier XP progress */}
+            {currentTier < 5 && (
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[9px] font-mono text-muted-foreground">
+                    TIER PROGRESS → {TIER_NAMES[(currentTier + 1) as 2|3|4|5]}
+                  </span>
+                  <span className="text-[9px] font-mono" style={{ color: TIER_COLORS[currentTier] }}>
+                    {tierPercent}%
+                  </span>
+                </div>
+                <div className="h-1.5 bg-muted rounded overflow-hidden">
+                  <motion.div
+                    className="h-full rounded"
+                    style={{ background: TIER_COLORS[currentTier], width: `${tierPercent}%` }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${tierPercent}%` }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                  />
+                </div>
+                <p className="text-[9px] font-mono text-muted-foreground mt-0.5">
+                  Reach LV{tierMax + 1} to unlock Tier {currentTier + 1}
+                </p>
+              </div>
+            )}
+
+            {/* 5-tier vertical progression */}
+            <div className="space-y-2">
+              {([1, 2, 3, 4, 5] as const).map((tier) => {
+                const isUnlocked = currentTier >= tier;
+                const isCurrent = currentTier === tier;
+                const title = mbtiType
+                  ? (MBTI_CLASS_MAP[mbtiType]?.tiers[tier - 1] ?? TIER_NAMES[tier])
+                  : TIER_NAMES[tier];
+                const { min, max } = TIER_THRESHOLDS[tier];
+                const tColor = TIER_COLORS[tier];
+
+                return (
+                  <motion.div
+                    key={tier}
+                    className={`flex items-center gap-3 rounded px-3 py-2.5 border transition-all ${
+                      isCurrent ? "border-opacity-60" : "border-border"
+                    }`}
+                    style={isCurrent ? {
+                      borderColor: tColor,
+                      background: `${tColor}0a`,
+                      boxShadow: `0 0 12px ${tColor}20`,
+                    } : {}}
+                  >
+                    <div
+                      className="w-7 h-7 rounded flex items-center justify-center shrink-0 text-xs font-display font-bold"
+                      style={isUnlocked
+                        ? { background: `${tColor}20`, color: tColor, border: `1px solid ${tColor}40` }
+                        : { background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }}
+                    >
+                      {isUnlocked ? tier : <Lock size={11} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className={`text-xs font-body font-semibold truncate ${isUnlocked ? "" : "text-muted-foreground"}`}
+                          style={isUnlocked ? { color: isCurrent ? tColor : "hsl(var(--foreground))" } : {}}>
+                          {title}
+                        </p>
+                        {isCurrent && (
+                          <span className="text-[8px] font-mono px-1 py-0.5 rounded shrink-0"
+                            style={{ background: `${tColor}20`, color: tColor }}>ACTIVE</span>
+                        )}
+                      </div>
+                      <p className="text-[9px] font-mono text-muted-foreground">
+                        {TIER_NAMES[tier]} · LV{min}–{max}
+                      </p>
+                    </div>
+                    {isUnlocked && !isCurrent && <ChevronRight size={12} className="text-muted-foreground shrink-0" />}
+                    {!isUnlocked && (
+                      <span className="text-[9px] font-mono text-muted-foreground shrink-0">LV{min}+</span>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </HudCard>
+
           {/* Base Stats */}
           <HudCard title="BASE STATS" icon={<Shield size={14} />} glow>
             <p className="text-[10px] font-mono text-muted-foreground mb-3">COMPUTED FROM YOUR REAL APP ACTIVITY</p>

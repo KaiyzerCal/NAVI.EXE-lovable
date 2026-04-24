@@ -32,6 +32,7 @@ export interface ProfileData {
     xpMilestones: boolean;
     dailySummary: boolean;
   };
+  last_evolution_tier: number;
 }
 
 const defaults: ProfileData = {
@@ -58,6 +59,7 @@ const defaults: ProfileData = {
   luck: 10,
   codex_points: 0,
   cali_coins: 0,
+  last_evolution_tier: 1,
   notification_settings: {
     questReminders: true,
     streakWarnings: true,

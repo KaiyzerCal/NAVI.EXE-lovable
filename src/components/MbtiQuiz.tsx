@@ -3,25 +3,9 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import HudCard from "@/components/HudCard";
 import { Brain } from "lucide-react";
+import { MBTI_CLASS_MAP } from "@/lib/classEvolution";
 
-export const MBTI_CLASS_MAP: Record<string, { class: string; desc: string }> = {
-  INTJ: { class: "INTJ", desc: "The Architect — Strategic mastermind who bends systems to their will" },
-  INTP: { class: "INTP", desc: "The Logician — Curious thinker who transmutes knowledge into power" },
-  ENTJ: { class: "ENTJ", desc: "The Commander — Born leader who conquers through force of will" },
-  ENTP: { class: "ENTP", desc: "The Debater — Inventive disruptor who thrives on creative chaos" },
-  INFJ: { class: "INFJ", desc: "The Advocate — Visionary who perceives hidden truths" },
-  INFP: { class: "INFP", desc: "The Mediator — Idealist who shapes reality through imagination" },
-  ENFJ: { class: "ENFJ", desc: "The Protagonist — Charismatic champion who inspires others" },
-  ENFP: { class: "ENFP", desc: "The Campaigner — Enthusiastic storyteller who energizes all" },
-  ISTJ: { class: "ISTJ", desc: "The Logistician — Disciplined guardian of order and tradition" },
-  ISFJ: { class: "ISFJ", desc: "The Defender — Devoted protector with quiet strength" },
-  ESTJ: { class: "ESTJ", desc: "The Executive — Decisive organizer who leads with authority" },
-  ESFJ: { class: "ESFJ", desc: "The Consul — Harmonizer who unites through empathy" },
-  ISTP: { class: "ISTP", desc: "The Virtuoso — Cool-headed operative who masters tools" },
-  ISFP: { class: "ISFP", desc: "The Adventurer — Free spirit attuned to subtle beauty" },
-  ESTP: { class: "ESTP", desc: "The Entrepreneur — Bold risk-taker who charges into action" },
-  ESFP: { class: "ESFP", desc: "The Entertainer — Vibrant performer who lives in the moment" },
-};
+export { MBTI_CLASS_MAP } from "@/lib/classEvolution";
 
 export const SUB_CLASSES: Record<string, { name: string; realWorld: string; bonus: string }[]> = {
   INTJ: [
@@ -166,7 +150,7 @@ export default function MbtiQuiz({ onComplete }: Props) {
       ].join("");
 
       const classInfo = MBTI_CLASS_MAP[mbti];
-      onComplete(mbti, classInfo?.class || mbti);
+      onComplete(mbti, classInfo?.className || mbti);
     }
   };
 

@@ -6,8 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
+import { useAppData } from "@/contexts/AppDataContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
+import EvolutionEvent from "@/components/EvolutionEvent";
 import AuthPage from "./pages/AuthPage";
 import Index from "./pages/Index";
 import NaviPage from "./pages/NaviPage";
@@ -21,6 +23,7 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { tierFromLevel } from "@/lib/classEvolution";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +54,46 @@ function AppContent() {
 
   return (
     <AppDataProvider>
+      <AppShell />
+    </AppDataProvider>
+  );
+}
+
+function AppShell() {
+  const { profile, updateProfile } = useAppData();
+  const operatorLevel = profile.operator_level ?? 1;
+  const lastTier = (profile as any).last_evolution_tier ?? 1;
+  const newTier = tierFromLevel(operatorLevel);
+  const showEvolution = newTier > lastTier && operatorLevel > 1;
+
+  // Build chat context for EvolutionEvent's NAVI message
+  const chatContext = {
+    navi_level: profile.navi_level,
+    navi_name: profile.navi_name,
+    display_name: profile.display_name,
+    operator_level: operatorLevel,
+    mbti_type: profile.mbti_type,
+    character_class: profile.character_class,
+    bond_affection: profile.bond_affection,
+    bond_trust: profile.bond_trust,
+    bond_loyalty: profile.bond_loyalty,
+    current_streak: profile.current_streak,
+    xp_total: profile.xp_total,
+  };
+
+  return (
+    <>
+      {showEvolution && (
+        <EvolutionEvent
+          operatorLevel={operatorLevel}
+          lastEvolutionTier={lastTier}
+          mbtiType={profile.mbti_type}
+          naviName={profile.navi_name}
+          displayName={profile.display_name}
+          chatContext={chatContext}
+          onDismiss={(tier) => updateProfile({ last_evolution_tier: tier } as any)}
+        />
+      )}
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">
@@ -68,7 +111,7 @@ function AppContent() {
           </Routes>
         </main>
       </div>
-    </AppDataProvider>
+    </>
   );
 }
 

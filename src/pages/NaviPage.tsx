@@ -439,6 +439,11 @@ export default function NaviPage() {
               {equippedSkin === skin.name && (
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary flex items-center justify-center"><Check size={8} className="text-primary-foreground" /></div>
               )}
+              {!paywall.canEquipSkin(skin.name) && equippedSkin !== skin.name && (
+                <div className="absolute top-1 left-1 px-1 rounded bg-primary/80 text-[7px] font-mono font-bold text-primary-foreground tracking-wider">
+                  CORE
+                </div>
+              )}
             </button>
           ))}
         </div>

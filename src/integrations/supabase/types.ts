@@ -879,6 +879,7 @@ export type Database = {
     }
     Functions: {
       award_xp: { Args: { _amount: number }; Returns: number }
+      consume_message_credit: { Args: never; Returns: number }
       has_active_subscription: {
         Args: { check_env?: string; user_uuid: string }
         Returns: boolean

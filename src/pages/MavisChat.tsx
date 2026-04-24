@@ -712,6 +712,24 @@ export default function MavisChat() {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || !user || !session?.access_token || !conversationId) return;
 
+    // Paywall: free tier daily AI message cap (owners/Core users bypass).
+    if (!paywall.hasFullAccess) {
+      const { data: newCount, error: rpcErr } = await supabase.rpc("consume_message_credit");
+      if (rpcErr) {
+        console.error("[MavisChat] consume_message_credit failed:", rpcErr);
+        toast({ title: "Error", description: "Could not verify message credits.", variant: "destructive" });
+        return;
+      }
+      if ((newCount as number) > paywall.limits.DAILY_AI_MESSAGES) {
+        toast({
+          title: "Daily limit reached",
+          description: `Free tier: ${paywall.limits.DAILY_AI_MESSAGES} messages/day. Upgrade to Core for unlimited.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const userContent = input.trim();
     setInput("");
     setIsLoading(true);

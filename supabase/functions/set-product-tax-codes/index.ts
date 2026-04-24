@@ -16,7 +16,7 @@ async function tagProduct(env: StripeEnv) {
   // navi_core was created via batch_create_product. Find it via metadata.lovable_external_id.
   const products = await stripe.products.list({ limit: 100 });
   const navi = products.data.find(
-    (p) => p.metadata?.lovable_external_id === "navi_core",
+    (p: any) => p.metadata?.lovable_external_id === "navi_core",
   );
   if (!navi) return { found: false };
   if (navi.tax_code === SAAS_TAX_CODE) return { found: true, updated: false, id: navi.id };

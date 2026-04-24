@@ -1,8 +1,8 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { type StripeEnv, verifyWebhook } from "../_shared/stripe.ts";
 
-let _supabase: ReturnType<typeof createClient> | null = null;
-function getSupabase() {
+let _supabase: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
   if (!_supabase) {
     _supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

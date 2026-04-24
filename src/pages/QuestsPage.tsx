@@ -10,6 +10,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { Quest, QuestType, CreateQuestInput } from "@/hooks/useQuests";
+import { usePaywall } from "@/hooks/usePaywall";
+import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
   Main:   { color: "text-accent",       bg: "bg-accent/10",       border: "border-accent/40",       icon: <Star size={10} />,     label: "MAIN" },
@@ -215,12 +217,17 @@ function QuestDetailModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function QuestsPage() {
   const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest } = useAppData();
+  const paywall = usePaywall();
   const [filter, setFilter] = useState<"all" | "active" | "completed">("active");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
   const [viewingQuest, setViewingQuest] = useState<Quest | null>(null);
   const [editingQuest, setEditingQuest] = useState<Quest | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const activeCount = quests.filter((q) => !q.completed).length;
+  const canCreate = paywall.canCreateQuest(activeCount);
+  const atQuestLimit = !canCreate;
 
   const filtered = quests.filter((q) => {
     const statusMatch = filter === "active" ? !q.completed : filter === "completed" ? q.completed : true;
@@ -235,6 +242,14 @@ export default function QuestsPage() {
 
   const handleCreate = useCallback(async (form: QuestFormState) => {
     if (!form.name.trim()) return;
+    if (!paywall.canCreateQuest(activeCount)) {
+      toast({
+        title: "Quest limit reached",
+        description: `Free tier is capped at ${paywall.limits.MAX_ACTIVE_QUESTS} active quests. Upgrade to Core for unlimited.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     await createQuest({
       name: form.name,
@@ -246,7 +261,7 @@ export default function QuestsPage() {
     setSaving(false);
     setShowNewForm(false);
     toast({ title: "Quest created", description: "New quest added to your log." });
-  }, [createQuest]);
+  }, [createQuest, paywall, activeCount]);
 
   const handleEdit = useCallback(async (form: QuestFormState) => {
     if (!editingQuest || !form.name.trim()) return;
@@ -292,12 +307,36 @@ export default function QuestsPage() {
     <div>
       <PageHeader title="QUESTS" subtitle="// MISSION CONTROL">
         <button
-          onClick={() => { setShowNewForm(true); setEditingQuest(null); }}
-          className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors"
+          onClick={() => {
+            if (atQuestLimit) {
+              toast({
+                title: "Quest limit reached",
+                description: `Free tier: ${paywall.limits.MAX_ACTIVE_QUESTS} active quests max. Upgrade to Core for unlimited.`,
+                variant: "destructive",
+              });
+              return;
+            }
+            setShowNewForm(true);
+            setEditingQuest(null);
+          }}
+          className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-display transition-colors ${
+            atQuestLimit
+              ? "bg-muted border border-border text-muted-foreground"
+              : "bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+          }`}
         >
           <Plus size={14} /> NEW QUEST
         </button>
       </PageHeader>
+
+      {atQuestLimit && (
+        <div className="mb-5">
+          <UnlockWithCoreCard
+            title="QUEST LIMIT REACHED"
+            description={`Free tier is capped at ${paywall.limits.MAX_ACTIVE_QUESTS} active quests. Upgrade to Core for unlimited quests.`}
+          />
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2 mb-5">

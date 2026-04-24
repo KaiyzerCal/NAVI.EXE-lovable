@@ -11,6 +11,8 @@ import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatSe
 import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
+import { usePaywall } from "@/hooks/usePaywall";
+import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
@@ -331,6 +333,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user, session } = useAuth();
+  const paywall = usePaywall();
   const {
     profile, updateProfile, refetchProfile,
     quests, questStats, refetchQuests,
@@ -709,6 +712,24 @@ export default function MavisChat() {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || !user || !session?.access_token || !conversationId) return;
 
+    // Paywall: free tier daily AI message cap (owners/Core users bypass).
+    if (!paywall.hasFullAccess) {
+      const { data: newCount, error: rpcErr } = await supabase.rpc("consume_message_credit");
+      if (rpcErr) {
+        console.error("[MavisChat] consume_message_credit failed:", rpcErr);
+        toast({ title: "Error", description: "Could not verify message credits.", variant: "destructive" });
+        return;
+      }
+      if ((newCount as number) > paywall.limits.DAILY_AI_MESSAGES) {
+        toast({
+          title: "Daily limit reached",
+          description: `Free tier: ${paywall.limits.DAILY_AI_MESSAGES} messages/day. Upgrade to Core for unlimited.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const userContent = input.trim();
     setInput("");
     setIsLoading(true);
@@ -901,7 +922,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile, paywall]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,
@@ -1051,6 +1072,17 @@ export default function MavisChat() {
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* Free-tier daily message limit banner */}
+      {!paywall.hasFullAccess &&
+        profile.daily_message_count >= paywall.limits.DAILY_AI_MESSAGES && (
+          <div className="mb-2">
+            <UnlockWithCoreCard
+              title="DAILY MESSAGE LIMIT REACHED"
+              description={`Free tier: ${paywall.limits.DAILY_AI_MESSAGES} AI messages/day. Resets at midnight. Upgrade to Core for unlimited.`}
+            />
+          </div>
+        )}
 
       {/* Input box */}
       <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">

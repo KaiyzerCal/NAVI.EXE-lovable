@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useOwner } from "@/hooks/useOwner";
+import { usePaywall } from "@/hooks/usePaywall";
 
 type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TECH" | "SPECIAL";
 
@@ -163,6 +164,7 @@ export default function NaviPage() {
   const navigate = useNavigate();
   const { profile, updateProfile } = useAppData();
   const isOwner = useOwner();
+  const paywall = usePaywall();
   const [selectedCategory, setSelectedCategory] = useState<SkinCategory | "ALL">("ALL");
   const [equippedSkin, setEquippedSkin] = useState("NETOP");
   const [searchQuery, setSearchQuery] = useState("");
@@ -188,6 +190,10 @@ export default function NaviPage() {
   }, [user]);
 
   const handleEquipSkin = async (skinName: string) => {
+    if (!paywall.canEquipSkin(skinName)) {
+      navigate("/upgrade");
+      return;
+    }
     setEquippedSkin(skinName);
     setPreviewSkin(null);
     if (user) {
@@ -432,6 +438,11 @@ export default function NaviPage() {
               <span className={`text-[7px] font-mono ${skin.rarity === "LEGENDARY" ? "text-accent" : skin.rarity === "EPIC" ? "text-secondary" : skin.rarity === "RARE" ? "text-primary" : "text-muted-foreground"}`}>{skin.rarity}</span>
               {equippedSkin === skin.name && (
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary flex items-center justify-center"><Check size={8} className="text-primary-foreground" /></div>
+              )}
+              {!paywall.canEquipSkin(skin.name) && equippedSkin !== skin.name && (
+                <div className="absolute top-1 left-1 px-1 rounded bg-primary/80 text-[7px] font-mono font-bold text-primary-foreground tracking-wider">
+                  CORE
+                </div>
               )}
             </button>
           ))}

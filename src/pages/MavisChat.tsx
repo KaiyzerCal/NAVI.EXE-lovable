@@ -294,6 +294,17 @@ async function streamChat({
 
   if (!resp.body) throw new Error("No response body");
 
+  // If the function returns plain JSON (non-streaming), emit the whole reply.
+  const contentType = resp.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const data = await resp.json();
+    if (data?.error) throw new Error(data.error);
+    const text = data?.reply ?? data?.choices?.[0]?.message?.content ?? "";
+    if (text) onDelta(text);
+    onDone();
+    return;
+  }
+
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";

@@ -32,6 +32,9 @@ export interface ProfileData {
     xpMilestones: boolean;
     dailySummary: boolean;
   };
+  subscription_tier: string;
+  daily_message_count: number;
+  message_count_reset_date: string;
 }
 
 const defaults: ProfileData = {
@@ -64,6 +67,9 @@ const defaults: ProfileData = {
     xpMilestones: false,
     dailySummary: true,
   },
+  subscription_tier: "free",
+  daily_message_count: 0,
+  message_count_reset_date: new Date().toISOString().slice(0, 10),
 };
 
 export function useProfile() {

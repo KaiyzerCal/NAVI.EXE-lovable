@@ -216,6 +216,191 @@ export default function CharacterPage() {
       {/* ── CHARACTER INFO ───────────────────────────────────────────────── */}
       {activeTab === "CHARACTER INFO" && (
         <div className="space-y-4">
+          {/* ── Evolution Path ──────────────────────────────────────── */}
+          <HudCard title="EVOLUTION PATH" icon={<Sparkles size={14} />} glow>
+            {!mbtiType ? (
+              <div className="text-center py-4">
+                <p className="text-xs font-mono text-muted-foreground mb-3">
+                  Operator calibration required to unlock the Evolution Path.
+                </p>
+                <Button
+                  variant="outline"
+                  className="text-[10px] font-mono tracking-widest border-primary text-primary hover:bg-primary/10"
+                  onClick={() => updateProfile({ mbti_type: null, character_class: null })}
+                >
+                  TAKE THE MBTI QUIZ
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* Header row */}
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="text-[10px] font-mono uppercase tracking-[0.3em] mb-1"
+                      style={{
+                        color: currentTierColor,
+                        textShadow: `0 0 8px ${currentTierColor}99`,
+                      }}
+                    >
+                      {currentTierName}
+                    </p>
+                    <h3
+                      className="font-display text-xl md:text-2xl font-bold"
+                      style={{
+                        color: currentTierColor,
+                        textShadow: `0 0 12px ${currentTierColor}66`,
+                      }}
+                    >
+                      {currentEvoTitle}
+                    </h3>
+                    <p className="text-[10px] font-mono text-muted-foreground mt-1">
+                      {classNameFromMbti(mbtiType)} // {mbtiType}
+                    </p>
+                  </div>
+                  <span
+                    className="text-[10px] font-mono px-2 py-1 rounded border shrink-0"
+                    style={{
+                      borderColor: currentTierColor,
+                      color: currentTierColor,
+                      backgroundColor: `${currentTierColor}10`,
+                    }}
+                  >
+                    T{currentTier}
+                  </span>
+                </div>
+
+                {/* Progress to next tier */}
+                {currentTier < 5 ? (
+                  <div className="mb-5">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        TIER PROGRESS
+                      </span>
+                      <span className="text-[10px] font-mono" style={{ color: currentTierColor }}>
+                        LV {operatorLevel} → LV {nextThresholdLevel}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-muted rounded overflow-hidden border border-border">
+                      <motion.div
+                        className="h-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${tierPct}%` }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
+                        style={{
+                          backgroundColor: currentTierColor,
+                          boxShadow: `0 0 12px ${currentTierColor}`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[9px] font-mono text-muted-foreground mt-1 text-right">
+                      {Math.round(tierPct)}% TO {TIER_NAMES[(currentTier + 1) as Tier]}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mb-5 text-center">
+                    <p
+                      className="text-[10px] font-mono tracking-widest"
+                      style={{ color: currentTierColor }}
+                    >
+                      ▲ MAXIMUM EVOLUTION REACHED ▲
+                    </p>
+                  </div>
+                )}
+
+                {/* 5-tier vertical list */}
+                <div className="space-y-2 pt-3 border-t border-border">
+                  {evoEntry?.tiers.map((title, i) => {
+                    const tier = (i + 1) as Tier;
+                    const color = TIER_COLORS[tier];
+                    const minLv = tierThreshold(tier);
+                    const isUnlocked = tier < currentTier;
+                    const isCurrent = tier === currentTier;
+                    const isFuture = tier > currentTier;
+
+                    return (
+                      <motion.div
+                        key={tier}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.06 }}
+                        className="flex items-center gap-3 px-3 py-2 rounded border transition-all"
+                        style={{
+                          borderColor: isCurrent
+                            ? color
+                            : isUnlocked
+                            ? "hsl(var(--border))"
+                            : "hsl(var(--border) / 0.4)",
+                          backgroundColor: isCurrent
+                            ? `${color}15`
+                            : isUnlocked
+                            ? "hsl(var(--card) / 0.4)"
+                            : "transparent",
+                          boxShadow: isCurrent ? `0 0 16px ${color}55` : undefined,
+                          animation: isCurrent ? "pulse 2.4s ease-in-out infinite" : undefined,
+                        }}
+                      >
+                        <span
+                          className="font-display text-xs font-bold w-7 shrink-0"
+                          style={{
+                            color,
+                            opacity: isFuture ? 0.4 : 1,
+                          }}
+                        >
+                          T{tier}
+                        </span>
+                        <span
+                          className="text-[9px] font-mono tracking-widest w-24 shrink-0"
+                          style={{
+                            color,
+                            opacity: isFuture ? 0.4 : isCurrent ? 1 : 0.7,
+                          }}
+                        >
+                          {TIER_NAMES[tier]}
+                        </span>
+                        <span
+                          className={`text-sm font-body flex-1 ${
+                            isCurrent
+                              ? "font-bold"
+                              : isFuture
+                              ? "text-muted-foreground/50"
+                              : "text-muted-foreground"
+                          }`}
+                          style={{
+                            color: isCurrent ? color : undefined,
+                            textShadow: isCurrent ? `0 0 8px ${color}66` : undefined,
+                          }}
+                        >
+                          {title}
+                        </span>
+                        <span className="shrink-0">
+                          {isUnlocked ? (
+                            <CheckCircle2 size={14} style={{ color }} />
+                          ) : isCurrent ? (
+                            <span
+                              className="text-[9px] font-mono px-1.5 py-0.5 rounded"
+                              style={{
+                                color,
+                                backgroundColor: `${color}20`,
+                                border: `1px solid ${color}`,
+                              }}
+                            >
+                              CURRENT
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50">
+                              <Lock size={10} /> LV{minLv}
+                            </span>
+                          )}
+                        </span>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </HudCard>
+
           {/* Base Stats */}
           <HudCard title="BASE STATS" icon={<Shield size={14} />} glow>
             <p className="text-[10px] font-mono text-muted-foreground mb-3">COMPUTED FROM YOUR REAL APP ACTIVITY</p>

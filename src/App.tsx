@@ -23,7 +23,6 @@ import PartyPage from "./pages/PartyPage";
 import SettingsPage from "./pages/SettingsPage";
 import UpgradePage from "./pages/UpgradePage";
 import AdminPage from "./pages/AdminPage";
-import SkinsPage from "./pages/SkinsPage";
 import GamesPage from "./pages/GamesPage";
 import GuildPage from "./pages/GuildPage";
 import SocialPage from "./pages/SocialPage";

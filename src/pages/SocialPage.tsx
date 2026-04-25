@@ -94,7 +94,6 @@ export default function SocialPage() {
     setReacted((prev) => new Set([...prev, postId]));
     setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, reaction_count: p.reaction_count + 1 } : p));
     await supabase.from("post_reactions").insert({ post_id: postId, user_id: user.id, emoji: "⚡" });
-    await supabase.from("social_posts").update({ reaction_count: currentCount + 1 }).eq("id", postId);
   }
 
   function timeAgo(dateStr: string) {

@@ -7,6 +7,7 @@ import { useAppData } from "@/contexts/AppDataContext";
 import { useNavigate } from "react-router-dom";
 import { Suspense } from "react";
 import { getNaviCharacter } from "@/components/navi-characters";
+import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
 
 const fadeIn = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.3 } };
 const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/navi-skins`;
@@ -17,6 +18,7 @@ const xpForLevel = (level: number) => level * 500;
 export default function Dashboard() {
   const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading } = useAppData();
   const navigate = useNavigate();
+  const [naviRenderMode] = useNaviRenderMode();
 
   const loading = profileLoading || questsLoading || journalLoading;
 
@@ -74,7 +76,7 @@ export default function Dashboard() {
             onClick={() => navigate("/navi")}
             className="w-32 h-32 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
           >
-            {NaviCharComponent ? (
+            {naviRenderMode === "SVG" && NaviCharComponent ? (
               <Suspense fallback={<div className="w-24 h-24" />}>
                 <NaviCharComponent size={100} animated />
               </Suspense>

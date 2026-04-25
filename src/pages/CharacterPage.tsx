@@ -32,6 +32,7 @@ import {
 } from "@/lib/skinUnlockSystem";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
 
 const tabs = ["CHARACTER INFO", "NAVI / SKINS", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
 
@@ -168,7 +169,7 @@ export default function CharacterPage() {
   const [skinCategory, setSkinCategory] = useState<SkinCategory | "ALL">("ALL");
   const [skinRarityFilter, setSkinRarityFilter] = useState<SkinRarity | "ALL">("ALL");
   const [showLockedSkins, setShowLockedSkins] = useState(true);
-  const [skinViewMode, setSkinViewMode] = useState<ViewMode>("SVG");
+  const [skinViewMode, setSkinViewMode] = useNaviRenderMode();
 
   const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
   const isAdmin = !!user && (ADMIN_USER_IDS.includes(user.id) || !!user.email?.endsWith("@vantara.exe"));

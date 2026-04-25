@@ -307,6 +307,7 @@ export default function MavisChat() {
   // ── TTS state ──────────────────────────────────────────────────────────────
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
+  const ttsQueueRef = useRef<string[]>([]);
 
   const stopSpeaking = useCallback(() => {
     ttsQueueRef.current = [];

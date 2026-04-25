@@ -89,6 +89,69 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_tasks: {
+        Row: {
+          agent_type: string
+          created_at: string
+          description: string
+          id: string
+          result: Json
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          result?: Json
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          result?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      beta_feedback: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          description: string
+          feedback_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          description: string
+          feedback_type?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          description?: string
+          feedback_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       buffs: {
         Row: {
           created_at: string
@@ -383,6 +446,33 @@ export type Database = {
         }
         Relationships: []
       }
+      mini_game_scores: {
+        Row: {
+          created_at: string
+          game_id: string
+          id: string
+          metadata: Json
+          score: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          game_id: string
+          id?: string
+          metadata?: Json
+          score?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          game_id?: string
+          id?: string
+          metadata?: Json
+          score?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       navi_core_memory: {
         Row: {
           content: string
@@ -488,6 +578,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          beta_tester: boolean
           bond_affection: number
           bond_loyalty: number
           bond_trust: number
@@ -522,6 +613,7 @@ export type Database = {
           xp_total: number
         }
         Insert: {
+          beta_tester?: boolean
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
@@ -556,6 +648,7 @@ export type Database = {
           xp_total?: number
         }
         Update: {
+          beta_tester?: boolean
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
@@ -896,7 +989,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "owner" | "user"
+      app_role: "owner" | "user" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1024,7 +1117,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["owner", "user"],
+      app_role: ["owner", "user", "admin"],
     },
   },
 } as const

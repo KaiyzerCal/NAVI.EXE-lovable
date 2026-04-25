@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useOwner } from "@/hooks/useOwner";
+import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
 
 type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TECH" | "SPECIAL";
 
@@ -169,7 +170,7 @@ export default function NaviPage() {
   const [unlockedSkins, setUnlockedSkins] = useState<Set<string>>(new Set(["NETOP"]));
   const [unlockConditions, setUnlockConditions] = useState<Record<string, { unlock_type: string; unlock_value: number; description: string }>>({});
   const [editMode, setEditMode] = useState(false);
-  const [skinViewMode, setSkinViewMode] = useState<"SVG" | "AI">("SVG");
+  const [skinViewMode, setSkinViewMode] = useNaviRenderMode();
 
   useEffect(() => {
     if (!user) return;
@@ -272,7 +273,7 @@ export default function NaviPage() {
           className="w-40 h-40 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
           title="Open Navi AI Chat"
         >
-          {EquippedNaviChar ? (
+          {skinViewMode === "SVG" && EquippedNaviChar ? (
             <Suspense fallback={<div className="w-32 h-32" />}>
               <EquippedNaviChar size={128} animated />
             </Suspense>

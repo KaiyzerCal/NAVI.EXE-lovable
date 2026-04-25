@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function PartyPage() {
   const { party, members, openParties, loading, myRole, createParty, joinParty, leaveParty, disbandParty, kickMember, completePartyQuest } = useParty();
-  const { quests, refetchQuests } = useAppData() as any;
+  const { quests } = useAppData();
   const activeQuests = quests.filter(q => !q.completed);
 
   const [showCreate, setShowCreate] = useState(false);

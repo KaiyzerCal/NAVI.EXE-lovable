@@ -34,7 +34,7 @@ export function useUnreadMessages() {
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel("unread-count-watch")
+      .channel(`unread-count-watch-${user.id}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "navi_message_threads" }, fetchUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "navi_message_threads" }, fetchUnread)
       .subscribe();

@@ -864,6 +864,7 @@ export type Database = {
           navi_level: number
           navi_name: string
           navi_personality: string
+          navi_render_mode: string
           notification_settings: Json
           onboarding_done: boolean
           operator_level: number
@@ -900,6 +901,7 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          navi_render_mode?: string
           notification_settings?: Json
           onboarding_done?: boolean
           operator_level?: number
@@ -936,6 +938,7 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          navi_render_mode?: string
           notification_settings?: Json
           onboarding_done?: boolean
           operator_level?: number

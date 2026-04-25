@@ -553,27 +553,36 @@ export type Database = {
           created_at: string
           id: string
           last_message_at: string
+          receiver_unread: number
           receiver_user_id: string
+          sender_unread: number
           sender_user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           last_message_at?: string
+          receiver_unread?: number
           receiver_user_id: string
+          sender_unread?: number
           sender_user_id: string
         }
         Update: {
           created_at?: string
           id?: string
           last_message_at?: string
+          receiver_unread?: number
           receiver_user_id?: string
+          sender_unread?: number
           sender_user_id?: string
         }
         Relationships: []
       }
       navi_messages: {
         Row: {
+          attachment_name: string | null
+          attachment_type: string | null
+          attachment_url: string | null
           content: string
           created_at: string
           id: string
@@ -582,6 +591,9 @@ export type Database = {
           thread_id: string
         }
         Insert: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           content: string
           created_at?: string
           id?: string
@@ -590,6 +602,9 @@ export type Database = {
           thread_id: string
         }
         Update: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           content?: string
           created_at?: string
           id?: string

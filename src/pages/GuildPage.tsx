@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import GuildPanel from "@/components/GuildPanel";
-import { Shield, Users, Swords, Plus, Loader2, CheckCircle } from "lucide-react";
+import { Shield, Users, Swords, Plus, Loader2, CheckCircle, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -31,6 +31,11 @@ export default function GuildPage() {
   const [newQuestDesc, setNewQuestDesc] = useState("");
   const [showQuestForm, setShowQuestForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importQuestId, setImportQuestId] = useState("");
+
+  const personalQuests = (useAppData() as any).quests as Array<any>;
+  const activePersonalQuests = (personalQuests ?? []).filter((q) => !q.completed);
 
   useEffect(() => {
     if (guild) loadQuests();
@@ -58,6 +63,7 @@ export default function GuildPage() {
         title: newQuestTitle.trim(),
         description: newQuestDesc.trim() || null,
         created_by: user.id,
+        status: "active",
       })
       .select()
       .single();
@@ -65,6 +71,28 @@ export default function GuildPage() {
     setNewQuestTitle("");
     setNewQuestDesc("");
     setShowQuestForm(false);
+    setSubmitting(false);
+  }
+
+  async function importPersonalQuest() {
+    if (!importQuestId || !guild || !user) return;
+    const personal = activePersonalQuests.find((q) => q.id === importQuestId);
+    if (!personal) return;
+    setSubmitting(true);
+    const { data } = await supabase
+      .from("guild_quests")
+      .insert({
+        guild_id: guild.id,
+        title: personal.name ?? "Quest",
+        description: personal.description ?? null,
+        created_by: user.id,
+        status: "active",
+      })
+      .select()
+      .single();
+    if (data) setQuests((prev) => [data, ...prev]);
+    setImportQuestId("");
+    setShowImport(false);
     setSubmitting(false);
   }
 
@@ -118,7 +146,7 @@ export default function GuildPage() {
             ) : (
               <div className="space-y-2">
                 {quests
-                  .filter((q) => q.status === "active")
+                  .filter((q) => q.status === "active" || q.status === "open")
                   .map((quest) => (
                     <div key={quest.id} className="flex items-start gap-2 p-2 rounded border border-border bg-muted/10">
                       <div className="flex-1">
@@ -186,14 +214,51 @@ export default function GuildPage() {
                       </button>
                     </div>
                   </div>
+                ) : showImport ? (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <p className="text-[10px] font-mono text-muted-foreground">IMPORT FROM YOUR ACTIVE QUESTS</p>
+                    <select value={importQuestId} onChange={(e) => setImportQuestId(e.target.value)}
+                      className="w-full bg-muted border border-border rounded px-2 py-1.5 text-xs font-body text-foreground outline-none focus:border-primary/40">
+                      <option value="">— Select a quest —</option>
+                      {activePersonalQuests.map((q) => <option key={q.id} value={q.id}>{q.name}</option>)}
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={importPersonalQuest}
+                        disabled={submitting || !importQuestId}
+                        className="px-3 py-1.5 text-xs font-mono rounded border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 transition-colors flex items-center gap-1"
+                      >
+                        {submitting ? <Loader2 size={10} className="animate-spin" /> : <Download size={10} />}
+                        IMPORT
+                      </button>
+                      <button
+                        onClick={() => { setShowImport(false); setImportQuestId(""); }}
+                        className="px-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                    {activePersonalQuests.length === 0 && (
+                      <p className="text-[10px] font-mono text-muted-foreground/70">No active personal quests to import.</p>
+                    )}
+                  </div>
                 ) : (
-                  <button
-                    onClick={() => setShowQuestForm(true)}
-                    className="mt-2 flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <Plus size={10} />
-                    ADD QUEST
-                  </button>
+                  <div className="flex flex-wrap gap-3 mt-2">
+                    <button
+                      onClick={() => setShowQuestForm(true)}
+                      className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <Plus size={10} />
+                      ADD QUEST
+                    </button>
+                    <button
+                      onClick={() => setShowImport(true)}
+                      className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <Download size={10} />
+                      IMPORT FROM MY QUESTS
+                    </button>
+                  </div>
                 )}
               </div>
             )}

@@ -364,6 +364,20 @@ export default function MavisChat() {
 
   // Auto-speak new assistant messages when voice is enabled
   const lastMessageRef = useRef<string | null>(null);
+
+  // Chrome pauses speechSynthesis after ~15s. Periodically pause/resume
+  // to keep the queue running through long messages.
+  useEffect(() => {
+    if (!currentlySpokenId) return;
+    const id = window.setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, [currentlySpokenId]);
+
   useEffect(() => {
     if (!voiceEnabled) return;
     const lastMsg = messages[messages.length - 1];

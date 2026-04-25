@@ -162,6 +162,16 @@ const RARITY_COLORS: Record<string, string> = {
 export default function CharacterPage() {
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("CHARACTER INFO");
   const { profile, updateProfile, refetchProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
+  const { user } = useAuth();
+
+  // ── Skin collection state ────────────────────────────────────────────────
+  const [skinCategory, setSkinCategory] = useState<SkinCategory | "ALL">("ALL");
+  const [skinRarityFilter, setSkinRarityFilter] = useState<SkinRarity | "ALL">("ALL");
+  const [showLockedSkins, setShowLockedSkins] = useState(true);
+  const [skinViewMode, setSkinViewMode] = useState<ViewMode>("SVG");
+
+  const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
+  const isAdmin = !!user && (ADMIN_USER_IDS.includes(user.id) || !!user.email?.endsWith("@vantara.exe"));
 
   const [editMode, setEditMode] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");

@@ -259,6 +259,39 @@ export type Database = {
           },
         ]
       }
+      direct_messages: {
+        Row: {
+          content: string
+          created_at: string
+          deleted_by_recipient: boolean
+          deleted_by_sender: boolean
+          id: string
+          read_at: string | null
+          recipient_id: string
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          read_at?: string | null
+          recipient_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          read_at?: string | null
+          recipient_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
       equipment: {
         Row: {
           buff_id: string | null
@@ -305,6 +338,41 @@ export type Database = {
             columns: ["buff_id"]
             isOneToOne: false
             referencedRelation: "buffs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feed_replies: {
+        Row: {
+          content: string
+          created_at: string
+          display_name: string | null
+          id: string
+          operator_id: string
+          post_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          operator_id: string
+          post_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          operator_id?: string
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_replies_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "operator_feed"
             referencedColumns: ["id"]
           },
         ]
@@ -551,6 +619,8 @@ export type Database = {
       navi_message_threads: {
         Row: {
           created_at: string
+          deleted_by_recipient: boolean
+          deleted_by_sender: boolean
           id: string
           last_message_at: string
           receiver_unread: number
@@ -560,6 +630,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
           id?: string
           last_message_at?: string
           receiver_unread?: number
@@ -569,6 +641,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
           id?: string
           last_message_at?: string
           receiver_unread?: number
@@ -585,6 +659,8 @@ export type Database = {
           attachment_url: string | null
           content: string
           created_at: string
+          deleted_by_recipient: boolean
+          deleted_by_sender: boolean
           id: string
           sender_navi_name: string
           sender_user_id: string
@@ -596,6 +672,8 @@ export type Database = {
           attachment_url?: string | null
           content: string
           created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
           id?: string
           sender_navi_name?: string
           sender_user_id?: string
@@ -607,10 +685,60 @@ export type Database = {
           attachment_url?: string | null
           content?: string
           created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
           id?: string
           sender_navi_name?: string
           sender_user_id?: string
           thread_id?: string
+        }
+        Relationships: []
+      }
+      operator_feed: {
+        Row: {
+          character_class: string | null
+          content: string
+          content_type: string
+          created_at: string
+          display_name: string | null
+          id: string
+          is_public: boolean
+          likes: Json
+          mbti_type: string | null
+          metadata: Json
+          navi_name: string | null
+          operator_id: string
+          operator_level: number | null
+        }
+        Insert: {
+          character_class?: string | null
+          content: string
+          content_type: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_public?: boolean
+          likes?: Json
+          mbti_type?: string | null
+          metadata?: Json
+          navi_name?: string | null
+          operator_id: string
+          operator_level?: number | null
+        }
+        Update: {
+          character_class?: string | null
+          content?: string
+          content_type?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_public?: boolean
+          likes?: Json
+          mbti_type?: string | null
+          metadata?: Json
+          navi_name?: string | null
+          operator_id?: string
+          operator_level?: number | null
         }
         Relationships: []
       }
@@ -741,6 +869,7 @@ export type Database = {
           operator_level: number
           operator_xp: number
           perception: number
+          quests_completed: number
           subclass: string | null
           subscription_tier: string
           updated_at: string
@@ -776,6 +905,7 @@ export type Database = {
           operator_level?: number
           operator_xp?: number
           perception?: number
+          quests_completed?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string
@@ -811,6 +941,7 @@ export type Database = {
           operator_level?: number
           operator_xp?: number
           perception?: number
+          quests_completed?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string

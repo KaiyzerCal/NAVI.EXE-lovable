@@ -11,16 +11,119 @@ import {
   totalXpForLevel,
   tierProgressPercent,
 } from "@/lib/xpSystem";
-import { motion } from "framer-motion";
-import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, ChevronRight, Layers, Wand2, Cpu, Loader2 as LoaderIcon } from "lucide-react";
 import GuildPanel from "@/components/GuildPanel";
 import NaviMilestones from "@/components/NaviMilestones";
-import { useState, useCallback } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { getNaviCharacter } from "@/components/navi-characters";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  SKIN_DEFINITIONS,
+  SKIN_CATEGORIES,
+  RARITY_COLORS as SKIN_RARITY_COLORS,
+  RARITY_GLOW,
+  isSkinUnlocked,
+  type SkinCategory,
+  type SkinRarity,
+  type UnlockState,
+} from "@/lib/skinUnlockSystem";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
-const tabs = ["CHARACTER INFO", "NAVI", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
+const tabs = ["CHARACTER INFO", "NAVI / SKINS", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
+
+// ── Skin collection metadata (mirrors SkinsPage) ──────────────────────────
+const SKIN_CATEGORY_LABELS: Record<SkinCategory, string> = {
+  CLASS: "CLASS", ELEMENTAL: "ELEMENTAL", NATURE: "NATURE", TECH: "TECH",
+  MYTHIC: "MYTHIC", COSMIC: "COSMIC", SPECIAL: "SPECIAL",
+};
+const RARITY_ORDER: SkinRarity[] = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
+const RARITY_AI_COLOR: Record<SkinRarity, string> = {
+  COMMON: "silver and white",
+  UNCOMMON: "green and emerald",
+  RARE: "blue and cyan",
+  EPIC: "purple and violet",
+  LEGENDARY: "orange and gold fire",
+};
+type ViewMode = "SVG" | "AI";
+
+function SkinCard({
+  skinId, isUnlocked, isEquipped, onEquip, viewMode,
+}: {
+  skinId: string; isUnlocked: boolean; isEquipped: boolean;
+  onEquip: () => void; viewMode: ViewMode;
+}) {
+  const def = SKIN_DEFINITIONS.find((s) => s.id === skinId)!;
+  const NaviComponent = getNaviCharacter(skinId);
+  const rarityColor = SKIN_RARITY_COLORS[def.rarity];
+  const glow = RARITY_GLOW[def.rarity];
+  const [imgError, setImgError] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const storageUrl = `${supabaseUrl}/storage/v1/object/public/navi-skins/${def.name.toLowerCase()}.png`;
+
+  async function generateAiSkin(e: React.MouseEvent) {
+    e.stopPropagation();
+    setGenerating(true);
+    await supabase.functions.invoke("navi-generate-skin", {
+      body: { skinName: def.name, skinColor: RARITY_AI_COLOR[def.rarity] },
+    });
+    setImgError(false);
+    setGenerating(false);
+  }
+
+  const showAi = viewMode === "AI" && isUnlocked;
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className={`relative rounded-lg border p-3 flex flex-col items-center gap-2 cursor-pointer transition-all group
+        ${isEquipped ? "border-primary/70 bg-primary/10"
+          : isUnlocked ? "border-border hover:border-primary/40 bg-card hover:bg-muted/10"
+          : "border-border/40 bg-muted/5 opacity-50"}`}
+      style={isEquipped ? { boxShadow: "0 0 12px rgba(56,189,248,0.2)" } : undefined}
+      onClick={isUnlocked ? onEquip : undefined}
+    >
+      <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full"
+        style={{ backgroundColor: rarityColor, boxShadow: glow }} />
+      {isEquipped && (
+        <div className="absolute top-1.5 right-1.5 bg-primary text-black text-[8px] font-mono px-1.5 py-0.5 rounded-full">ON</div>
+      )}
+      <div className="w-14 h-14 relative flex items-center justify-center">
+        {showAi && !imgError ? (
+          <img src={storageUrl} alt={def.name} className="w-14 h-14 object-contain rounded" onError={() => setImgError(true)} />
+        ) : showAi && imgError ? (
+          <button onClick={generateAiSkin} disabled={generating}
+            className="w-14 h-14 rounded border border-dashed border-primary/30 flex flex-col items-center justify-center gap-1 text-primary/50 hover:text-primary hover:border-primary/60 transition-colors">
+            {generating
+              ? <LoaderIcon size={12} className="animate-spin" />
+              : <><Wand2 size={11} /><span className="text-[7px] font-mono">GEN AI</span></>}
+          </button>
+        ) : isUnlocked && NaviComponent ? (
+          <Suspense fallback={<div className="w-14 h-14 rounded-full bg-muted/30 animate-pulse" />}>
+            <NaviComponent size={56} animated={false} />
+          </Suspense>
+        ) : (
+          <div className="w-14 h-14 rounded-full bg-muted/20 border border-border flex items-center justify-center">
+            <Lock size={16} className="text-muted-foreground/40" />
+          </div>
+        )}
+      </div>
+      <p className={`text-[10px] font-mono text-center ${isEquipped ? "text-primary" : isUnlocked ? "text-foreground" : "text-muted-foreground"}`}>
+        {def.name.toUpperCase()}
+      </p>
+      <p className="text-[8px] font-mono" style={{ color: rarityColor }}>{def.rarity}</p>
+      {!isUnlocked && (
+        <p className="text-[8px] font-mono text-muted-foreground/60 text-center leading-tight">{def.unlockCondition}</p>
+      )}
+    </motion.div>
+  );
+}
 
 // XP per level (same formula as Dashboard/Stats)
 const xpForLevel = (lv: number) => lv * 500;

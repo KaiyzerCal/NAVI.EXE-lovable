@@ -672,6 +672,30 @@ export type Database = {
           },
         ]
       }
+      post_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           beta_tester: boolean
@@ -934,6 +958,36 @@ export type Database = {
           skin_name?: string
           unlock_type?: string
           unlock_value?: number
+        }
+        Relationships: []
+      }
+      social_posts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          post_type: string
+          reaction_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          post_type?: string
+          reaction_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          post_type?: string
+          reaction_count?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

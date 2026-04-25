@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { useAppData } from "@/contexts/AppDataContext";
+import { FeedProvider } from "@/contexts/FeedContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
 import EvolutionEvent from "@/components/EvolutionEvent";
@@ -62,7 +63,9 @@ function AppContent() {
 
   return (
     <AppDataProvider>
-      <AppShell />
+      <FeedProvider>
+        <AppShell />
+      </FeedProvider>
     </AppDataProvider>
   );
 }

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
-import { Send, Loader2, ArrowLeft, Pencil, Search, X, Paperclip, Download, FileText, Play } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Send, Loader2, ArrowLeft, Pencil, Search, X, Paperclip, Download, FileText, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { toast } from "@/hooks/use-toast";
+import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 
 interface Thread {
   id: string;
@@ -29,6 +31,8 @@ interface Message {
   attachment_url: string | null;
   attachment_type: string | null;
   attachment_name: string | null;
+  deleted_by_sender: boolean;
+  deleted_by_recipient: boolean;
 }
 
 function timeAgo(dateStr: string) {
@@ -96,6 +100,14 @@ export default function InboxPage() {
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
+  // Delete state
+  const [deleteThreadId, setDeleteThreadId] = useState<string | null>(null);
+  const [deletingThread, setDeletingThread] = useState(false);
+  const [deleteMsgId, setDeleteMsgId] = useState<string | null>(null);
+
+  // Profile sheet
+  const [profileSheetId, setProfileSheetId] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeThreadRef = useRef<Thread | null>(null);
@@ -106,13 +118,23 @@ export default function InboxPage() {
     if (!user) return;
     const { data: rows } = await supabase
       .from("navi_message_threads")
-      .select("id, sender_user_id, receiver_user_id, last_message_at")
+      .select("id, sender_user_id, receiver_user_id, last_message_at, deleted_by_sender, deleted_by_recipient")
       .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
       .order("last_message_at", { ascending: false });
 
     if (!rows?.length) { setThreads([]); setLoading(false); return; }
 
-    const otherIds = rows.map((t) =>
+    // Filter out threads the current user has deleted
+    const visibleRows = rows.filter((t) => {
+      const isSender = t.sender_user_id === user.id;
+      if (isSender && (t as any).deleted_by_sender) return false;
+      if (!isSender && (t as any).deleted_by_recipient) return false;
+      return true;
+    });
+
+    if (!visibleRows.length) { setThreads([]); setLoading(false); return; }
+
+    const otherIds = visibleRows.map((t) =>
       t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
     );
     const { data: profiles } = await supabase
@@ -124,7 +146,7 @@ export default function InboxPage() {
     );
 
     const previews = await Promise.all(
-      rows.map((t) =>
+      visibleRows.map((t) =>
         supabase
           .from("navi_messages")
           .select("content, sender_navi_name, attachment_name, attachment_type")
@@ -135,7 +157,7 @@ export default function InboxPage() {
       )
     );
 
-    const mapped: Thread[] = rows.map((t, i) => {
+    const mapped: Thread[] = visibleRows.map((t, i) => {
       const otherId = t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id;
       const other = profileMap[otherId] ?? {};
       const lastMsg = previews[i].data;
@@ -377,6 +399,48 @@ export default function InboxPage() {
     });
   }
 
+  // ── Delete thread (soft delete) ──────────────────────────────────────────
+  async function deleteThread(thread: Thread) {
+    if (!user) return;
+    setDeletingThread(true);
+    const isSender = thread.sender_user_id === user.id;
+    const col = isSender ? "deleted_by_sender" : "deleted_by_recipient";
+    await supabase
+      .from("navi_message_threads")
+      .update({ [col]: true } as any)
+      .eq("id", thread.id);
+    setThreads((prev) => prev.filter((t) => t.id !== thread.id));
+    setDeleteThreadId(null);
+    setDeletingThread(false);
+    toast({ title: "Conversation removed from your inbox." });
+  }
+
+  // ── Delete individual message (soft delete) ──────────────────────────────
+  async function deleteMessage(msg: Message) {
+    if (!user) return;
+    const isSender = msg.sender_user_id === user.id;
+    const col = isSender ? "deleted_by_sender" : "deleted_by_recipient";
+    await supabase
+      .from("navi_messages")
+      .update({ [col]: true } as any)
+      .eq("id", msg.id);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msg.id
+          ? { ...m, deleted_by_sender: isSender ? true : m.deleted_by_sender, deleted_by_recipient: !isSender ? true : m.deleted_by_recipient }
+          : m
+      )
+    );
+    setDeleteMsgId(null);
+  }
+
+  // ── Is message visibly deleted for current user ──────────────────────────
+  function isDeleted(msg: Message): boolean {
+    if (!user) return false;
+    const isSender = msg.sender_user_id === user.id;
+    return isSender ? msg.deleted_by_sender : msg.deleted_by_recipient;
+  }
+
   // ────────────────────────────────────────────────────────────────────────
   // THREAD DETAIL
   // ────────────────────────────────────────────────────────────────────────
@@ -390,13 +454,18 @@ export default function InboxPage() {
           <button onClick={() => setActiveThread(null)} className="text-muted-foreground hover:text-foreground transition-colors p-1">
             <ArrowLeft size={16} />
           </button>
-          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-            <span className="text-xs font-display font-bold text-primary">{initials(activeThread.other_display_name)}</span>
-          </div>
-          <div>
-            <p className="text-sm font-body font-semibold text-foreground leading-tight">{activeThread.other_display_name ?? "Operator"}</p>
-            <p className="text-[9px] font-mono text-muted-foreground">{activeThread.other_navi_name ?? "NAVI"}</p>
-          </div>
+          <button
+            onClick={() => setProfileSheetId(activeThread.other_user_id)}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
+            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+              <span className="text-xs font-display font-bold text-primary">{initials(activeThread.other_display_name)}</span>
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-body font-semibold text-foreground leading-tight">{activeThread.other_display_name ?? "Operator"}</p>
+              <p className="text-[9px] font-mono text-muted-foreground">{activeThread.other_navi_name ?? "NAVI"}</p>
+            </div>
+          </button>
         </div>
 
         {/* Messages */}
@@ -406,24 +475,70 @@ export default function InboxPage() {
           )}
           {messages.map((msg) => {
             const mine = isMine(msg);
+            const deleted = isDeleted(msg);
+            const showDeleteBtn = deleteMsgId === msg.id;
             return (
               <motion.div
                 key={msg.id}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
+                className={`flex flex-col ${mine ? "items-end" : "items-start"} group`}
               >
                 <span className="text-[9px] font-mono text-muted-foreground mb-0.5 px-1">
                   {msg.sender_display_name ?? msg.sender_navi_name}
                 </span>
-                <div className={`max-w-[75%] ${msg.content ? `px-3 py-2 rounded-2xl text-sm font-body leading-relaxed ${
-                  mine ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted/60 border border-border text-foreground rounded-bl-sm"
-                }` : ""}`}>
-                  {msg.content || null}
-                  {msg.attachment_url && (
-                    <AttachmentView url={msg.attachment_url} type={msg.attachment_type} name={msg.attachment_name} />
+                <div className="relative flex items-end gap-1.5">
+                  {/* Delete button — appears on hover/tap (desktop: left side for mine, right side for theirs) */}
+                  {!deleted && (
+                    <button
+                      onClick={() => setDeleteMsgId(deleteMsgId === msg.id ? null : msg.id)}
+                      className={`opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0 p-0.5 ${mine ? "order-first" : "order-last"}`}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                  {deleted ? (
+                    <div className={`px-3 py-2 rounded-2xl text-sm italic text-muted-foreground/50 border border-border/30 ${mine ? "rounded-br-sm" : "rounded-bl-sm"}`}>
+                      [Message deleted]
+                    </div>
+                  ) : (
+                    <div className={`max-w-[75%] ${msg.content || msg.attachment_url ? `px-3 py-2 rounded-2xl text-sm font-body leading-relaxed ${
+                      mine ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted/60 border border-border text-foreground rounded-bl-sm"
+                    }` : ""}`}>
+                      {msg.content || null}
+                      {msg.attachment_url && (
+                        <AttachmentView url={msg.attachment_url} type={msg.attachment_type} name={msg.attachment_name} />
+                      )}
+                    </div>
                   )}
                 </div>
+
+                {/* Delete confirm popover */}
+                <AnimatePresence>
+                  {showDeleteBtn && !deleted && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className={`mt-1 px-1 flex items-center gap-1.5 ${mine ? "self-end" : "self-start"}`}
+                    >
+                      <span className="text-[9px] font-mono text-muted-foreground">Delete for you?</span>
+                      <button
+                        onClick={() => deleteMessage(msg)}
+                        className="text-[9px] font-mono text-destructive border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 rounded hover:bg-destructive/20 transition-colors"
+                      >
+                        DELETE
+                      </button>
+                      <button
+                        onClick={() => setDeleteMsgId(null)}
+                        className="text-[9px] font-mono text-muted-foreground border border-border px-1.5 py-0.5 rounded hover:text-foreground transition-colors"
+                      >
+                        CANCEL
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <span className="text-[8px] font-mono text-muted-foreground/50 mt-0.5 px-1">{timeAgo(msg.created_at)}</span>
               </motion.div>
             );
@@ -540,54 +655,109 @@ export default function InboxPage() {
           <p className="text-xs text-muted-foreground/60">Tap COMPOSE to message an operator.</p>
         </div>
       ) : (
+        <AnimatePresence>
         <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
           {threads.map((thread, i) => {
             const unread = unreadByThread[thread.id] ?? 0;
+            const showDeleteConfirm = deleteThreadId === thread.id;
             return (
-              <motion.button
+              <motion.div
                 key={thread.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
+                exit={{ opacity: 0, x: -40, transition: { duration: 0.2 } }}
                 transition={{ delay: i * 0.03 }}
-                onClick={() => openThread(thread)}
-                className={`w-full text-left flex items-center gap-3 px-4 py-3.5 transition-colors ${
+                className={`relative flex items-center gap-3 px-4 py-3.5 transition-colors group ${
                   unread > 0 ? "bg-primary/5 hover:bg-primary/10" : "bg-card hover:bg-muted/30"
                 }`}
               >
-                {/* Avatar */}
-                <div className="relative shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                    <span className="text-sm font-display font-bold text-primary">{initials(thread.other_display_name)}</span>
+                {/* Main click area */}
+                <button
+                  onClick={() => openThread(thread)}
+                  className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                >
+                  {/* Avatar */}
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                      <span className="text-sm font-display font-bold text-primary">{initials(thread.other_display_name)}</span>
+                    </div>
+                    {unread > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-1 leading-none">
+                        {unread > 9 ? "9+" : unread}
+                      </span>
+                    )}
                   </div>
-                  {unread > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-1 leading-none">
-                      {unread > 9 ? "9+" : unread}
-                    </span>
-                  )}
-                </div>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <p className={`text-sm font-body truncate ${unread > 0 ? "font-bold text-foreground" : "font-semibold text-foreground"}`}>
-                      {thread.other_display_name ?? "Operator"}
-                    </p>
-                    <span className={`text-[9px] font-mono shrink-0 ml-2 ${unread > 0 ? "text-primary font-bold" : "text-muted-foreground"}`}>
-                      {timeAgo(thread.last_message_at)}
-                    </span>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <p className={`text-sm font-body truncate ${unread > 0 ? "font-bold text-foreground" : "font-semibold text-foreground"}`}>
+                        {thread.other_display_name ?? "Operator"}
+                      </p>
+                      <span className={`text-[9px] font-mono shrink-0 ml-2 ${unread > 0 ? "text-primary font-bold" : "text-muted-foreground"}`}>
+                        {timeAgo(thread.last_message_at)}
+                      </span>
+                    </div>
+                    {thread.last_message_preview ? (
+                      <p className={`text-xs font-body truncate ${unread > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                        {thread.preview_is_mine ? "You: " : ""}{thread.last_message_preview}
+                      </p>
+                    ) : (
+                      <p className="text-xs font-mono text-muted-foreground/50">No messages yet</p>
+                    )}
                   </div>
-                  {thread.last_message_preview ? (
-                    <p className={`text-xs font-body truncate ${unread > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                      {thread.preview_is_mine ? "You: " : ""}{thread.last_message_preview}
-                    </p>
-                  ) : (
-                    <p className="text-xs font-mono text-muted-foreground/50">No messages yet</p>
+                </button>
+
+                {/* Hover trash icon */}
+                {!showDeleteConfirm && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeleteThreadId(thread.id); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0 p-1"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+
+                {/* Delete confirm inline */}
+                <AnimatePresence>
+                  {showDeleteConfirm && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 bg-card border border-border rounded-lg px-2 py-1.5 shadow-lg z-10"
+                    >
+                      <span className="text-[9px] font-mono text-muted-foreground whitespace-nowrap">Remove from inbox?</span>
+                      <button
+                        onClick={() => deleteThread(thread)}
+                        disabled={deletingThread}
+                        className="text-[9px] font-mono text-destructive border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 rounded hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                      >
+                        {deletingThread ? <Loader2 size={9} className="animate-spin" /> : "DELETE"}
+                      </button>
+                      <button
+                        onClick={() => setDeleteThreadId(null)}
+                        className="text-[9px] font-mono text-muted-foreground border border-border px-1.5 py-0.5 rounded hover:text-foreground transition-colors"
+                      >
+                        CANCEL
+                      </button>
+                    </motion.div>
                   )}
-                </div>
-              </motion.button>
+                </AnimatePresence>
+              </motion.div>
             );
           })}
         </div>
+      </AnimatePresence>
+      )}
+
+      {/* Operator profile sheet from thread header tap */}
+      {profileSheetId && (
+        <OperatorProfileSheet
+          operatorId={profileSheetId}
+          isOpen
+          onClose={() => setProfileSheetId(null)}
+        />
       )}
     </div>
   );

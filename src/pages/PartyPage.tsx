@@ -3,14 +3,17 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useParty } from "@/hooks/useParty";
 import { useAppData } from "@/contexts/AppDataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 
 export default function PartyPage() {
   const { party, members, openParties, loading, myRole, createParty, joinParty, leaveParty, disbandParty, kickMember, completePartyQuest } = useParty();
   const { quests } = useAppData();
+  const { user } = useAuth();
   const activeQuests = quests.filter(q => !q.completed);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -20,6 +23,8 @@ export default function PartyPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [linkingQuest, setLinkingQuest] = useState(false);
   const [selectedQuestId, setSelectedQuestId] = useState<string>("");
+  const [profileSheetUserId, setProfileSheetUserId] = useState<string | null>(null);
+  const [profileSheetMemberId, setProfileSheetMemberId] = useState<string | null>(null);
 
   const linkPartyQuest = async (newQuestId: string | null) => {
     if (!party) return;
@@ -158,16 +163,26 @@ export default function PartyPage() {
             <div className="space-y-1.5">
               <p className="text-[10px] font-mono text-muted-foreground">MEMBERS ({members.length}/{party.max_members})</p>
               {members.map(m => (
-                <div key={m.id} className="flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    {m.role === "leader" && <Crown size={10} className="text-accent" />}
-                    <div>
-                      <p className="text-xs font-body">{m.display_name || "Unknown"}</p>
-                      <p className="text-[10px] font-mono text-muted-foreground">{m.navi_name} · LV{m.operator_level}</p>
+                <div key={m.id} className="flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2 hover:border-primary/30 transition-colors">
+                  <button
+                    onClick={() => { if (m.user_id !== user?.id) { setProfileSheetUserId(m.user_id); setProfileSheetMemberId(m.id); } }}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left active:opacity-70 transition-opacity"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <span className="text-[10px] font-display font-bold text-primary">
+                        {(m.display_name ?? "?")[0].toUpperCase()}
+                      </span>
                     </div>
-                  </div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {m.role === "leader" && <Crown size={10} className="text-accent shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="text-xs font-body truncate">{m.display_name || "Unknown"}</p>
+                        <p className="text-[10px] font-mono text-muted-foreground">{m.navi_name} · LV{m.operator_level}</p>
+                      </div>
+                    </div>
+                  </button>
                   {myRole === "leader" && m.role !== "leader" && (
-                    <button onClick={() => kickMember(m.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                    <button onClick={() => kickMember(m.id)} className="text-muted-foreground hover:text-destructive transition-colors ml-2 shrink-0">
                       <Trash2 size={11} />
                     </button>
                   )}
@@ -223,6 +238,21 @@ export default function PartyPage() {
             </div>
           )}
         </HudCard>
+      )}
+
+      {/* Operator profile sheet — opens when tapping a party member */}
+      {profileSheetUserId && (
+        <OperatorProfileSheet
+          operatorId={profileSheetUserId}
+          isOpen
+          onClose={() => { setProfileSheetUserId(null); setProfileSheetMemberId(null); }}
+          isPartyLeader={myRole === "leader"}
+          onRemoveFromParty={
+            myRole === "leader" && profileSheetMemberId
+              ? () => kickMember(profileSheetMemberId)
+              : undefined
+          }
+        />
       )}
     </div>
   );

@@ -14,12 +14,13 @@ import {
 import { motion } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, ChevronRight } from "lucide-react";
 import GuildPanel from "@/components/GuildPanel";
+import NaviMilestones from "@/components/NaviMilestones";
 import { useState, useCallback } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
-const tabs = ["CHARACTER INFO", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
+const tabs = ["CHARACTER INFO", "NAVI", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
 
 // XP per level (same formula as Dashboard/Stats)
 const xpForLevel = (lv: number) => lv * 500;
@@ -394,6 +395,13 @@ export default function CharacterPage() {
               </div>
             </div>
           </HudCard>
+        </div>
+      )}
+
+      {/* ── NAVI ─────────────────────────────────────────────────────────── */}
+      {activeTab === "NAVI" && (
+        <div className="space-y-4">
+          <NaviMilestones naviLevel={profile.navi_level} />
         </div>
       )}
 

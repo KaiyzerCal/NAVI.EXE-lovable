@@ -247,6 +247,8 @@ export default function InboxPage() {
       content: body,
       created_at: new Date().toISOString(),
       attachment_url: null, attachment_type: null, attachment_name: null,
+      deleted_by_sender: false,
+      deleted_by_recipient: false,
     };
     setMessages((prev) => [...prev, optimistic]);
 
@@ -311,6 +313,8 @@ export default function InboxPage() {
       attachment_url: url,
       attachment_type: attachType,
       attachment_name: file.name,
+      deleted_by_sender: false,
+      deleted_by_recipient: false,
     };
     setMessages((prev) => [...prev, optimistic]);
 

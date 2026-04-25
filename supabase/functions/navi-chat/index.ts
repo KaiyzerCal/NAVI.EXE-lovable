@@ -184,12 +184,15 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
     }
   }
   if (ctx.message_threads && ctx.message_threads.length > 0) {
-    appState += "\n[RECENT OPERATOR MESSAGES]\nThese are recent conversations between the Operator and other users. You may reference them naturally.\n";
+    appState += "\n[OPERATOR INBOX — DIRECT MESSAGES]\nThese are the Operator's actual inbox conversations with other users. You have FULL READ ACCESS to them. When the Operator asks about a message, who said something, what someone wrote, when something was sent, or asks you to summarize / search / recall an inbox conversation, use this data directly and report the specific details (sender, date, content, attachments). Quote exact text when helpful. Do NOT pretend you cannot see their inbox.\n";
     for (const thread of ctx.message_threads) {
       appState += `\nConversation with ${thread.with}:\n`;
       for (const msg of thread.messages) {
-        const ts = msg.at ? new Date(msg.at).toLocaleDateString() : "";
-        appState += `  [${ts}] ${msg.from}: ${msg.text}\n`;
+        const ts = msg.at
+          ? new Date(msg.at).toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+          : "";
+        const attach = msg.attachment ? ` [attachment: ${msg.attachment}]` : "";
+        appState += `  [${ts}] ${msg.from}: ${msg.text}${attach}\n`;
       }
     }
   }

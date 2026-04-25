@@ -445,7 +445,7 @@ export default function MavisChat() {
         .select("id, sender_user_id, receiver_user_id")
         .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
         .order("updated_at", { ascending: false })
-        .limit(5);
+        .limit(15);
       if (!threads || threads.length === 0) return;
 
       const otherIds = threads.map((t: any) =>
@@ -466,16 +466,19 @@ export default function MavisChat() {
           const other = profileMap[otherId] || {};
           const { data: msgs } = await supabase
             .from("navi_messages")
-            .select("content, sender_user_id, created_at")
+            .select("content, sender_user_id, created_at, attachment_name, attachment_type, attachment_url")
             .eq("thread_id", t.id)
             .order("created_at", { ascending: false })
-            .limit(6);
+            .limit(25);
           return {
             with: other.display_name || other.navi_name || "Unknown",
             messages: (msgs || []).reverse().map((m: any) => ({
               from: m.sender_user_id === user.id ? "me" : (other.display_name || "them"),
-              text: (m.content || "").slice(0, 200),
+              text: (m.content || "").slice(0, 1200),
               at: m.created_at,
+              attachment: m.attachment_name
+                ? `${m.attachment_name}${m.attachment_type ? ` (${m.attachment_type})` : ""}`
+                : undefined,
             })),
           };
         })

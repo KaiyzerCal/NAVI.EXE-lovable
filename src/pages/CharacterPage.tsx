@@ -558,6 +558,22 @@ export default function CharacterPage() {
                     <h3 className="font-display text-sm tracking-widest text-primary">SKIN COLLECTION</h3>
                     <p className="text-[10px] font-mono text-muted-foreground">// {totalUnlocked} / {SKIN_DEFINITIONS.length} UNLOCKED{isAdmin && " · ADMIN"}</p>
                   </div>
+                  {/* Style toggle — top-right for visibility */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono text-muted-foreground hidden sm:inline">VIEW</span>
+                    <div className="flex rounded border border-primary/40 overflow-hidden">
+                      <button onClick={() => setSkinViewMode("SVG")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
+                          ${skinViewMode === "SVG" ? "bg-primary/15 text-primary border-r border-primary/30" : "text-muted-foreground hover:text-foreground border-r border-border"}`}>
+                        <Cpu size={9} /> SPRITE
+                      </button>
+                      <button onClick={() => setSkinViewMode("AI")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
+                          ${skinViewMode === "AI" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                        <Wand2 size={9} /> AI GEN
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Progress bar */}
@@ -605,25 +621,9 @@ export default function CharacterPage() {
                   </div>
                 </div>
 
-                {/* Style toggle */}
-                <div className="flex items-center gap-2 mb-5">
-                  <span className="text-[9px] font-mono text-muted-foreground">VIEW STYLE</span>
-                  <div className="flex rounded border border-border overflow-hidden">
-                    <button onClick={() => setSkinViewMode("SVG")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
-                        ${skinViewMode === "SVG" ? "bg-primary/15 text-primary border-r border-primary/30" : "text-muted-foreground hover:text-foreground border-r border-border"}`}>
-                      <Cpu size={9} /> SPRITE
-                    </button>
-                    <button onClick={() => setSkinViewMode("AI")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
-                        ${skinViewMode === "AI" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-                      <Wand2 size={9} /> AI GEN
-                    </button>
-                  </div>
-                  {skinViewMode === "AI" && (
-                    <span className="text-[8px] font-mono text-muted-foreground/60">// tap GEN AI on unlocked skins without an image yet</span>
-                  )}
-                </div>
+                {skinViewMode === "AI" && (
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-3">// tap GEN AI on unlocked skins without an image yet</p>
+                )}
 
                 {/* Currently equipped */}
                 <div className="mb-4 p-3 rounded border border-primary/30 bg-primary/5 flex items-center gap-3">

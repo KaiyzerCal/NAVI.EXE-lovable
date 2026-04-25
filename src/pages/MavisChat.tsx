@@ -442,13 +442,20 @@ export default function MavisChat() {
     (async () => {
       const { data: threads } = await supabase
         .from("navi_message_threads")
-        .select("id, sender_user_id, receiver_user_id")
+        .select("id, sender_user_id, receiver_user_id, deleted_by_sender, deleted_by_recipient, last_message_at")
         .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
-        .order("updated_at", { ascending: false })
+        .order("last_message_at", { ascending: false })
         .limit(15);
       if (!threads || threads.length === 0) return;
 
-      const otherIds = threads.map((t: any) =>
+      // Exclude threads the operator has deleted on their side
+      const visibleThreads = threads.filter((t: any) => {
+        if (t.sender_user_id === user.id) return !t.deleted_by_sender;
+        return !t.deleted_by_recipient;
+      });
+      if (visibleThreads.length === 0) return;
+
+      const otherIds = visibleThreads.map((t: any) =>
         t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
       ).filter(Boolean);
 
@@ -461,7 +468,7 @@ export default function MavisChat() {
       for (const p of otherProfiles || []) profileMap[p.id] = p;
 
       const contexts = await Promise.all(
-        threads.map(async (t: any) => {
+        visibleThreads.map(async (t: any) => {
           const otherId = t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id;
           const other = profileMap[otherId] || {};
           const { data: msgs } = await supabase

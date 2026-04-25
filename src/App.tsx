@@ -23,7 +23,6 @@ import PartyPage from "./pages/PartyPage";
 import SettingsPage from "./pages/SettingsPage";
 import UpgradePage from "./pages/UpgradePage";
 import AdminPage from "./pages/AdminPage";
-import SkinsPage from "./pages/SkinsPage";
 import GamesPage from "./pages/GamesPage";
 import GuildPage from "./pages/GuildPage";
 import SocialPage from "./pages/SocialPage";
@@ -116,7 +115,6 @@ function AppShell() {
           <Route path="/party" element={<PartyPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/stats" element={<StatsPage />} />
-          <Route path="/skins" element={<SkinsPage />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/guild" element={<GuildPage />} />
           <Route path="/social" element={<SocialPage />} />

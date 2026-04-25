@@ -4,11 +4,13 @@ import HudCard from "@/components/HudCard";
 import { useParty } from "@/hooks/useParty";
 import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle } from "lucide-react";
+import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle, Link2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 export default function PartyPage() {
   const { party, members, openParties, loading, myRole, createParty, joinParty, leaveParty, disbandParty, kickMember, completePartyQuest } = useParty();
-  const { quests } = useAppData();
+  const { quests, refetchQuests } = useAppData() as any;
   const activeQuests = quests.filter(q => !q.completed);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -16,6 +18,26 @@ export default function PartyPage() {
   const [questId, setQuestId] = useState<string | null>(null);
   const [maxMembers, setMaxMembers] = useState(4);
   const [actionLoading, setActionLoading] = useState(false);
+  const [linkingQuest, setLinkingQuest] = useState(false);
+  const [selectedQuestId, setSelectedQuestId] = useState<string>("");
+
+  const linkPartyQuest = async (newQuestId: string | null) => {
+    if (!party) return;
+    setActionLoading(true);
+    const { error } = await supabase
+      .from("parties")
+      .update({ quest_id: newQuestId } as any)
+      .eq("id", party.id);
+    setActionLoading(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: newQuestId ? "Quest linked to party" : "Quest unlinked" });
+      setLinkingQuest(false);
+      setSelectedQuestId("");
+      // realtime parties watcher in useParty will refresh
+    }
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -97,6 +119,40 @@ export default function PartyPage() {
             )}
 
             <p className="text-[10px] font-mono text-accent">XP POOL: {party.xp_pool}</p>
+
+            {/* Quest linker — leader only */}
+            {myRole === "leader" && (
+              <div className="border border-border rounded p-2 bg-muted/10">
+                {!linkingQuest ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-mono text-muted-foreground">
+                      {party.quest_id ? "Change the quest your party is hunting." : "No quest linked. Pick one to take on together."}
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => { setLinkingQuest(true); setSelectedQuestId(party.quest_id ?? ""); }} className="text-[10px] font-mono shrink-0">
+                      <Link2 size={10} className="mr-1" /> {party.quest_id ? "CHANGE QUEST" : "PICK QUEST"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-mono text-muted-foreground">SELECT A QUEST FROM YOUR ACTIVE LIST</p>
+                    <select value={selectedQuestId} onChange={(e) => setSelectedQuestId(e.target.value)}
+                      className="w-full bg-muted border border-border rounded px-2 py-1.5 text-xs font-body text-foreground outline-none focus:border-primary/40">
+                      <option value="">— No linked quest —</option>
+                      {activeQuests.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
+                    </select>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => linkPartyQuest(selectedQuestId || null)} disabled={actionLoading} className="text-[10px] font-mono">
+                        {actionLoading ? <Loader2 className="animate-spin" size={12} /> : "SAVE"}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setLinkingQuest(false)} className="text-[10px] font-mono">CANCEL</Button>
+                    </div>
+                    {activeQuests.length === 0 && (
+                      <p className="text-[10px] font-mono text-muted-foreground/70">You have no active quests yet — create one in the Quests tab.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Members */}
             <div className="space-y-1.5">

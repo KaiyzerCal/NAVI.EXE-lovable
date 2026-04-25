@@ -7,6 +7,7 @@ import {
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -30,6 +31,7 @@ export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
+  const { totalUnread } = useUnreadMessages();
 
   return (
     <motion.aside
@@ -63,6 +65,8 @@ export default function AppSidebar() {
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {navItems.map(({ to, icon: Icon, label }) => {
           const isActive = location.pathname === to;
+          const isInbox = to === "/inbox";
+          const badge = isInbox && totalUnread > 0 ? totalUnread : 0;
           return (
             <NavLink
               key={to}
@@ -73,19 +77,31 @@ export default function AppSidebar() {
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border border-transparent"
               }`}
             >
-              <Icon size={18} className={`shrink-0 ${isActive ? "text-primary" : ""}`} />
+              <div className="relative shrink-0">
+                <Icon size={18} className={isActive ? "text-primary" : ""} />
+                {badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </div>
               <AnimatePresence>
                 {!collapsed && (
                   <motion.span
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="whitespace-nowrap font-body"
+                    className="whitespace-nowrap font-body flex-1"
                   >
                     {label}
                   </motion.span>
                 )}
               </AnimatePresence>
+              {!collapsed && badge > 0 && (
+                <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-1 leading-none shrink-0">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
             </NavLink>
           );
         })}

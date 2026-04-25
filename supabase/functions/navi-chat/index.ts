@@ -183,6 +183,16 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
       appState += `- ${b.name} (${b.effect_type}) — ${b.stat_affected} ${b.modifier_value > 0 ? "+" : ""}${b.modifier_value} — source: ${b.source}${b.expires_at ? ` — expires: ${b.expires_at}` : " — permanent"} — ID: ${b.id}\n`;
     }
   }
+  if (ctx.message_threads && ctx.message_threads.length > 0) {
+    appState += "\n[RECENT OPERATOR MESSAGES]\nThese are recent conversations between the Operator and other users. You may reference them naturally.\n";
+    for (const thread of ctx.message_threads) {
+      appState += `\nConversation with ${thread.with}:\n`;
+      for (const msg of thread.messages) {
+        const ts = msg.at ? new Date(msg.at).toLocaleDateString() : "";
+        appState += `  [${ts}] ${msg.from}: ${msg.text}\n`;
+      }
+    }
+  }
 
   const webSection = webSearchResults ? `\n${webSearchResults}\n` : "";
 

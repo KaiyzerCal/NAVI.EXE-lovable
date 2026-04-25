@@ -388,6 +388,55 @@ export default function MavisChat() {
     })();
   }, [user]);
 
+  // ── Load recent message threads for NAVI context ───────────────────────────
+  const [messageThreadContext, setMessageThreadContext] = useState<any[]>([]);
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data: threads } = await supabase
+        .from("navi_message_threads")
+        .select("id, sender_user_id, receiver_user_id")
+        .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
+        .order("updated_at", { ascending: false })
+        .limit(5);
+      if (!threads || threads.length === 0) return;
+
+      const otherIds = threads.map((t: any) =>
+        t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
+      ).filter(Boolean);
+
+      const { data: otherProfiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, navi_name")
+        .in("id", otherIds);
+
+      const profileMap: Record<string, any> = {};
+      for (const p of otherProfiles || []) profileMap[p.id] = p;
+
+      const contexts = await Promise.all(
+        threads.map(async (t: any) => {
+          const otherId = t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id;
+          const other = profileMap[otherId] || {};
+          const { data: msgs } = await supabase
+            .from("navi_messages")
+            .select("content, sender_user_id, created_at")
+            .eq("thread_id", t.id)
+            .order("created_at", { ascending: false })
+            .limit(6);
+          return {
+            with: other.display_name || other.navi_name || "Unknown",
+            messages: (msgs || []).reverse().map((m: any) => ({
+              from: m.sender_user_id === user.id ? "me" : (other.display_name || "them"),
+              text: (m.content || "").slice(0, 200),
+              at: m.created_at,
+            })),
+          };
+        })
+      );
+      setMessageThreadContext(contexts.filter((c) => c.messages.length > 0));
+    })();
+  }, [user]);
+
   // ── Auto-scroll & scroll button ───────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
@@ -639,6 +688,7 @@ export default function MavisChat() {
             source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,
           })),
           memory_context: memoryContext || undefined,
+          message_threads: messageThreadContext.length > 0 ? messageThreadContext : undefined,
         },
         onDelta: (chunk) => {
           assistantContent += chunk;
@@ -745,7 +795,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,

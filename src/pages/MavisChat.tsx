@@ -307,8 +307,10 @@ export default function MavisChat() {
   // ── TTS state ──────────────────────────────────────────────────────────────
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
+  const ttsQueueRef = useRef<string[]>([]);
 
   const stopSpeaking = useCallback(() => {
+    ttsQueueRef.current = [];
     window.speechSynthesis.cancel();
     setCurrentlySpokenId(null);
   }, []);
@@ -316,21 +318,66 @@ export default function MavisChat() {
   const speakMessage = useCallback((msgId: string, content: string) => {
     if (currentlySpokenId === msgId) { stopSpeaking(); return; }
     stopSpeaking();
-    const cleaned = content.replace(/[#*_`~>|[\](){}]/g, "").slice(0, 1000);
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
+    const cleaned = content.replace(/[#*_`~>|[\](){}]/g, "");
+    // Split into sentence-sized chunks (≤200 chars) to bypass Chrome's
+    // ~15s SpeechSynthesis cutoff on long utterances.
+    const chunks: string[] = [];
+    const sentences = cleaned.match(/[^.!?\n]+[.!?]+|[^.!?\n]+$/g) || [cleaned];
+    for (const s of sentences) {
+      const trimmed = s.trim();
+      if (!trimmed) continue;
+      if (trimmed.length <= 200) {
+        chunks.push(trimmed);
+      } else {
+        // Further split long sentences on commas / spaces
+        const parts = trimmed.match(/.{1,200}(?:[,\s]|$)/g) || [trimmed];
+        for (const p of parts) {
+          const t = p.trim();
+          if (t) chunks.push(t);
+        }
+      }
+    }
+    if (chunks.length === 0) return;
+
     const voices = window.speechSynthesis.getVoices();
     const preferred = voices.find(v => /female|samantha|karen|victoria/i.test(v.name));
-    if (preferred) utterance.voice = preferred;
-    utterance.onend = () => setCurrentlySpokenId(null);
-    utterance.onerror = () => setCurrentlySpokenId(null);
+
+    ttsQueueRef.current = chunks;
     setCurrentlySpokenId(msgId);
-    window.speechSynthesis.speak(utterance);
+
+    const speakNext = () => {
+      const next = ttsQueueRef.current.shift();
+      if (!next) {
+        setCurrentlySpokenId(null);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(next);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      if (preferred) utterance.voice = preferred;
+      utterance.onend = () => speakNext();
+      utterance.onerror = () => speakNext();
+      window.speechSynthesis.speak(utterance);
+    };
+    speakNext();
   }, [currentlySpokenId, stopSpeaking]);
 
   // Auto-speak new assistant messages when voice is enabled
   const lastMessageRef = useRef<string | null>(null);
+
+  // Chrome pauses speechSynthesis after ~15s. Periodically pause/resume
+  // to keep the queue running through long messages.
+  useEffect(() => {
+    if (!currentlySpokenId) return;
+    const id = window.setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, [currentlySpokenId]);
+
   useEffect(() => {
     if (!voiceEnabled) return;
     const lastMsg = messages[messages.length - 1];

@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { Lock, Layers, Wand2, Cpu, Loader2 } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { getNaviCharacter } from "@/components/navi-characters";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -151,10 +152,14 @@ function SkinCard({
 
 export default function SkinsPage() {
   const { profile, updateProfile } = useAppData();
+  const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState<SkinCategory | "ALL">("ALL");
   const [rarityFilter, setRarityFilter] = useState<SkinRarity | "ALL">("ALL");
   const [showLocked, setShowLocked] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("SVG");
+
+  const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
+  const isAdmin = !!user && (ADMIN_USER_IDS.includes(user.id) || user.email?.endsWith("@vantara.exe"));
 
   const unlockState: UnlockState = {
     operatorLevel: profile.operator_level ?? 1,
@@ -163,6 +168,7 @@ export default function SkinsPage() {
     questsCompleted: (profile as any).quests_completed ?? 0,
     unlockedAchievements: new Set(),
     isPremium: (profile as any).subscription_tier === "core" || (profile as any).subscription_tier === "power",
+    isAdmin,
   };
 
   const visibleSkins = SKIN_DEFINITIONS.filter((skin) => {

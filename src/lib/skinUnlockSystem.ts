@@ -120,9 +120,11 @@ export interface UnlockState {
   questsCompleted: number;
   unlockedAchievements: Set<string>;
   isPremium: boolean;
+  isAdmin?: boolean;
 }
 
 export function isSkinUnlocked(skin: SkinDefinition, state: UnlockState): boolean {
+  if (state.isAdmin) return true;
   if (skin.unlockType === "default") return true;
   if (skin.unlockType === "premium") return state.isPremium;
   if (skin.unlockType === "level") return state.operatorLevel >= (skin.unlockValue ?? 0);

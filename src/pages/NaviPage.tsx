@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye } from "lucide-react";
+import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye, Cpu, Wand2 } from "lucide-react";
 import { useState, useEffect, Suspense } from "react";
 import { getNaviCharacter } from "@/components/navi-characters";
 import { Input } from "@/components/ui/input";
@@ -169,6 +169,7 @@ export default function NaviPage() {
   const [unlockedSkins, setUnlockedSkins] = useState<Set<string>>(new Set(["NETOP"]));
   const [unlockConditions, setUnlockConditions] = useState<Record<string, { unlock_type: string; unlock_value: number; description: string }>>({});
   const [editMode, setEditMode] = useState(false);
+  const [skinViewMode, setSkinViewMode] = useState<"SVG" | "AI">("SVG");
 
   useEffect(() => {
     if (!user) return;
@@ -228,7 +229,17 @@ export default function NaviPage() {
           {previewSkin && (
             <div className="flex flex-col items-center p-6">
               <div className="w-56 h-56 rounded-lg bg-muted/30 border border-border flex items-center justify-center mb-4 overflow-hidden">
-                <img src={getSkinUrl(previewSkin.name)} alt={previewSkin.name} className="w-full h-full object-contain drop-shadow-[0_0_16px_hsl(185,100%,50%,0.3)]" />
+                {(() => {
+                  const PreviewNavi = getNaviCharacter(previewSkin.name);
+                  if (skinViewMode === "SVG" && PreviewNavi) {
+                    return (
+                      <Suspense fallback={<div className="w-full h-full" />}>
+                        <PreviewNavi size={200} animated />
+                      </Suspense>
+                    );
+                  }
+                  return <img src={getSkinUrl(previewSkin.name)} alt={previewSkin.name} className="w-full h-full object-contain drop-shadow-[0_0_16px_hsl(185,100%,50%,0.3)]" />;
+                })()}
               </div>
               <h3 className="font-display text-lg text-primary font-bold">{previewSkin.name}</h3>
               <div className="flex gap-2 mt-1 mb-3">
@@ -409,9 +420,22 @@ export default function NaviPage() {
 
       {/* Skin Locker */}
       <HudCard title="SKIN LOCKER" icon={<Sparkles size={14} />} glow className="mb-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <p className="text-xs font-mono text-muted-foreground">{unlockedCount}/{ALL_SKINS.length} UNLOCKED • TAP TO PREVIEW</p>
-          <Input placeholder="Search skins..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-40 h-7 text-xs bg-muted/50 border-border" />
+          <div className="flex items-center gap-2">
+            {/* SPRITE / AI GEN toggle */}
+            <div className="flex rounded border border-primary/40 overflow-hidden">
+              <button onClick={() => setSkinViewMode("SVG")}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono transition-colors ${skinViewMode === "SVG" ? "bg-primary/15 text-primary border-r border-primary/30" : "text-muted-foreground hover:text-foreground border-r border-border"}`}>
+                <Cpu size={9} /> SPRITE
+              </button>
+              <button onClick={() => setSkinViewMode("AI")}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono transition-colors ${skinViewMode === "AI" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                <Wand2 size={9} /> AI GEN
+              </button>
+            </div>
+            <Input placeholder="Search skins..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-40 h-7 text-xs bg-muted/50 border-border" />
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5 mb-4">
           <button onClick={() => setSelectedCategory("ALL")} className={`px-2.5 py-1 rounded text-[10px] font-mono transition-all ${selectedCategory === "ALL" ? "bg-primary/20 text-primary border border-primary/40" : "bg-muted/30 text-muted-foreground border border-border hover:border-primary/20"}`}>ALL ({ALL_SKINS.length})</button>
@@ -420,10 +444,19 @@ export default function NaviPage() {
           ))}
         </div>
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[600px] overflow-y-auto pr-1">
-          {filteredSkins.map((skin) => (
+          {filteredSkins.map((skin) => {
+            const SkinNavi = getNaviCharacter(skin.name);
+            const unlocked = isSkinUnlocked(skin.name);
+            return (
             <button key={skin.name} onClick={() => setPreviewSkin(skin)} className={`rounded border p-2 flex flex-col items-center gap-1.5 transition-all relative group ${RARITY_BORDER[skin.rarity]} ${RARITY_BG[skin.rarity]} ${equippedSkin === skin.name ? "ring-1 ring-primary" : ""} cursor-pointer hover:border-primary/60`}>
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-muted/30 flex items-center justify-center">
-                <img src={getSkinUrl(skin.name)} alt={skin.name} className={`w-full h-full object-contain ${!isSkinUnlocked(skin.name) ? "opacity-40 grayscale" : "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]"}`} loading="lazy" />
+              <div className={`w-12 h-12 rounded-full overflow-hidden bg-muted/30 flex items-center justify-center ${!unlocked ? "opacity-40 grayscale" : ""}`}>
+                {skinViewMode === "SVG" && SkinNavi ? (
+                  <Suspense fallback={<div className="w-full h-full" />}>
+                    <SkinNavi size={48} animated={false} />
+                  </Suspense>
+                ) : (
+                  <img src={getSkinUrl(skin.name)} alt={skin.name} className={`w-full h-full object-contain ${unlocked ? "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]" : ""}`} loading="lazy" />
+                )}
               </div>
               <p className="font-mono text-[8px] text-foreground leading-tight text-center truncate w-full">{skin.name}</p>
               <span className={`text-[7px] font-mono ${skin.rarity === "LEGENDARY" ? "text-accent" : skin.rarity === "EPIC" ? "text-secondary" : skin.rarity === "RARE" ? "text-primary" : "text-muted-foreground"}`}>{skin.rarity}</span>
@@ -431,7 +464,8 @@ export default function NaviPage() {
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary flex items-center justify-center"><Check size={8} className="text-primary-foreground" /></div>
               )}
             </button>
-          ))}
+            );
+          })}
         </div>
       </HudCard>
     </div>

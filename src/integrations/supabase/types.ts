@@ -92,9 +92,11 @@ export type Database = {
       agent_tasks: {
         Row: {
           agent_type: string
+          completed_at: string | null
           created_at: string
           description: string
           id: string
+          priority: number
           result: Json
           status: string
           title: string
@@ -103,9 +105,11 @@ export type Database = {
         }
         Insert: {
           agent_type?: string
+          completed_at?: string | null
           created_at?: string
           description?: string
           id?: string
+          priority?: number
           result?: Json
           status?: string
           title: string
@@ -114,9 +118,11 @@ export type Database = {
         }
         Update: {
           agent_type?: string
+          completed_at?: string | null
           created_at?: string
           description?: string
           id?: string
+          priority?: number
           result?: Json
           status?: string
           title?: string
@@ -335,6 +341,45 @@ export type Database = {
           },
         ]
       }
+      guild_quests: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          guild_id: string
+          id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          guild_id: string
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          guild_id?: string
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       guilds: {
         Row: {
           banner_color: string
@@ -500,6 +545,57 @@ export type Database = {
           memory_type?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      navi_message_threads: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          receiver_user_id: string
+          sender_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          receiver_user_id: string
+          sender_user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          receiver_user_id?: string
+          sender_user_id?: string
+        }
+        Relationships: []
+      }
+      navi_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          sender_navi_name: string
+          sender_user_id: string
+          thread_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          sender_navi_name?: string
+          sender_user_id?: string
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          sender_navi_name?: string
+          sender_user_id?: string
+          thread_id?: string
         }
         Relationships: []
       }

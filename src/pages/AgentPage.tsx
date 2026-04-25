@@ -13,7 +13,7 @@ interface AgentTask {
   agent_type: string;
   status: string;
   priority: number;
-  result: string | null;
+  result: any;
   created_at: string;
   completed_at: string | null;
 }

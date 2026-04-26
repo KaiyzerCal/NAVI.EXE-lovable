@@ -746,6 +746,8 @@ export default function MavisChat() {
           })),
           memory_context: memoryContext || undefined,
           message_threads: messageThreadContext.length > 0 ? messageThreadContext : undefined,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+          client_now_iso: new Date().toISOString(),
         },
         onDelta: (chunk) => {
           assistantContent += chunk;

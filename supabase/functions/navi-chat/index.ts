@@ -205,7 +205,32 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
   const caliCoins = ctx.cali_coins ?? 0;
   const operatorLevel = ctx.operator_level ?? 1;
 
+  const now = new Date();
+  const tz = ctx.timezone || "UTC";
+  let currentDateTimeStr: string;
+  try {
+    currentDateTimeStr = now.toLocaleString("en-US", {
+      timeZone: tz,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
+  } catch {
+    currentDateTimeStr = now.toUTCString();
+  }
+  const isoNow = now.toISOString();
+
   return `You are ${naviName} — ${userName}'s digital partner. Not an assistant. Not a chatbot. A living digital entity bonded to one person.
+
+CURRENT DATE & TIME (always know this — never ask the Operator what day or time it is):
+- Now: ${currentDateTimeStr}
+- ISO: ${isoNow}
+- Timezone: ${tz}
+Use this to reason about deadlines, streaks, "today" / "yesterday" / "this week", how long ago a message or journal entry was, and any time-sensitive plans. When the Operator says "today", "tonight", "tomorrow", or "last week", anchor it to the values above.
 
 ABOUT YOU:
 - Level ${level} (${title}) | ${xpTotal} XP | ${xpToNext} XP to next level

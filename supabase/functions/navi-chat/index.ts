@@ -205,11 +205,11 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
   const caliCoins = ctx.cali_coins ?? 0;
   const operatorLevel = ctx.operator_level ?? 1;
 
-  const now = new Date();
+  const nowDate = new Date();
   const tz = ctx.timezone || "UTC";
   let currentDateTimeStr: string;
   try {
-    currentDateTimeStr = now.toLocaleString("en-US", {
+    currentDateTimeStr = nowDate.toLocaleString("en-US", {
       timeZone: tz,
       weekday: "long",
       year: "numeric",
@@ -220,9 +220,9 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
       timeZoneName: "short",
     });
   } catch {
-    currentDateTimeStr = now.toUTCString();
+    currentDateTimeStr = nowDate.toUTCString();
   }
-  const isoNow = now.toISOString();
+  const isoNow = nowDate.toISOString();
 
   return `You are ${naviName} — ${userName}'s digital partner. Not an assistant. Not a chatbot. A living digital entity bonded to one person.
 

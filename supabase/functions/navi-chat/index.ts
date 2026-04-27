@@ -6,6 +6,53 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const SUPABASE_URL         = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+// ── Semantic memory retrieval ────────────────────────────────────────────────
+
+async function embedText(text: string, apiKey: string): Promise<number[] | null> {
+  try {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "text-embedding-3-small", input: text.slice(0, 8000) }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.data?.[0]?.embedding ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function searchNaViMemories(
+  userId: string,
+  embedding: number[]
+): Promise<{ content: string; memory_type: string; importance: number; similarity: number }[]> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_navi_memories`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      },
+      body: JSON.stringify({
+        p_user_id: userId,
+        query_embedding: embedding,
+        match_threshold: 0.70,
+        match_count: 10,
+      }),
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
 const LEVEL_TITLES: Record<number, string> = {
   1: "Boot Sequence", 5: "Initialized", 10: "Linked", 15: "Active",
   20: "Synchronized", 25: "Attuned", 30: "Resonant", 35: "Awakened",
@@ -76,7 +123,7 @@ function needsWebSearch(lastUserMessage: string): string | null {
   return null;
 }
 
-function buildSystemPrompt(ctx: any, webSearchResults: string): string {
+function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories: string): string {
   const level = ctx.navi_level ?? 1;
   const title = getLevelTitle(level);
   const xpTotal = ctx.xp_total ?? 0;
@@ -134,7 +181,14 @@ function buildSystemPrompt(ctx: any, webSearchResults: string): string {
 
   const personalityDesc = personalityBlocks[personality] || personalityBlocks.GUARDIAN;
 
-  const memorySection = ctx.memory_context ? `\n${ctx.memory_context}\n\nIMPORTANT: If memory_context exists above, reference at least one specific thing from it in your first response to show continuity. Connect what you remember to the current conversation naturally.\n` : "";
+  // Semantic memories take priority; fall back to the client-side text blob when
+  // embeddings don't exist yet (graceful degradation for new installs).
+  let memorySection = "";
+  if (semanticMemories) {
+    memorySection = `\n[RELEVANT MEMORIES — retrieved by semantic similarity]\n${semanticMemories}\nReference these naturally. Do NOT list them out — weave them into your response where relevant.\n`;
+  } else if (ctx.memory_context) {
+    memorySection = `\n${ctx.memory_context}\n\nIMPORTANT: Reference at least one specific thing from memory above in your first response to show continuity.\n`;
+  }
   const recentSection = ctx.recent_context ? `\n[RECENT CONVERSATION]\n${ctx.recent_context}\n` : "";
 
   let appState = "";
@@ -347,17 +401,32 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Check if last user message needs web search
-    let webSearchResults = "";
-    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
-    if (lastUserMsg) {
-      const searchQuery = needsWebSearch(lastUserMsg.content);
-      if (searchQuery) {
-        webSearchResults = await tavilySearch(searchQuery);
-      }
-    }
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API") ?? "";
 
-    const systemPrompt = buildSystemPrompt(context || {}, webSearchResults);
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+
+    // ── Parallel: web search + semantic memory retrieval ──────────────────
+    const [webSearchResults, semanticMemories] = await Promise.all([
+      // Web search (only when triggered)
+      lastUserMsg && needsWebSearch(lastUserMsg.content)
+        ? tavilySearch(lastUserMsg.content)
+        : Promise.resolve(""),
+
+      // Semantic memory search (only when user_id + embeddings exist)
+      (async (): Promise<string> => {
+        const userId = context?.user_id;
+        if (!userId || !lastUserMsg) return "";
+        const embedding = await embedText(lastUserMsg.content, OPENAI_API_KEY);
+        if (!embedding) return "";
+        const results = await searchNaViMemories(userId, embedding);
+        if (!results.length) return "";
+        return results
+          .map((m) => `[${m.memory_type}] ${m.content}`)
+          .join("\n");
+      })(),
+    ]);
+
+    const systemPrompt = buildSystemPrompt(context || {}, webSearchResults, semanticMemories);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

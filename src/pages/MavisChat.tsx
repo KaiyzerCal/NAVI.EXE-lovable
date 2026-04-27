@@ -12,8 +12,9 @@ import { parseActions, executeAction as executeClientAction, type NaviAction } f
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
+const CHAT_URL        = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
+const EMBED_URL       = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-embed-memories`;
 
 const CLIENT_FALLBACK_ACTION_TYPES = new Set([
   "create_journal",
@@ -545,6 +546,16 @@ export default function MavisChat() {
         importance: item.importance,
       }));
       await supabase.from("navi_core_memory").insert(memoryRows as any);
+      // Embed the newly saved memories in the background
+      fetch(EMBED_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      }).catch(() => {});
     }
 
     // Delete chat messages from DB (keep conversation shell)
@@ -628,6 +639,17 @@ export default function MavisChat() {
 
       if (memoryRows.length > 0) {
         await supabase.from("navi_core_memory").insert(memoryRows as any);
+        // Fire-and-forget: generate embeddings for newly saved memories
+        // so the next navi-chat call can find them via semantic search
+        fetch(EMBED_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({ user_id: user.id }),
+        }).catch(() => {});
       }
 
       // Refresh memory context
@@ -700,6 +722,7 @@ export default function MavisChat() {
         signal: controller.signal,
         accessToken: session.access_token,
         context: {
+          user_id: user.id,
           navi_name: profile.navi_name,
           display_name: profile.display_name,
           navi_level: profile.navi_level,

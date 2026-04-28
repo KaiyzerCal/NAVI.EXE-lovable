@@ -306,9 +306,48 @@ export default function MavisChat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── TTS state ──────────────────────────────────────────────────────────────
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("mavis.voiceEnabled") === "1";
+  });
   const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
   const ttsQueueRef = useRef<string[]>([]);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  // Persist voice on/off preference
+  useEffect(() => {
+    try {
+      localStorage.setItem("mavis.voiceEnabled", voiceEnabled ? "1" : "0");
+    } catch {}
+  }, [voiceEnabled]);
+
+  // Pick the best available voice (prefer high-quality neural / natural English voices)
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const pickVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+      const score = (v: SpeechSynthesisVoice) => {
+        const n = v.name.toLowerCase();
+        let s = 0;
+        if (/en[-_]/i.test(v.lang) || /^en$/i.test(v.lang)) s += 10;
+        if (/natural|neural|online|premium|enhanced/.test(n)) s += 8;
+        if (/google/.test(n)) s += 6;
+        if (/microsoft/.test(n) && /(aria|jenny|libby|sonia|natasha|clara)/.test(n)) s += 7;
+        if (/(samantha|karen|victoria|serena|allison|ava|zoe|joanna)/.test(n)) s += 5;
+        if (/female/.test(n)) s += 2;
+        if (v.localService) s += 1;
+        return s;
+      };
+      const sorted = [...voices].sort((a, b) => score(b) - score(a));
+      preferredVoiceRef.current = sorted[0] || null;
+    };
+    pickVoice();
+    window.speechSynthesis.onvoiceschanged = pickVoice;
+    return () => {
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
 
   const stopSpeaking = useCallback(() => {
     ttsQueueRef.current = [];
@@ -319,29 +358,58 @@ export default function MavisChat() {
   const speakMessage = useCallback((msgId: string, content: string) => {
     if (currentlySpokenId === msgId) { stopSpeaking(); return; }
     stopSpeaking();
-    const cleaned = content.replace(/[#*_`~>|[\](){}]/g, "");
-    // Split into sentence-sized chunks (≤200 chars) to bypass Chrome's
-    // ~15s SpeechSynthesis cutoff on long utterances.
-    const chunks: string[] = [];
+    // Strip Markdown / code / links / emojis so the voice reads natural prose.
+    const cleaned = content
+      .replace(/```[\s\S]*?```/g, " ")              // fenced code blocks
+      .replace(/`[^`]*`/g, " ")                      // inline code
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")         // images
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")      // links → label
+      .replace(/^\s{0,3}#{1,6}\s+/gm, "")           // headings
+      .replace(/^\s*[-*+]\s+/gm, "")                 // list bullets
+      .replace(/^\s*>\s?/gm, "")                     // blockquotes
+      .replace(/[*_~`>|]/g, "")                      // residual markdown chars
+      .replace(/:::ACTION[\s\S]*?:::/gi, " ")       // navi action tags
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ") // emoji
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return;
+
+    // Split into sentence-sized chunks. Group short sentences together up to
+    // ~240 chars for smoother prosody, and split overly long ones on punctuation.
+    const MAX = 240;
     const sentences = cleaned.match(/[^.!?\n]+[.!?]+|[^.!?\n]+$/g) || [cleaned];
+    const chunks: string[] = [];
+    let buf = "";
+    const flush = () => { if (buf.trim()) chunks.push(buf.trim()); buf = ""; };
     for (const s of sentences) {
       const trimmed = s.trim();
       if (!trimmed) continue;
-      if (trimmed.length <= 200) {
-        chunks.push(trimmed);
-      } else {
-        // Further split long sentences on commas / spaces
-        const parts = trimmed.match(/.{1,200}(?:[,\s]|$)/g) || [trimmed];
+      if (trimmed.length > MAX) {
+        flush();
+        const parts = trimmed.match(/[^,;:]+[,;:]?|.+/g) || [trimmed];
+        let sub = "";
         for (const p of parts) {
-          const t = p.trim();
-          if (t) chunks.push(t);
+          if ((sub + " " + p).trim().length > MAX) {
+            if (sub.trim()) chunks.push(sub.trim());
+            sub = p;
+          } else {
+            sub = (sub + " " + p).trim();
+          }
         }
+        if (sub.trim()) chunks.push(sub.trim());
+        continue;
+      }
+      if ((buf + " " + trimmed).trim().length > MAX) {
+        flush();
+        buf = trimmed;
+      } else {
+        buf = (buf + " " + trimmed).trim();
       }
     }
+    flush();
     if (chunks.length === 0) return;
 
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(v => /female|samantha|karen|victoria/i.test(v.name));
+    const preferred = preferredVoiceRef.current;
 
     ttsQueueRef.current = chunks;
     setCurrentlySpokenId(msgId);
@@ -353,15 +421,30 @@ export default function MavisChat() {
         return;
       }
       const utterance = new SpeechSynthesisUtterance(next);
-      utterance.rate = 0.95;
-      utterance.pitch = 1.0;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.05;
+      utterance.volume = 1.0;
+      if (preferred?.lang) utterance.lang = preferred.lang;
       if (preferred) utterance.voice = preferred;
       utterance.onend = () => speakNext();
-      utterance.onerror = () => speakNext();
+      utterance.onerror = (e: any) => {
+        // Ignore benign 'interrupted'/'canceled' errors so the queue keeps moving.
+        if (e?.error && e.error !== "interrupted" && e.error !== "canceled") {
+          console.warn("TTS error:", e.error);
+        }
+        speakNext();
+      };
       window.speechSynthesis.speak(utterance);
     };
     speakNext();
   }, [currentlySpokenId, stopSpeaking]);
+
+  // Stop any in-flight speech when the chat unmounts.
+  useEffect(() => {
+    return () => {
+      try { window.speechSynthesis.cancel(); } catch {}
+    };
+  }, []);
 
   // Auto-speak new assistant messages when voice is enabled
   const lastMessageRef = useRef<string | null>(null);

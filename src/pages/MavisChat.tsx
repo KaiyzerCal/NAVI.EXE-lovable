@@ -8,331 +8,59 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { usePaywall } from "@/hooks/usePaywall";
 import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
-const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
 const OMNI_SYNC_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/omni-sync`;
 
-const CLIENT_FALLBACK_ACTION_TYPES = new Set([
-  "create_journal",
-  "update_journal",
-  "delete_journal",
-  "create_quest",
-  "update_quest",
-  "update_quest_progress",
-  "delete_quest",
-  "create_skill",
-  "update_skill",
-  "delete_skill",
-  "create_subskill",
-  "update_subskill",
-  "delete_subskill",
-  "create_equipment",
-  "update_equipment",
-  "equip_item",
-  "unequip_item",
-  "delete_equipment",
-  "create_buff",
-  "update_buff",
-  "remove_buff",
-]);
-
-function isJournalIntent(message: string): boolean {
-  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)\s/i.test(message);
-}
-
-function isQuestIntent(message: string): boolean {
-  // Require explicit action words — casual mentions of goals/tasks should NOT trigger quest creation
-  const hasActionWord = /(create|make|add|new|start|set up|give me|track)\s/i.test(message);
-  const hasQuestWord = /(quest|mission)/i.test(message);
-  return hasActionWord && hasQuestWord;
-}
-
-function isSkillIntent(message: string): boolean {
-  return /(skill|ability|talent|proficiency)/i.test(message) && /(create|add|new|make|start|track)/i.test(message);
-}
-
-function deriveJournalTitle(userMessage: string, cleanText: string): string {
-  const quoted = `${userMessage} ${cleanText}`.match(/[""](.+?)[""]/);
-  if (quoted?.[1]) return quoted[1].trim().slice(0, 80);
-
-  const source = cleanText.trim() || userMessage.trim();
-  const normalized = source.replace(/\s+/g, " ").trim();
-  return normalized.slice(0, 60) || "NAVI Entry";
-}
-
-function extractNameFromMessage(message: string): string {
-  // Try to extract a name from patterns like "called X", "named X", "make X", "create X"
-  const patterns = [
-    /called\s+[""]?([^"".,!?]+)[""]?/i,
-    /named\s+[""]?([^"".,!?]+)[""]?/i,
-    /(?:create|make|add|new|start)\s+(?:a\s+)?(?:quest|task|skill|mission|entry|note)?\s*(?:called|named|:)?\s*[""]?([^"".,!?]{3,})[""]?/i,
-  ];
-  for (const p of patterns) {
-    const match = message.match(p);
-    if (match?.[1]) return match[1].trim().slice(0, 80);
-  }
-  // Fallback: use the message itself (trimmed)
-  return message.replace(/^(create|make|add|new|start|give me)\s+(a\s+)?(quest|task|skill|mission)\s*/i, "").trim().slice(0, 60) || "New Item";
-}
-
-function inferQuestType(msg: string): string {
-  const m = msg.toLowerCase();
-  if (/\bepic\b/i.test(m)) return "Epic";
-  if (/\bmain\b/i.test(m)) return "Main";
-  if (/\bweekly\b/i.test(m)) return "Weekly";
-  if (/\bside\b/i.test(m)) return "Side";
-  if (/\bminor\b/i.test(m)) return "Minor";
-  return "Daily";
-}
-
-function inferXpReward(type: string): number {
-  const map: Record<string, number> = { Daily: 50, Weekly: 150, Main: 300, Side: 100, Minor: 25, Epic: 500 };
-  return map[type] || 50;
-}
-
-function inferTotalSteps(msg: string): number {
-  const match = msg.match(/(\d+)\s*(?:steps?|parts?|phases?|stages?|tasks?)/i);
-  if (match) return parseInt(match[1], 10);
-  return 1;
-}
-
-function inferFallbackActions(userMessage: string, cleanText: string, appData?: any): NaviAction[] {
-  const msg = userMessage.toLowerCase();
-
-  // Delete quest/skill/journal intent
-  if (/(delete|remove|destroy|trash|get rid of)\s/i.test(msg)) {
-    if (/(quest|task|mission)/i.test(msg) && appData?.quests) {
-      const quest = appData.quests.find((q: any) => msg.includes(q.name?.toLowerCase()));
-      if (quest) return [{ type: "delete_quest", params: { quest_id: quest.id } }];
-    }
-    if (/(skill|ability)/i.test(msg) && appData?.skills) {
-      const skill = appData.skills.find((s: any) => msg.includes(s.name?.toLowerCase()));
-      if (skill) return [{ type: "delete_skill", params: { skill_id: skill.id } }];
-    }
-    if (/(journal|entry|vault|note|log)/i.test(msg) && appData?.entries) {
-      const entry = appData.entries.find((e: any) => msg.includes(e.title?.toLowerCase()));
-      if (entry) return [{ type: "delete_journal", params: { entry_id: entry.id } }];
-    }
-  }
-
-  // Complete/finish quest intent
-  if (/(finish|complete|done|did it|finished|completed|mark.*done|close)/i.test(msg)) {
-    if (appData?.quests) {
-      // Try to find the quest by name
-      const activeQuests = appData.quests.filter((q: any) => !q.completed);
-      let quest = activeQuests.find((q: any) => msg.includes(q.name?.toLowerCase()));
-      // If no name match, complete the most recent active quest
-      if (!quest && activeQuests.length > 0) quest = activeQuests[0];
-      if (quest) return [{ type: "complete_quest", params: { quest_id: quest.id } }];
-    }
-  }
-
-  // Update quest type intent (e.g., "make X an epic quest", "change X to weekly")
-  if (/(make|change|set|convert|switch)\s.*(daily|weekly|main|side|minor|epic)/i.test(msg)) {
-    if (appData?.quests) {
-      const newType = inferQuestType(msg);
-      const quest = appData.quests.find((q: any) => msg.includes(q.name?.toLowerCase()));
-      if (quest) return [{ type: "update_quest", params: { quest_id: quest.id, type: newType } }];
-    }
-  }
-
-  // Quest create intent
-  if (isQuestIntent(userMessage)) {
-    const name = extractNameFromMessage(userMessage);
-    const type = inferQuestType(userMessage);
-    const total = inferTotalSteps(userMessage);
-    return [{
-      type: "create_quest",
-      params: {
-        name,
-        description: cleanText.trim().slice(0, 200) || "",
-        type,
-        total,
-        xp_reward: inferXpReward(type),
-      },
-    }];
-  }
-
-  // Skill intent
-  if (isSkillIntent(userMessage)) {
-    const name = extractNameFromMessage(userMessage);
-    return [{
-      type: "create_skill",
-      params: {
-        name,
-        description: cleanText.trim().slice(0, 200) || "",
-        category: "General",
-        max_level: 10,
-      },
-    }];
-  }
-
-  // Journal/vault intent
-  if (isJournalIntent(userMessage)) {
-    const content = cleanText.trim().length >= 24
-      ? cleanText.trim()
-      : `Operator request: ${userMessage.trim()}`;
-
-    return [{
-      type: "create_journal",
-      params: {
-        title: deriveJournalTitle(userMessage, cleanText),
-        content,
-        tags: ["navi"],
-        category: "personal",
-        importance: "medium",
-        xp_earned: 10,
-      },
-    }];
-  }
-
-  // Equipment create intent
-  if (/(create|make|add|give|craft|forge)\s.*(equipment|item|weapon|armor|gear|sword|shield)/i.test(msg)) {
-    const name = extractNameFromMessage(userMessage);
-    return [{
-      type: "create_equipment",
-      params: {
-        name,
-        description: cleanText.trim().slice(0, 200) || "",
-        slot: "accessory",
-        rarity: "common",
-        stat_bonuses: {},
-        obtained_from: "navi",
-      },
-    }];
-  }
-
-  // XP award intent
-  if (/(give|award|add|grant)\s.*(\d+)\s*xp/i.test(msg)) {
-    const match = msg.match(/(\d+)\s*xp/i);
-    if (match) return [{ type: "award_xp", params: { amount: parseInt(match[1], 10) } }];
-  }
-
-  return [];
-}
-
-async function streamChat({
+async function callChat({
   messages,
-  context,
   signal,
   accessToken,
   onDelta,
   onDone,
+  onResult,
 }: {
   messages: { role: string; content: string }[];
-  context?: Record<string, any>;
   signal: AbortSignal;
   accessToken: string;
   onDelta: (text: string) => void;
   onDone: () => void;
+  onResult?: (data: any) => void;
 }) {
-  const resp = await fetch(CHAT_URL, {
+  const doFetch = () => fetch(CHAT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ messages, context }),
+    body: JSON.stringify({ messages }),
     signal,
   });
 
-  if (!resp.ok) {
-    if (resp.status === 429) {
-      // Retry once after a short delay
-      await new Promise((r) => setTimeout(r, 3000));
-      const retry = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ messages, context }),
-        signal,
-      });
-      if (!retry.ok) {
-        const err = await retry.json().catch(() => ({ error: "Rate limited" }));
-        throw new Error(err.error || "Rate limit exceeded. Please wait a moment.");
-      }
-      // Use retry response going forward
-      const retryBody = retry.body;
-      if (!retryBody) throw new Error("No response body");
-      const retryReader = retryBody.getReader();
-      const retryDecoder = new TextDecoder();
-      let retryBuffer = "";
-      while (true) {
-        const { done, value } = await retryReader.read();
-        if (done) break;
-        retryBuffer += retryDecoder.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = retryBuffer.indexOf("\n")) !== -1) {
-          let line = retryBuffer.slice(0, idx);
-          retryBuffer = retryBuffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const json = line.slice(6).trim();
-          if (json === "[DONE]") { onDone(); return; }
-          try {
-            const parsed = JSON.parse(json);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) onDelta(content);
-          } catch { /* partial chunk */ }
-        }
-      }
-      onDone();
-      return;
+  let resp = await doFetch();
+
+  if (resp.status === 429) {
+    await new Promise((r) => setTimeout(r, 3000));
+    resp = await doFetch();
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: "Rate limited" }));
+      throw new Error(err.error || "Rate limit exceeded. Please wait a moment.");
     }
+  } else if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: "Request failed" }));
     throw new Error(err.error || `Request failed (${resp.status})`);
   }
 
-  if (!resp.body) throw new Error("No response body");
-
-  // If the function returns plain JSON (non-streaming), emit the whole reply.
-  const contentType = resp.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    const data = await resp.json();
-    if (data?.error) throw new Error(data.error);
-    const text = data?.reply ?? data?.choices?.[0]?.message?.content ?? "";
-    if (text) onDelta(text);
-    onDone();
-    return;
-  }
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    let newlineIdx: number;
-    while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-      let line = buffer.slice(0, newlineIdx);
-      buffer = buffer.slice(newlineIdx + 1);
-      if (line.endsWith("\r")) line = line.slice(0, -1);
-      if (!line.startsWith("data: ")) continue;
-      const json = line.slice(6).trim();
-      if (json === "[DONE]") { onDone(); return; }
-      try {
-        const parsed = JSON.parse(json);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) onDelta(content);
-      } catch {
-        buffer = line + "\n" + buffer;
-        break;
-      }
-    }
-  }
+  const data = await resp.json();
+  if (data?.error) throw new Error(data.error);
+  const text = data?.reply ?? data?.choices?.[0]?.message?.content ?? "";
+  if (text) onDelta(text);
+  onResult?.(data);
   onDone();
 }
 
@@ -752,30 +480,11 @@ export default function MavisChat() {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || !user || !session?.access_token || !conversationId) return;
 
-    // Paywall: free tier daily AI message cap (owners/Core users bypass).
-    if (!paywall.hasFullAccess) {
-      const { data: newCount, error: rpcErr } = await supabase.rpc("consume_message_credit");
-      if (rpcErr) {
-        console.error("[MavisChat] consume_message_credit failed:", rpcErr);
-        toast({ title: "Error", description: "Could not verify message credits.", variant: "destructive" });
-        return;
-      }
-      if ((newCount as number) > paywall.limits.DAILY_AI_MESSAGES) {
-        toast({
-          title: "Daily limit reached",
-          description: `Free tier: ${paywall.limits.DAILY_AI_MESSAGES} messages/day. Upgrade to Core for unlimited.`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
     const userContent = input.trim();
     setInput("");
     setIsLoading(true);
     stopSpeaking();
 
-    // abort any previous stream
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -798,139 +507,36 @@ export default function MavisChat() {
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
 
-    let assistantContent = "";
     const allHistory = updatedMessages
       .filter((m) => m.id !== "initial")
       .map((m) => ({ role: m.role, content: m.content }));
-    // Keep last 20 messages to avoid token overload / rate limits
     const chatHistory = allHistory.length > 20 ? allHistory.slice(-20) : allHistory;
 
+    let assistantText = "";
+    let actionsExecuted: string[] = [];
+
     try {
-      await streamChat({
+      await callChat({
         messages: chatHistory,
         signal: controller.signal,
         accessToken: session.access_token,
-        context: {
-          navi_name: profile.navi_name,
-          display_name: profile.display_name,
-          navi_level: profile.navi_level,
-          navi_personality: profile.navi_personality,
-          xp_total: profile.xp_total,
-          current_streak: profile.current_streak,
-          longest_streak: profile.longest_streak,
-          user_navi_description: profile.user_navi_description,
-          character_class: profile.character_class,
-          mbti_type: profile.mbti_type,
-          subclass: profile.subclass,
-          bond_affection: profile.bond_affection,
-          bond_trust: profile.bond_trust,
-          bond_loyalty: profile.bond_loyalty,
-          operator_level: profile.operator_level ?? 1,
-          perception: (profile as any).perception ?? 10,
-          luck: (profile as any).luck ?? 10,
-          codex_points: (profile as any).codex_points ?? 0,
-          cali_coins: (profile as any).cali_coins ?? 0,
-          // Full objects with IDs so AI can reference them in actions
-          quests: quests.map((q) => ({
-            id: q.id, name: q.name, type: q.type, progress: q.progress,
-            total: q.total, xp_reward: q.xp_reward, completed: q.completed,
-            loot_description: (q as any).loot_description || "",
-          })),
-          skills: skills.map((s) => ({
-            id: s.id, name: s.name, category: s.category,
-            level: s.level, max_level: (s as any).max_level ?? 10, xp: s.xp,
-          })),
-          equipment: equipment.map((e) => ({
-            id: e.id, name: e.name, slot: e.slot, rarity: e.rarity,
-            is_equipped: e.equipped, stat_bonuses: (e as any).stat_bonuses || {},
-          })),
-          journal_entries: entries.slice(0, 10).map((j) => ({
-            id: j.id, title: j.title, date: new Date(j.created_at).toLocaleDateString(),
-          })),
-          achievements: achievements.slice(0, 15).map((a) => ({
-            name: a.name, unlocked: a.unlocked,
-          })),
-          buffs: buffs.map((b) => ({
-            id: b.id, name: b.name, effect_type: (b as any).effect_type || "buff",
-            stat_affected: (b as any).stat_affected || "", modifier_value: (b as any).modifier_value || 0,
-            source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,
-          })),
-          memory_context: memoryContext || undefined,
-        },
-        onDelta: (chunk) => {
-          assistantContent += chunk;
-          // Strip action tags from display
-          const { cleanText } = parseActions(assistantContent);
+        onDelta: (text) => {
+          assistantText = text;
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant" && last.id === "streaming") {
-              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: cleanText } : m));
+              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: text } : m));
             }
-            return [...prev, { id: "streaming", role: "assistant", content: cleanText, timestamp: new Date() }];
+            return [...prev, { id: "streaming", role: "assistant", content: text, timestamp: new Date() }];
           });
+        },
+        onResult: (data) => {
+          actionsExecuted = data?.actions_executed ?? [];
         },
         onDone: async () => {
           if (controller.signal.aborted) return;
 
-          const { cleanText, actions: parsedActions } = parseActions(assistantContent);
-          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText, { quests, entries, skills });
-
-          console.log("[NAVI] Raw response length:", assistantContent.length);
-          console.log("[NAVI] Raw response preview:", assistantContent.slice(0, 500));
-          console.log("[NAVI] Contains :::ACTION:", assistantContent.includes(":::ACTION"));
-          console.log("[NAVI] Parsed actions count:", parsedActions.length);
-          console.log("[NAVI] Fallback actions used:", parsedActions.length === 0 && actions.length > 0);
-          console.log("[NAVI] Actions:", JSON.stringify(actions, null, 2));
-
-          if (actions.length > 0) {
-            let failedActions: NaviAction[] = [];
-
-            try {
-              const actionResp = await fetch(NAVI_ACTIONS_URL, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                  Authorization: `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({ actions }),
-              });
-
-              const actionJson = await actionResp.json().catch(() => ({ results: [] }));
-              console.log("[NAVI] Action response status:", actionResp.status);
-              console.log("[NAVI] Action response body:", JSON.stringify(actionJson));
-
-              if (!actionResp.ok) {
-                throw new Error(actionJson.error || `Action request failed (${actionResp.status})`);
-              }
-
-              const failures = Array.isArray(actionJson.results)
-                ? actionJson.results
-                    .map((result: { success: boolean }, index: number) => (!result.success ? actions[index] : null))
-                    .filter((result): result is NaviAction => Boolean(result))
-                : [];
-
-              if (failures.length > 0) {
-                console.error("[NAVI] Action failures:", failures);
-                failedActions = failures;
-              }
-            } catch (err) {
-              console.error("[NAVI] Backend action execution failed:", err);
-              failedActions = actions;
-            }
-
-            if (failedActions.length > 0) {
-              const fallbackActions = failedActions.filter((action) => CLIENT_FALLBACK_ACTION_TYPES.has(action.type));
-
-              for (const action of fallbackActions) {
-                try {
-                  await executeClientAction(user.id, action);
-                } catch (fallbackError) {
-                  console.error("[NAVI] Client fallback failed:", action.type, fallbackError);
-                }
-              }
-            }
-
+          if (actionsExecuted.length > 0) {
             await Promise.all([
               refetchQuests(),
               refetchJournal(),
@@ -943,14 +549,14 @@ export default function MavisChat() {
           }
 
           try {
-            const assistantId = await saveMessage(conversationId, user.id, "assistant", cleanText);
+            const assistantId = await saveMessage(conversationId, user.id, "assistant", assistantText);
             setMessages((prev) =>
-              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: cleanText } : m))
+              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: assistantText } : m))
             );
           } catch (err) {
             console.error("Failed to save assistant message:", err);
             setMessages((prev) =>
-              prev.map((m) => (m.id === "streaming" ? { ...m, content: cleanText } : m))
+              prev.map((m) => (m.id === "streaming" ? { ...m, content: assistantText } : m))
             );
           }
 
@@ -962,7 +568,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile, paywall]);
+  }, [input, isLoading, user, session, conversationId, messages, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, stopSpeaking]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,

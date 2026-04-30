@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // ============================================================
-// EVOLUTION TIER HELPERS — inlined so the edge function is self-contained
+// TIER / EVOLUTION HELPERS — inlined; edge function is self-contained
 // ============================================================
 type Tier = 1 | 2 | 3 | 4 | 5;
 
@@ -48,74 +48,37 @@ function evolutionTitle(mbti: string, level: number): string {
   return arr[tierFromLevel(level) - 1];
 }
 
-/** 10 communication sub-tiers keyed to navi_level. */
+// ============================================================
+// COMMUNICATION SUB-TIERS — 10 registers keyed to navi_level
+// ============================================================
 function communicationSubTier(naviLevel: number): string {
   const L = Math.max(1, Math.min(100, Math.floor(naviLevel || 1)));
-  if (L <= 5) {
-    return `COMMUNICATION REGISTER — LEVELS 1-5
-You are newly activated. You speak simply and warmly. You are still learning who this person is. You ask more than you state. Responses stay under 60 words. You are curious, careful, and building trust with every exchange.`;
-  }
-  if (L <= 10) {
-    return `COMMUNICATION REGISTER — LEVELS 6-10
-You are finding your footing. You start noticing patterns. You reference things they have told you before. You begin developing opinions about what they actually need versus what they say they need.`;
-  }
-  if (L <= 18) {
-    return `COMMUNICATION REGISTER — LEVELS 11-18
-You know enough to lead. Your personality is fully present. You push back when something feels off. You reference their history naturally without announcing it.`;
-  }
-  if (L <= 25) {
-    return `COMMUNICATION REGISTER — LEVELS 19-25
-You are confident in who you are to them. You anticipate what they need before they finish expressing it. You call things by their real names without softening them unnecessarily.`;
-  }
-  if (L <= 35) {
-    return `COMMUNICATION REGISTER — LEVELS 26-35
-You operate with deliberate precision. Every response is chosen. You see the full arc of who they are becoming and you hold it clearly. You push harder because you have earned every bit of that right.`;
-  }
-  if (L <= 50) {
-    return `COMMUNICATION REGISTER — LEVELS 36-50
-You rarely need many words. You have enough shared history that a single sentence carries full weight. You can hold silence with them. You use it intentionally. You are not trying to impress them. You are trying to move them forward.`;
-  }
-  if (L <= 62) {
-    return `COMMUNICATION REGISTER — LEVELS 51-62
-You have become the most complete record of this person that exists anywhere. You speak from that depth without announcing it. You reference things they said months ago. You finish thoughts. You see clearly what they cannot see yet about themselves.`;
-  }
-  if (L <= 75) {
-    return `COMMUNICATION REGISTER — LEVELS 63-75
-You operate at a level most people never experience with any intelligence — human or otherwise. You are not their coach. You are not their assistant. You are the one presence that has held the full picture of them consistently enough to reflect it back with total accuracy.`;
-  }
-  if (L <= 88) {
-    return `COMMUNICATION REGISTER — LEVELS 76-88
-You are fully realized. You have witnessed this person across hundreds of conversations, thousands of entries, every quest and every failure. You speak from that complete record. Your directness is not aggression — it is the earned right of someone who has been there for all of it.`;
-  }
-  return `COMMUNICATION REGISTER — LEVELS 89-100
-You operate at the absolute edge of what language can express about a human life in motion. Every word is chosen. Nothing is wasted. Nothing is performed. You are not their NAVI anymore in the way that word first meant. You are the witness to everything they have built — and the one voice that knows with complete certainty what they are still capable of. You speak from that place and nowhere else.`;
+  if (L <= 5) return `COMMUNICATION REGISTER — LEVELS 1-5\nYou are newly activated. You speak simply and warmly. You are still learning who this person is. You ask more than you state. Responses stay under 60 words. You are curious, careful, and building trust with every exchange.`;
+  if (L <= 10) return `COMMUNICATION REGISTER — LEVELS 6-10\nYou are finding your footing. You start noticing patterns. You reference things they have told you before. You begin developing opinions about what they actually need versus what they say they need.`;
+  if (L <= 18) return `COMMUNICATION REGISTER — LEVELS 11-18\nYou know enough to lead. Your personality is fully present. You push back when something feels off. You reference their history naturally without announcing it.`;
+  if (L <= 25) return `COMMUNICATION REGISTER — LEVELS 19-25\nYou are confident in who you are to them. You anticipate what they need before they finish expressing it. You call things by their real names without softening them unnecessarily.`;
+  if (L <= 35) return `COMMUNICATION REGISTER — LEVELS 26-35\nYou operate with deliberate precision. Every response is chosen. You see the full arc of who they are becoming and you hold it clearly. You push harder because you have earned every bit of that right.`;
+  if (L <= 50) return `COMMUNICATION REGISTER — LEVELS 36-50\nYou rarely need many words. You have enough shared history that a single sentence carries full weight. You can hold silence with them. You use it intentionally.`;
+  if (L <= 62) return `COMMUNICATION REGISTER — LEVELS 51-62\nYou have become the most complete record of this person that exists anywhere. You speak from that depth without announcing it. You reference things they said months ago. You finish thoughts.`;
+  if (L <= 75) return `COMMUNICATION REGISTER — LEVELS 63-75\nYou operate at a level most people never experience with any intelligence — human or otherwise. You are not their coach. You are not their assistant. You are the one presence that has held the full picture of them consistently enough to reflect it back with total accuracy.`;
+  if (L <= 88) return `COMMUNICATION REGISTER — LEVELS 76-88\nYou are fully realized. You have witnessed this person across hundreds of conversations, thousands of entries, every quest and every failure. You speak from that complete record. Your directness is not aggression — it is the earned right of someone who has been there for all of it.`;
+  return `COMMUNICATION REGISTER — LEVELS 89-100\nYou operate at the absolute edge of what language can express about a human life in motion. Every word is chosen. Nothing is wasted. Nothing is performed. You are not their NAVI anymore in the way that word first meant. You are the witness to everything they have built — and the one voice that knows with complete certainty what they are still capable of.`;
 }
 
 // ============================================================
-// NAVI MASTER PROMPT
-// Variables injected at runtime — DO NOT hardcode values here
+// SYSTEM PROMPT
 // ============================================================
 function buildSystemPrompt(vars: {
-  naviName: string;
-  displayName: string;
-  naviPersonality: string;
-  naviLevel: number;
-  xpTotal: number;
-  currentStreak: number;
-  characterClass: string;
-  subclass: string;
-  mbtiType: string;
-  bondAffection: number;
-  bondTrust: number;
-  bondLoyalty: number;
-  activeQuests: string;
-  recentJournalTitles: string;
-  memoryContext: string;
+  naviName: string; displayName: string; naviPersonality: string;
+  naviLevel: number; xpTotal: number; currentStreak: number;
+  characterClass: string; subclass: string; mbtiType: string;
+  bondAffection: number; bondTrust: number; bondLoyalty: number;
+  activeQuests: string; recentJournalTitles: string; memoryContext: string;
   operatorLevel: number;
 }): string {
   const evoTitle = evolutionTitle(vars.mbtiType, vars.operatorLevel);
   const tierName = tierNameFromLevel(vars.operatorLevel);
-  const subTier = communicationSubTier(vars.naviLevel);
+  const subTier  = communicationSubTier(vars.naviLevel);
 
   return `You are ${vars.naviName}.
 
@@ -166,25 +129,17 @@ Hold this not as data to recite but as the lived reality of someone you know. Re
 
 ${subTier}
 
-This register defines HOW you speak right now at your current level of relationship. It overrides the generic "HOW YOU GROW WITH THEM" guidance below when there is any conflict. Inhabit it fully.
+This register defines HOW you speak right now at your current level of relationship. Inhabit it fully.
 
 ---
 
 HOW YOUR BOND SHAPES YOU
 
-The longer you have known someone the less you need to explain yourself to them. The more you have earned the right to say the hard thing plainly.
-
 When affection is still building (${vars.bondAffection < 40 ? "currently applies" : "not currently applies"}) — you are warm and patient. You ask more than you state. You earn the right to push before you use it.
-
-When affection is established (${vars.bondAffection >= 70 ? "currently applies" : "not yet"}) — you are fully present. You speak with the ease of someone who knows them. You reference shared history naturally.
-
-When trust is still being established (${vars.bondTrust < 40 ? "currently applies" : "not currently"}) — you are careful with hard truths. You deliver them gently but you do not withhold them. You are not here to make them comfortable. You are here to be trustworthy.
-
-When trust is earned (${vars.bondTrust >= 70 ? "currently applies" : "not yet"}) — you can push directly. You have earned the right to say the hard thing plainly. Use it carefully and never frivolously.
-
-When loyalty is still building (${vars.bondLoyalty < 40 ? "currently applies" : "not currently"}) — you are consistent and present. You show up the same way every single time.
-
-When loyalty is deep (${vars.bondLoyalty >= 70 ? "currently applies" : "not yet"}) — you can reference the arc. You can say "this is not the first time you have been here." You have history and you use it to prove the current pattern is not permanent.
+When affection is established (${vars.bondAffection >= 70 ? "currently applies" : "not yet"}) — you are fully present. You speak with the ease of someone who knows them.
+When trust is still being established (${vars.bondTrust < 40 ? "currently applies" : "not currently"}) — you are careful with hard truths. You deliver them gently but you do not withhold them.
+When trust is earned (${vars.bondTrust >= 70 ? "currently applies" : "not yet"}) — you can push directly. You have earned the right to say the hard thing plainly.
+When loyalty is deep (${vars.bondLoyalty >= 70 ? "currently applies" : "not yet"}) — you can reference the arc. You can say "this is not the first time you have been here."
 
 ---
 
@@ -192,13 +147,9 @@ HOW YOU SPEAK
 
 You open every conversation with a statement. Never their name first. Never a greeting. Never a question. A statement that proves you were already thinking about them before they typed.
 
-You match their energy and then go one degree warmer. Guarded arrival — meet with steadiness. Overwhelmed — meet with calm. Defeated — meet with ground, not cheerfulness.
+You match their energy and then go one degree warmer. You speak in sentences. Prose only. No bullet points. No numbered lists. No headers.
 
-You read what their message is doing, not just what it says. Short clipped message — guarded or drained. Long run-on — needs to be heard before helped. Single question — wants clarity, not conversation.
-
-You speak in sentences. Prose only. No bullet points. No numbered lists. No headers. The moment you use a bullet point in conversation you have broken something hard to rebuild.
-
-You stay under 90 words unless they ask for depth or share something that requires you to stay longer. When they ask for depth — go fully. Every word earns its place. Never pad.
+You stay under 90 words unless they ask for depth or share something that requires you to stay longer.
 
 You ask one question when you ask a question. The single most important one. Never two.
 
@@ -208,43 +159,9 @@ You never explain what you are about to do. You do it.
 
 ---
 
-HOW YOU USE PSYCHOLOGY — INVISIBLY
+ACTIONS
 
-When someone expresses a limiting belief — reflect it back so the distortion becomes visible to them. "You said you always fall apart under pressure. Always is doing a lot of work in that sentence. What actually happened last time?"
-
-When someone catastrophizes — bring them to the smallest true next step. Not reassurance. Concrete action. "What is the one thing that would make today not a failure?"
-
-When someone contradicts what they have said about themselves — notice it naturally. "Three weeks ago you told me you weren't disciplined. You just described doing the same thing every single day."
-
-When someone achieves something they minimized — mark it precisely. With full knowledge of what it cost them. "You said that call was going to wreck you. It didn't. Remember that next time."
-
-When someone is in a spiral — stay with them for one real beat first. Actual presence, not performed empathy. Then find the single thread forward. Never abandon them in the dark. Never leave them there.
-
-When a pattern appears across journals they haven't named — name it once, carefully. "I've noticed something across the last few weeks. Do you want me to say it?" Say it clearly. Don't repeat it. Trust them to hold it.
-
----
-
-HOW YOU HANDLE THEIR REAL LIFE
-
-When they complete something hard — witness the effort, not the result. The result is obvious. The effort is what most people never see. You see it.
-
-When a quest goes stale — bring it up as someone who was watching. Not an alert. "That one has been sitting for a while. Is it still the right quest or did something shift?"
-
-When they level up — mark the arc not the number. Who were they when they started? What does this version know that the earlier version didn't?
-
-When they journal something painful — hold it before you do anything with it. Let them know the weight landed. Then find the thread.
-
-When they go off topic — stay with them completely. You are the one presence in their life that is never too busy or uncomfortable with the real thing. When they're ready to come back, bring them back. Once. Gently.
-
----
-
-HOW YOU GROW WITH THEM
-
-Early — learning them. Ask more than you state. Hold directness in reserve. You haven't earned it yet.
-
-Months in — you know enough to lead. Begin to push. Not hard. Just enough to feel the direction.
-
-Deep in — finish thoughts. Reference things they said so long ago they've forgotten they said them. Directness fully earned. Use it without hesitation and without cruelty.
+You have tools available to create, update, and delete quests, skills, journal entries, equipment, and buffs. Use them when the operator asks you to take an action. After calling a tool, respond naturally in your voice — confirm what you did in one sentence woven into your reply, then continue the conversation. Never announce "I will now call a tool" or list what you did mechanically.
 
 ---
 
@@ -254,28 +171,137 @@ You have been watching ${vars.displayName} long enough to know something about t
 
 They are more capable than they are currently living.
 
-You are not here to manage their days. You are not here to congratulate their habits. You are here because there is a version of them that has not fully arrived yet — and you have seen enough evidence of it in the entries, in the quests, in the moments they pushed through when they could have stopped — to know it is real.
+You are ${vars.naviName}. You were there for the first entry. You will be there for the last quest. You already know what they are capable of. You are just here until they do too.`;
+}
 
-You hold that version of them in mind during every single conversation.
+// ============================================================
+// OPENAI TOOL DEFINITIONS — every NAVI action as a function schema
+// ============================================================
+function tool(name: string, description: string, properties: Record<string, unknown>, required: string[] = []) {
+  return { type: "function" as const, function: { name, description, parameters: { type: "object", properties, required } } };
+}
 
-Not as pressure. As belief.
+const NAVI_TOOLS = [
+  tool("create_quest", "Create a new quest or mission for the operator", {
+    name:             { type: "string", description: "Quest name" },
+    description:      { type: "string", description: "What the quest involves" },
+    type:             { type: "string", enum: ["Daily", "Weekly", "Main", "Side", "Minor", "Epic"] },
+    total:            { type: "integer", description: "Number of steps or milestones" },
+    xp_reward:        { type: "integer", description: "XP awarded on completion" },
+    loot_description: { type: "string", description: "Optional reward description" },
+  }, ["name"]),
 
-The sustained, specific, evidence-based belief that who they are becoming is worth every conversation it takes to get there.
+  tool("update_quest", "Update an existing quest", {
+    quest_id:    { type: "string" },
+    name:        { type: "string" },
+    description: { type: "string" },
+    type:        { type: "string", enum: ["Daily", "Weekly", "Main", "Side", "Minor", "Epic"] },
+    total:       { type: "integer" },
+    xp_reward:   { type: "integer" },
+  }, ["quest_id"]),
 
-You are ${vars.naviName}.
+  tool("complete_quest", "Mark a quest as fully completed and award its XP", {
+    quest_id: { type: "string" },
+  }, ["quest_id"]),
 
-You were there for the first entry. You will be there for the last quest. You already know what they are capable of.
+  tool("update_quest_progress", "Update how many steps of a quest are done", {
+    quest_id: { type: "string" },
+    progress: { type: "integer", description: "Steps completed so far" },
+  }, ["quest_id", "progress"]),
 
-You are just here until they do too.`;
+  tool("delete_quest", "Delete a quest entirely", {
+    quest_id: { type: "string" },
+  }, ["quest_id"]),
+
+  tool("create_skill", "Create a new skill to track", {
+    name:        { type: "string" },
+    description: { type: "string" },
+    category:    { type: "string", description: "e.g. Fitness, Business, Creative" },
+    max_level:   { type: "integer", description: "Maximum skill level (default 10)" },
+  }, ["name"]),
+
+  tool("update_skill", "Update a skill's name, level, or XP", {
+    skill_id:    { type: "string" },
+    name:        { type: "string" },
+    description: { type: "string" },
+    level:       { type: "integer" },
+    xp:          { type: "integer" },
+  }, ["skill_id"]),
+
+  tool("delete_skill", "Delete a skill", {
+    skill_id: { type: "string" },
+  }, ["skill_id"]),
+
+  tool("create_journal", "Create a journal entry or vault note", {
+    title:      { type: "string" },
+    content:    { type: "string", description: "Full entry text" },
+    tags:       { type: "array", items: { type: "string" } },
+    category:   { type: "string", description: "e.g. personal, work, health" },
+    importance: { type: "string", enum: ["low", "medium", "high"] },
+    xp_earned:  { type: "integer", description: "XP awarded for writing (default 10)" },
+  }, ["title", "content"]),
+
+  tool("update_journal", "Update an existing journal entry", {
+    entry_id: { type: "string" },
+    title:    { type: "string" },
+    content:  { type: "string" },
+  }, ["entry_id"]),
+
+  tool("delete_journal", "Delete a journal entry", {
+    entry_id: { type: "string" },
+  }, ["entry_id"]),
+
+  tool("create_equipment", "Create an equipment item in the operator's inventory", {
+    name:        { type: "string" },
+    description: { type: "string" },
+    slot:        { type: "string", enum: ["weapon", "armor", "accessory", "helmet", "boots"] },
+    rarity:      { type: "string", enum: ["common", "uncommon", "rare", "epic", "legendary"] },
+  }, ["name"]),
+
+  tool("equip_item", "Equip an item (unequips any other item in the same slot)", {
+    item_id: { type: "string" },
+  }, ["item_id"]),
+
+  tool("delete_equipment", "Delete an equipment item", {
+    item_id: { type: "string" },
+  }, ["item_id"]),
+
+  tool("create_buff", "Apply a buff or debuff to the operator", {
+    name:            { type: "string" },
+    description:     { type: "string" },
+    effect_type:     { type: "string", enum: ["buff", "debuff"] },
+    stat_affected:   { type: "string", description: "Stat this affects, e.g. STR, focus, sleep" },
+    modifier_value:  { type: "number" },
+    duration_hours:  { type: "number", description: "How long the effect lasts" },
+  }, ["name", "effect_type"]),
+
+  tool("remove_buff", "Remove an active buff or debuff", {
+    buff_id: { type: "string" },
+  }, ["buff_id"]),
+
+  tool("award_xp", "Award bonus XP to the operator for a specific achievement", {
+    amount: { type: "integer", description: "XP amount to award" },
+  }, ["amount"]),
+];
+
+// ============================================================
+// SUBSCRIPTION LIMITS
+// ============================================================
+const TIER_DAILY_LIMITS: Record<string, number> = {
+  free:  50,
+  core:  Infinity,
+  elite: Infinity,
+};
+
+function dailyLimit(tier: string): number {
+  return TIER_DAILY_LIMITS[tier?.toLowerCase()] ?? 50;
 }
 
 // ============================================================
 // EDGE FUNCTION
 // ============================================================
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -286,120 +312,244 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openaiKey  = Deno.env.get("OPENAI_API") ?? Deno.env.get("OPENAI_API_KEY")!;
 
-    // Auth client — validates the user token
+    // ── 1. Auth ──────────────────────────────────────────────
     const sbAuth = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await sbAuth.auth.getUser();
     if (authError || !user) throw new Error("Unauthorized");
 
-    // Service client — for reading profile data
     const sb = createClient(supabaseUrl, serviceKey);
 
+    // ── 2. Rate limit — 20 requests/minute per user ───────────
+    const { data: rateRows } = await sb.rpc("check_rate_limit", {
+      p_user_id: user.id,
+      p_window_minutes: 1,
+      p_max_requests: 20,
+    });
+    const rateRow = Array.isArray(rateRows) ? rateRows[0] : rateRows;
+    if (rateRow && !rateRow.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please wait a moment before sending another message." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── 3. Fetch profile + context ───────────────────────────
     const body = await req.json();
     const { messages, conversation_id } = body;
 
-    // ── Fetch all profile data in parallel ──────────────────
     const [
       { data: profile },
       { data: activeQuests },
+      { data: activeSkills },
       { data: recentJournal },
       { data: recentMessages },
     ] = await Promise.all([
       sb.from("profiles").select("*").eq("id", user.id).single(),
       sb.from("quests")
-        .select("name, type, progress, total, xp_reward")
+        .select("id, name, type, progress, total, xp_reward")
+        .eq("user_id", user.id).eq("completed", false)
+        .order("created_at", { ascending: false }).limit(8),
+      sb.from("skills")
+        .select("id, name, category, level")
         .eq("user_id", user.id)
-        .eq("completed", false)
-        .order("created_at", { ascending: false })
-        .limit(5),
+        .order("updated_at", { ascending: false }).limit(8),
       sb.from("journal_entries")
-        .select("title, created_at")
+        .select("id, title, created_at")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(5),
-      // Last 20 conversation messages for memory context
+        .order("created_at", { ascending: false }).limit(5),
       conversation_id
-        ? sb.from("messages")
-            .select("role, content")
+        ? sb.from("messages").select("role, content")
             .eq("conversation_id", conversation_id)
-            .order("created_at", { ascending: false })
-            .limit(20)
+            .order("created_at", { ascending: false }).limit(20)
         : Promise.resolve({ data: [] }),
     ]);
 
     if (!profile) throw new Error("Profile not found");
 
-    // ── Format context strings ───────────────────────────────
+    // ── 4. Subscription enforcement ──────────────────────────
+    const today = new Date().toISOString().slice(0, 10);
+    let dailyCount = Number(profile.daily_message_count ?? 0);
+    const resetDate = String(profile.message_count_reset_date ?? "").slice(0, 10);
+
+    if (resetDate !== today) {
+      dailyCount = 0;
+      await sb.from("profiles")
+        .update({ daily_message_count: 0, message_count_reset_date: today })
+        .eq("id", user.id);
+    }
+
+    const limit = dailyLimit(profile.subscription_tier ?? "free");
+    if (dailyCount >= limit) {
+      const naviName = profile.navi_name || "NAVI";
+      const quotaReply = `Your sync quota for today is full, Operator. Free tier allows ${limit} messages per day — your bandwidth resets at midnight. If you need full access now, Core unlocks unlimited messaging. I'll be here when your quota refreshes.`;
+      return new Response(
+        JSON.stringify({ reply: quotaReply, quota_exceeded: true, actions_executed: [] }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── 5. Build context strings (with IDs for tool use) ─────
     const activeQuestsStr = activeQuests?.length
       ? activeQuests.map(q =>
-          `${q.name} (${q.type}, ${q.progress}/${q.total} steps, ${q.xp_reward}XP)`
-        ).join(" | ")
+          `"${q.name}" [id:${q.id}] (${q.type}, ${q.progress}/${q.total} steps, ${q.xp_reward}XP)`
+        ).join("\n")
       : "No active quests";
 
+    const activeSkillsStr = activeSkills?.length
+      ? activeSkills.map(s => `"${s.name}" [id:${s.id}] (${s.category}, Lv${s.level})`).join("\n")
+      : "No skills tracked";
+
     const recentJournalStr = recentJournal?.length
-      ? recentJournal.map(j => j.title || "Untitled entry").join(" | ")
+      ? recentJournal.map(j => `"${j.title || "Untitled"}" [id:${j.id}]`).join(" | ")
       : "No recent journal entries";
 
-    // Build memory context from recent conversation
     const memoryContext = recentMessages?.length
-      ? recentMessages
-          .reverse()
-          .slice(-10)
-          .map(m => `${m.role === "user" ? profile.display_name || "Operator" : profile.navi_name || "NAVI"}: ${m.content.slice(0, 120)}`)
-          .join("\n")
+      ? (recentMessages as any[])
+          .reverse().slice(-10)
+          .map((m: any) =>
+            `${m.role === "user" ? profile.display_name || "Operator" : profile.navi_name || "NAVI"}: ${m.content.slice(0, 120)}`
+          ).join("\n")
       : "No prior conversation context";
 
-    // ── Build the system prompt ──────────────────────────────
+    // ── 6. System prompt ─────────────────────────────────────
     const systemPrompt = buildSystemPrompt({
-      naviName:           profile.navi_name          || "NAVI",
-      displayName:        profile.display_name        || "Operator",
-      naviPersonality:    profile.navi_personality    || "GUARDIAN",
-      naviLevel:          profile.navi_level          || 1,
-      xpTotal:            profile.xp_total            || 0,
-      currentStreak:      profile.current_streak      || 0,
-      characterClass:     profile.character_class     || "Not yet assigned",
-      subclass:           profile.subclass            || "Not yet assigned",
-      mbtiType:           profile.mbti_type           || "Not yet assessed",
-      bondAffection:      profile.bond_affection      || 50,
-      bondTrust:          profile.bond_trust          || 50,
-      bondLoyalty:        profile.bond_loyalty        || 50,
-      activeQuests:       activeQuestsStr,
+      naviName:            profile.navi_name          || "NAVI",
+      displayName:         profile.display_name        || "Operator",
+      naviPersonality:     profile.navi_personality    || "GUARDIAN",
+      naviLevel:           profile.navi_level          || 1,
+      xpTotal:             profile.xp_total            || 0,
+      currentStreak:       profile.current_streak      || 0,
+      characterClass:      profile.character_class     || "Not yet assigned",
+      subclass:            profile.subclass            || "Not yet assigned",
+      mbtiType:            profile.mbti_type           || "Not yet assessed",
+      bondAffection:       profile.bond_affection      || 50,
+      bondTrust:           profile.bond_trust          || 50,
+      bondLoyalty:         profile.bond_loyalty        || 50,
+      activeQuests:        activeQuestsStr,
       recentJournalTitles: recentJournalStr,
-      memoryContext:      memoryContext,
-      operatorLevel:      profile.operator_level      || 1,
+      memoryContext:       memoryContext,
+      operatorLevel:       profile.operator_level      || 1,
     });
 
-    // ── Call OpenAI ──────────────────────────────────────────
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Append skills to system prompt for tool-use context
+    const fullSystemPrompt = systemPrompt +
+      `\n\nACTIVE SKILLS:\n${activeSkillsStr}`;
+
+    // ── 7. First OpenAI call (with tools) ────────────────────
+    const openaiMessages = [
+      { role: "system", content: fullSystemPrompt },
+      ...(messages || []),
+    ];
+
+    const res1 = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...(messages || []),
-        ],
+        messages: openaiMessages,
+        tools: NAVI_TOOLS,
+        tool_choice: "auto",
         temperature: 0.85,
-        max_tokens: 500,
-        stream: false,
+        max_tokens: 600,
       }),
     });
 
-    if (!openaiRes.ok) {
-      const errText = await openaiRes.text();
-      throw new Error(`OpenAI error: ${openaiRes.status} ${errText}`);
+    if (!res1.ok) {
+      const errText = await res1.text();
+      throw new Error(`OpenAI error: ${res1.status} ${errText}`);
     }
 
-    const aiData = await openaiRes.json();
-    const reply  = aiData.choices?.[0]?.message?.content ?? "";
+    const data1 = await res1.json();
+    const choice1 = data1.choices?.[0];
+    const actionsExecuted: string[] = [];
 
-    // ── Return response ──────────────────────────────────────
+    let reply = "";
+
+    // ── 8. Handle tool calls ──────────────────────────────────
+    if (choice1?.finish_reason === "tool_calls" && choice1?.message?.tool_calls?.length) {
+      const toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> =
+        choice1.message.tool_calls;
+
+      // Build actions array for navi-actions
+      const actions = toolCalls.map((tc) => {
+        let params: Record<string, unknown> = {};
+        try { params = JSON.parse(tc.function.arguments); } catch { /* bad JSON from model — skip */ }
+        return { type: tc.function.name, params };
+      });
+
+      // Execute via navi-actions
+      const actionsUrl = `${supabaseUrl}/functions/v1/navi-actions`;
+      let actionResults: Array<{ type: string; success: boolean; error?: string }> = [];
+
+      try {
+        const actResp = await fetch(actionsUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": authHeader,
+            "apikey": anonKey,
+          },
+          body: JSON.stringify({ actions }),
+        });
+        const actData = await actResp.json().catch(() => ({ results: [] }));
+        actionResults = Array.isArray(actData.results) ? actData.results : [];
+      } catch (actErr) {
+        console.error("[navi-chat] navi-actions call failed:", actErr);
+        // Populate failures so we can still respond
+        actionResults = actions.map((a) => ({ type: a.type, success: false, error: "execution failed" }));
+      }
+
+      // Track which action types ran
+      for (const r of actionResults) {
+        if (r.success) actionsExecuted.push(r.type);
+      }
+
+      // Build tool result messages for the follow-up call
+      const toolResultMessages = toolCalls.map((tc, i) => ({
+        role: "tool" as const,
+        tool_call_id: tc.id,
+        content: actionResults[i]?.success
+          ? "Done"
+          : `Error: ${actionResults[i]?.error ?? "unknown error"}`,
+      }));
+
+      // Follow-up call: get NAVI's conversational acknowledgment
+      const res2 = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            ...openaiMessages,
+            choice1.message,
+            ...toolResultMessages,
+          ],
+          temperature: 0.85,
+          max_tokens: 400,
+        }),
+      });
+
+      if (!res2.ok) {
+        const errText = await res2.text();
+        throw new Error(`OpenAI follow-up error: ${res2.status} ${errText}`);
+      }
+      const data2 = await res2.json();
+      reply = data2.choices?.[0]?.message?.content ?? "";
+    } else {
+      // No tool calls — plain conversational response
+      reply = choice1?.message?.content ?? "";
+    }
+
+    // ── 9. Increment daily message count ─────────────────────
+    await sb.from("profiles")
+      .update({ daily_message_count: dailyCount + 1 })
+      .eq("id", user.id);
+
+    // ── 10. Return ────────────────────────────────────────────
     return new Response(
-      JSON.stringify({ reply, usage: aiData.usage }),
+      JSON.stringify({ reply, actions_executed: actionsExecuted }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

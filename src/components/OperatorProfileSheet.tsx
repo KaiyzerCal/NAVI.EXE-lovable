@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Loader2, MessageSquare, UserMinus, Star, Shield, Sword,
-  Brain, Heart, Zap, ScanEye, Clover, Flame, Trophy, Circle,
+  X, Loader2, MessageSquare, UserMinus, UserPlus, Star, Shield, Sword,
+  Brain, Heart, Zap, Flame, Trophy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -65,7 +65,7 @@ export default function OperatorProfileSheet({
   showRemoveFromParty = false,
 }: Props) {
   const { user } = useAuth();
-  const { profile: myProfile } = useAppData();
+  const { profile: myProfile, isFollowing, follow, unfollow } = useAppData();
   const [profile, setProfile] = useState<OperatorProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,6 +342,22 @@ export default function OperatorProfileSheet({
                       >
                         <MessageSquare size={14} />
                         MESSAGE {(profile.display_name || "OPERATOR").toUpperCase()}
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          isFollowing(profile.id)
+                            ? unfollow(profile.id)
+                            : follow(profile.id, profile.display_name)
+                        }
+                        className={`w-full py-2.5 rounded border font-display font-bold tracking-widest text-sm flex items-center justify-center gap-2 transition-all ${
+                          isFollowing(profile.id)
+                            ? "border-primary/30 text-primary bg-primary/10 hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive"
+                            : "border-border text-muted-foreground bg-card/40 hover:border-primary/30 hover:text-primary"
+                        }`}
+                      >
+                        {isFollowing(profile.id) ? <UserMinus size={14} /> : <UserPlus size={14} />}
+                        {isFollowing(profile.id) ? "FOLLOWING" : "FOLLOW"}
                       </button>
 
                       {showRemoveFromParty && onRemoveFromParty && (

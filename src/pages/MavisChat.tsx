@@ -16,6 +16,7 @@ import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
+const OMNI_SYNC_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/omni-sync`;
 
 const CLIENT_FALLBACK_ACTION_TYPES = new Set([
   "create_journal",
@@ -699,6 +700,34 @@ export default function MavisChat() {
         setMemoryContext(buildMemoryContext(blocks));
       }
 
+      // Also call the AI compression edge function (non-blocking — best effort)
+      if (session?.access_token && userMsgs.length >= 2) {
+        const chatHistory = messages
+          .filter((m) => m.id !== "initial" && m.id !== "streaming")
+          .map((m) => ({ role: m.role, content: m.content }));
+        fetch(OMNI_SYNC_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            messages: chatHistory,
+            profile: {
+              operator_level: profile.operator_level,
+              navi_level: profile.navi_level,
+              character_class: profile.character_class,
+              mbti_type: profile.mbti_type,
+              current_streak: profile.current_streak,
+              bond_affection: profile.bond_affection,
+              bond_trust: profile.bond_trust,
+              bond_loyalty: profile.bond_loyalty,
+            },
+          }),
+        }).catch((e) => console.warn("[OmniSync] AI compression skipped:", e));
+      }
+
       toast({ title: "⚡ OmniSync Complete", description: `Saved ${memoryRows.length} memory entries. NAVI's long-term memory updated.` });
     } catch (err) {
       console.error("[OMNISYNC] Error:", err);
@@ -711,7 +740,7 @@ export default function MavisChat() {
     } finally {
       setIsSyncing(false);
     }
-  }, [user, isSyncing, messages, profile, quests, skills, entries]);
+  }, [user, session, isSyncing, messages, profile, quests, skills, entries]);
 
   // ── Copy message ──────────────────────────────────────────────────────────
   const copyMessage = useCallback((content: string) => {

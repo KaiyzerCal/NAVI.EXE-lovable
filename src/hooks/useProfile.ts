@@ -36,6 +36,7 @@ export interface ProfileData {
   daily_message_count: number;
   message_count_reset_date: string;
   last_evolution_tier: number;
+  operator_handle: string | null;
 }
 
 const defaults: ProfileData = {
@@ -72,6 +73,7 @@ const defaults: ProfileData = {
   daily_message_count: 0,
   message_count_reset_date: new Date().toISOString().slice(0, 10),
   last_evolution_tier: 1,
+  operator_handle: null,
 };
 
 export function useProfile() {

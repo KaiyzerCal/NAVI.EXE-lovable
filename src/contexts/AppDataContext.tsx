@@ -6,6 +6,8 @@ import { useAchievements, type Achievement } from "@/hooks/useAchievements";
 import { useOperatorSkills, useEquipment, useActiveEffects, type OperatorSkill, type EquipmentItem, type ActiveEffect } from "@/hooks/useSkillsAndEquipment";
 import { useFeed, type FeedPost, type FeedReply } from "@/hooks/useFeed";
 import { useDirectMessages } from "@/hooks/useDirectMessages";
+import { useNotifications, type AppNotification } from "@/hooks/useNotifications";
+import { useFollows } from "@/hooks/useFollows";
 
 export interface DisplayMessage {
   id: string;
@@ -127,6 +129,21 @@ interface AppDataContextType {
   // Inbox / DMs
   inbox: InboxContextSlice;
   dmUnreadCount: number;
+
+  // Notifications
+  notifications: AppNotification[];
+  notificationsLoading: boolean;
+  unreadNotifCount: number;
+  markNotifRead: (id: string) => void;
+  markAllNotifsRead: () => void;
+  deleteNotification: (id: string) => void;
+
+  // Follows
+  followingIds: Set<string>;
+  isFollowing: (id: string) => boolean;
+  follow: (id: string, name?: string | null) => void;
+  unfollow: (id: string) => void;
+  fetchFollowCounts: (id: string) => Promise<{ followers: number; following: number }>;
 }
 
 const AppDataContext = createContext<AppDataContextType | null>(null);
@@ -164,6 +181,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     dmUnreadCount, fetchUnreadCount, fetchInboxThreads, fetchDMThread, sendDM, markDMRead,
     deleteDM, deleteNaviThread, deleteDMThread,
   } = useDirectMessages();
+
+  // Notifications
+  const {
+    notifications, loading: notificationsLoading, unreadCount: unreadNotifCount,
+    markRead: markNotifRead, markAllRead: markAllNotifsRead, deleteNotification,
+  } = useNotifications();
+
+  // Follows
+  const {
+    followingIds, isFollowing, follow, unfollow, fetchCounts: fetchFollowCounts,
+  } = useFollows();
 
   // Chat state persisted across tab switches
   const [chatMessages, setChatMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
@@ -220,6 +248,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       feed,
       inbox,
       dmUnreadCount,
+      notifications, notificationsLoading, unreadNotifCount,
+      markNotifRead, markAllNotifsRead, deleteNotification,
+      followingIds, isFollowing, follow, unfollow, fetchFollowCounts,
     }}>
       {children}
     </AppDataContext.Provider>

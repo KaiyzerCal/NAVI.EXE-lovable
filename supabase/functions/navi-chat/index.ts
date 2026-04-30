@@ -296,6 +296,22 @@ serve(async (req) => {
     // Service client — for reading profile data
     const sb = createClient(supabaseUrl, serviceKey);
 
+    // Basic per-user rate limit guard (requests/minute)
+    const windowStart = new Date(Date.now() - 60_000).toISOString();
+    const { count: recentCount } = await sb
+      .from("rate_limit_events")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("route", "navi-chat")
+      .gte("created_at", windowStart);
+    if ((recentCount ?? 0) >= 20) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please wait a moment and try again." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    await sb.from("rate_limit_events").insert({ user_id: user.id, route: "navi-chat" });
+
     const body = await req.json();
     const { messages, conversation_id } = body;
 

@@ -6,6 +6,8 @@ import {
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect } from "react";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -16,6 +18,8 @@ const navItems = [
   { to: "/party", icon: Users, label: "Party" },
   { to: "/journal", icon: BookOpen, label: "Journal" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
+  { to: "/operators", icon: Users, label: "Operators" },
+  { to: "/notifications", icon: MessageSquare, label: "Notifications" },
   { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -23,7 +27,26 @@ const navItems = [
 export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const loadUnread = async () => {
+      const { count } = await supabase.from("operator_notifications").select("*", { count: "exact", head: true }).eq("operator_id", user.id).is("read_at", null);
+      setUnreadCount(count ?? 0);
+    };
+    void loadUnread();
+    const channel = supabase
+      .channel(`operator-notifications-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "operator_notifications", filter: `operator_id=eq.${user.id}` }, () => {
+        setUnreadCount((c) => c + 1);
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   return (
     <motion.aside
@@ -77,6 +100,9 @@ export default function AppSidebar() {
                     className="whitespace-nowrap font-body"
                   >
                     {label}
+                    {to === "/notifications" && unreadCount > 0 && (
+                      <span className="ml-2 text-[10px] font-mono bg-primary/20 text-primary border border-primary/30 rounded px-1.5 py-0.5">{unreadCount}</span>
+                    )}
                   </motion.span>
                 )}
               </AnimatePresence>

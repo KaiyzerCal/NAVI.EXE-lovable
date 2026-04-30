@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useParty } from "@/hooks/useParty";
 import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
 import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle } from "lucide-react";
+import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 
 export default function PartyPage() {
   const { party, members, openParties, loading, myRole, createParty, joinParty, leaveParty, disbandParty, kickMember, completePartyQuest } = useParty();
@@ -16,6 +18,7 @@ export default function PartyPage() {
   const [questId, setQuestId] = useState<string | null>(null);
   const [maxMembers, setMaxMembers] = useState(4);
   const [actionLoading, setActionLoading] = useState(false);
+  const [activeOperatorId, setActiveOperatorId] = useState<string | null>(null);
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -102,7 +105,7 @@ export default function PartyPage() {
             <div className="space-y-1.5">
               <p className="text-[10px] font-mono text-muted-foreground">MEMBERS ({members.length}/{party.max_members})</p>
               {members.map(m => (
-                <div key={m.id} className="flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2">
+                <motion.button key={m.id} whileTap={{ scale: 0.99 }} onClick={() => setActiveOperatorId(m.id)} className="w-full text-left flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2 hover:border-primary/40 transition-colors">
                   <div className="flex items-center gap-2">
                     {m.role === "leader" && <Crown size={10} className="text-accent" />}
                     <div>
@@ -111,11 +114,11 @@ export default function PartyPage() {
                     </div>
                   </div>
                   {myRole === "leader" && m.role !== "leader" && (
-                    <button onClick={() => kickMember(m.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                    <button onClick={(e) => { e.stopPropagation(); kickMember(m.id); }} className="text-muted-foreground hover:text-destructive transition-colors">
                       <Trash2 size={11} />
                     </button>
                   )}
-                </div>
+                </motion.button>
               ))}
             </div>
 
@@ -168,6 +171,8 @@ export default function PartyPage() {
           )}
         </HudCard>
       )}
+
+      <OperatorProfileSheet operatorId={activeOperatorId || ""} isOpen={Boolean(activeOperatorId)} onClose={() => setActiveOperatorId(null)} />
     </div>
   );
 }

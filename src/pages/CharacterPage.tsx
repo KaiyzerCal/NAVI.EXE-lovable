@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, CheckCircle2, Sparkles } from "lucide-react";
 import GuildPanel from "@/components/GuildPanel";
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -59,7 +60,9 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export default function CharacterPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("CHARACTER INFO");
+  const [showMbtiQuiz, setShowMbtiQuiz] = useState(false);
   const { profile, updateProfile, refetchProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
 
   const [editMode, setEditMode] = useState(false);
@@ -92,6 +95,9 @@ export default function CharacterPage() {
 
   const handleQuizComplete = (mbti: string, charClass: string) => {
     updateProfile({ mbti_type: mbti, character_class: charClass });
+    setShowMbtiQuiz(false);
+    refetchProfile();
+    navigate("/character");
   };
 
   const handleAddSkill = useCallback(async () => {
@@ -110,15 +116,6 @@ export default function CharacterPage() {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="animate-spin text-primary" size={24} />
-      </div>
-    );
-  }
-
-  if (!mbtiType && !profile.character_class) {
-    return (
-      <div>
-        <PageHeader title="CHARACTER" subtitle="// OPERATOR CALIBRATION REQUIRED" />
-        <MbtiQuiz onComplete={handleQuizComplete} />
       </div>
     );
   }
@@ -226,7 +223,7 @@ export default function CharacterPage() {
                 <Button
                   variant="outline"
                   className="text-[10px] font-mono tracking-widest border-primary text-primary hover:bg-primary/10"
-                  onClick={() => updateProfile({ mbti_type: null, character_class: null })}
+                  onClick={() => setShowMbtiQuiz(true)}
                 >
                   TAKE THE MBTI QUIZ
                 </Button>
@@ -624,6 +621,8 @@ export default function CharacterPage() {
           )}
         </HudCard>
       )}
+
+      {showMbtiQuiz && <MbtiQuiz onComplete={handleQuizComplete} />}
     </div>
   );
 }

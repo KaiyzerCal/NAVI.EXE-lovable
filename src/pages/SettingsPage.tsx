@@ -69,6 +69,7 @@ export default function SettingsPage() {
   const [personality, setPersonality] = useState<NaviPersonalitySettings>(DEFAULT_PERSONALITY);
   const [saving, setSaving] = useState(false);
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [naviName, setNaviName] = useState("");
   const [notifications, setNotifications] = useState({
     questReminders: true, streakWarnings: true, xpMilestones: false, dailySummary: true,
@@ -79,6 +80,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (loading) return;
     setDisplayName(profile.display_name ?? "");
+    setUsername((profile as any).username ?? "");
     setNaviName(profile.navi_name ?? "NAVI");
     setPersonality(parsePersonality(profile.navi_personality));
   }, [loading, profile.display_name]); // re-sync when profile loads
@@ -92,7 +94,7 @@ export default function SettingsPage() {
   const saveProfile = async () => {
     setSaving(true);
     try {
-      await updateProfile({ display_name: displayName.trim() || null, navi_name: naviName.trim() || "NAVI" });
+      await updateProfile({ display_name: displayName.trim() || null, navi_name: naviName.trim() || "NAVI", username: username.trim().toLowerCase() || null } as any);
       toast({ title: "Profile saved", description: "Changes persisted to database." });
     } finally {
       setSaving(false);
@@ -113,6 +115,11 @@ export default function SettingsPage() {
             <div>
               <label className="text-xs font-mono text-muted-foreground block mb-1">OPERATOR NAME</label>
               <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs font-mono text-muted-foreground block mb-1">USERNAME (@HANDLE)</label>
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_]/g, "").slice(0, 24))}
                 className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
             </div>
             <div>
@@ -194,4 +201,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

@@ -18,6 +18,8 @@ import JournalPage from "./pages/JournalPage";
 import StatsPage from "./pages/StatsPage";
 import PartyPage from "./pages/PartyPage";
 import SettingsPage from "./pages/SettingsPage";
+import OperatorSearchPage from "./pages/OperatorSearchPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import UpgradePage from "./pages/UpgradePage";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import NotFound from "./pages/NotFound";
@@ -116,6 +118,8 @@ function AppContent() {
           <Route path="/upgrade" element={<UpgradePage />} />
           <Route path="/checkout/return" element={<CheckoutReturn />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/operators" element={<OperatorSearchPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

@@ -16,6 +16,8 @@ const navItems = [
   { to: "/party", icon: Users, label: "Party" },
   { to: "/journal", icon: BookOpen, label: "Journal" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
+  { to: "/operators", icon: Users, label: "Operators" },
+  { to: "/notifications", icon: MessageSquare, label: "Notifications" },
   { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

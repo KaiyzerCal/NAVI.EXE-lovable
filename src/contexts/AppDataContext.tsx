@@ -4,6 +4,8 @@ import { useQuests, type Quest, type QuestType, type CreateQuestInput, type Upda
 import { useJournal, type JournalEntry, type CreateJournalInput, type UpdateJournalInput } from "@/hooks/useJournal";
 import { useAchievements, type Achievement } from "@/hooks/useAchievements";
 import { useOperatorSkills, useEquipment, useActiveEffects, type OperatorSkill, type EquipmentItem, type ActiveEffect } from "@/hooks/useSkillsAndEquipment";
+import { useFeed, type FeedPost, type FeedReply } from "@/hooks/useFeed";
+import { useDirectMessages } from "@/hooks/useDirectMessages";
 
 export interface DisplayMessage {
   id: string;
@@ -12,12 +14,52 @@ export interface DisplayMessage {
   timestamp: Date;
 }
 
+// Feed slice exposed through context
+interface FeedContextSlice {
+  posts: FeedPost[];
+  loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  newPostsCount: number;
+  error: string | null;
+  fetchInitial: () => Promise<void>;
+  loadMore: () => Promise<void>;
+  createPost: (params: {
+    content_type: string;
+    content: string;
+    metadata?: Record<string, any>;
+    display_name: string | null;
+    navi_name: string | null;
+    character_class: string | null;
+    mbti_type: string | null;
+    operator_level: number;
+  }) => Promise<FeedPost | null>;
+  deletePost: (postId: string) => Promise<void>;
+  toggleLike: (postId: string) => Promise<void>;
+  fetchReplies: (postId: string) => Promise<FeedReply[]>;
+  addReply: (postId: string, content: string, displayName: string | null) => Promise<FeedReply | null>;
+  clearNewPosts: () => void;
+}
+
+// Inbox slice exposed through context
+interface InboxContextSlice {
+  dmUnreadCount: number;
+  fetchUnreadCount: () => Promise<void>;
+  fetchInboxThreads: () => Promise<import("@/hooks/useDirectMessages").InboxThread[]>;
+  fetchDMThread: (otherId: string) => Promise<import("@/hooks/useDirectMessages").DirectMessage[]>;
+  sendDM: (recipientId: string, content: string) => Promise<import("@/hooks/useDirectMessages").DirectMessage | null>;
+  markDMRead: (messageIds: string[]) => Promise<void>;
+  deleteDM: (messageId: string, isSender: boolean) => Promise<void>;
+  deleteNaviThread: (otherId: string, isSender: boolean) => Promise<void>;
+  deleteDMThread: (otherId: string) => Promise<void>;
+}
+
 interface AppDataContextType {
   // Ready flag
   isReady: boolean;
 
   // Profile
-  profile: ProfileData;
+  profile: ProfileData & { id?: string };
   profileLoading: boolean;
   updateProfile: (updates: Partial<ProfileData>) => Promise<void>;
   refetchProfile: () => Promise<void>;
@@ -78,6 +120,13 @@ interface AppDataContextType {
   setConversationId: (id: string | null) => void;
   chatDbLoaded: boolean;
   setChatDbLoaded: (v: boolean) => void;
+
+  // Feed (persists across tab switches)
+  feed: FeedContextSlice;
+
+  // Inbox / DMs
+  inbox: InboxContextSlice;
+  dmUnreadCount: number;
 }
 
 const AppDataContext = createContext<AppDataContextType | null>(null);
@@ -96,7 +145,6 @@ const INITIAL_MESSAGE: DisplayMessage = {
 };
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  // All hooks called once at top level
   const { profile, loading: profileLoading, updateProfile, refetchProfile } = useProfile();
   const { quests, loading: questsLoading, stats: questStats, createQuest, updateQuest, toggleQuest, deleteQuest, refetch: refetchQuests } = useQuests();
   const { entries, loading: journalLoading, createEntry, updateEntry, deleteEntry, refetch: refetchJournal } = useJournal();
@@ -105,6 +153,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { items, loading: equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetch: refetchEquipment } = useEquipment();
   const { effects, loading: effectsLoading, addEffect, removeEffect, refetch: refetchEffects } = useActiveEffects();
 
+  // Feed — lives at context level so it persists across page navigations
+  const {
+    posts, loading: feedLoading, loadingMore, hasMore, newPostsCount, error: feedError,
+    fetchInitial, loadMore, createPost, deletePost, toggleLike, fetchReplies, addReply, clearNewPosts,
+  } = useFeed();
+
+  // DM / inbox
+  const {
+    dmUnreadCount, fetchUnreadCount, fetchInboxThreads, fetchDMThread, sendDM, markDMRead,
+    deleteDM, deleteNaviThread, deleteDMThread,
+  } = useDirectMessages();
+
   // Chat state persisted across tab switches
   const [chatMessages, setChatMessages] = useState<DisplayMessage[]>([INITIAL_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -112,14 +172,44 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const isReady = !profileLoading;
 
-  if (!isReady) {
-    return null;
-  }
+  if (!isReady) return null;
+
+  const feed: FeedContextSlice = {
+    posts,
+    loading: feedLoading,
+    loadingMore,
+    hasMore,
+    newPostsCount,
+    error: feedError,
+    fetchInitial,
+    loadMore,
+    createPost,
+    deletePost,
+    toggleLike,
+    fetchReplies,
+    addReply,
+    clearNewPosts,
+  };
+
+  const inbox: InboxContextSlice = {
+    dmUnreadCount,
+    fetchUnreadCount,
+    fetchInboxThreads,
+    fetchDMThread,
+    sendDM,
+    markDMRead,
+    deleteDM,
+    deleteNaviThread,
+    deleteDMThread,
+  };
 
   return (
     <AppDataContext.Provider value={{
       isReady,
-      profile, profileLoading, updateProfile, refetchProfile,
+      profile: profile as ProfileData & { id?: string },
+      profileLoading,
+      updateProfile,
+      refetchProfile,
       quests, questsLoading, questStats, createQuest, updateQuest, toggleQuest, deleteQuest, refetchQuests,
       entries, journalLoading, createEntry, updateEntry, deleteEntry, refetchJournal,
       achievements, achievementsLoading, checkAchievements, achievementStats, refetchAchievements,
@@ -127,6 +217,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       items, equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetchEquipment,
       effects, effectsLoading, addEffect, removeEffect, refetchEffects,
       chatMessages, setChatMessages, conversationId, setConversationId, chatDbLoaded, setChatDbLoaded,
+      feed,
+      inbox,
+      dmUnreadCount,
     }}>
       {children}
     </AppDataContext.Provider>

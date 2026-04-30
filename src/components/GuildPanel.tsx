@@ -4,6 +4,7 @@ import { useGuild, type CreateGuildInput } from "@/hooks/useGuild";
 import HudCard from "@/components/HudCard";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 
 const COLOR_SWATCHES = [
   { color: "#6366f1", label: "Purple" },
@@ -24,6 +25,7 @@ export default function GuildPanel({ guildId, onGuildChange }: GuildPanelProps) 
   const [form, setForm] = useState<CreateGuildInput>({ name: "", tag: "", description: "", banner_color: "#6366f1" });
   const [searchQuery, setSearchQuery] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [sheetMemberId, setSheetMemberId] = useState<string | null>(null);
 
   if (loading) return <HudCard title="GUILD" icon={<Shield size={14} />} glow><Loader2 className="animate-spin text-primary" size={18} /></HudCard>;
 
@@ -141,41 +143,76 @@ export default function GuildPanel({ guildId, onGuildChange }: GuildPanelProps) 
 
   // STATE B — Has guild
   return (
-    <HudCard title="GUILD" icon={<Shield size={14} />} glow>
-      {mode === "edit" ? guildForm : (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: guild.banner_color }} />
-            <h3 className="text-sm font-display font-bold text-foreground">{guild.name}</h3>
-            <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">[{guild.tag}]</span>
-          </div>
-          {guild.description && <p className="text-[10px] font-body text-muted-foreground">{guild.description}</p>}
-          <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
-            <span><Users size={10} className="inline mr-0.5" />{members.length} members</span>
-            <span className="flex items-center gap-0.5">
-              {myRole === "leader" && <Crown size={10} className="text-accent" />}
-              {(myRole || "member").toUpperCase()}
-            </span>
-          </div>
-          <div className="flex gap-2 pt-1">
-            {myRole === "leader" && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => { setForm({ name: guild.name, tag: guild.tag, description: guild.description, banner_color: guild.banner_color }); setMode("edit"); }} className="text-[10px] font-mono">
-                  EDIT
-                </Button>
-                <Button variant="destructive" size="sm" onClick={handleDisband} disabled={actionLoading} className="text-[10px] font-mono">
-                  <Trash2 size={10} className="mr-1" /> DISBAND
-                </Button>
-              </>
+    <>
+      <HudCard title="GUILD" icon={<Shield size={14} />} glow>
+        {mode === "edit" ? guildForm : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: guild.banner_color }} />
+              <h3 className="text-sm font-display font-bold text-foreground">{guild.name}</h3>
+              <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">[{guild.tag}]</span>
+            </div>
+            {guild.description && <p className="text-[10px] font-body text-muted-foreground">{guild.description}</p>}
+            <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
+              <span><Users size={10} className="inline mr-0.5" />{members.length} members</span>
+              <span className="flex items-center gap-0.5">
+                {myRole === "leader" && <Crown size={10} className="text-accent" />}
+                {(myRole || "member").toUpperCase()}
+              </span>
+            </div>
+
+            {/* Members list — clickable */}
+            {members.length > 0 && (
+              <div className="space-y-1 pt-1">
+                {members.slice(0, 5).map((m: any) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setSheetMemberId(m.user_id)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded border border-border/50 hover:border-primary/30 hover:bg-muted/30 transition-all text-left group"
+                  >
+                    {m.role === "leader" && <Crown size={9} className="text-accent shrink-0" />}
+                    <span className="text-[10px] font-mono text-foreground truncate flex-1">
+                      {(m as any).display_name || (m as any).user_id?.slice(0, 8) || "Member"}
+                    </span>
+                    <span className="text-[9px] font-mono text-muted-foreground/50 opacity-0 group-hover:opacity-100">
+                      VIEW
+                    </span>
+                  </button>
+                ))}
+                {members.length > 5 && (
+                  <p className="text-[9px] font-mono text-muted-foreground pl-2">+{members.length - 5} more</p>
+                )}
+              </div>
             )}
-            {myRole !== "leader" && (
-              <Button variant="outline" size="sm" onClick={handleLeave} disabled={actionLoading} className="text-[10px] font-mono">
-                <LogOut size={10} className="mr-1" /> LEAVE
-              </Button>
-            )}
+
+            <div className="flex gap-2 pt-1">
+              {myRole === "leader" && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => { setForm({ name: guild.name, tag: guild.tag, description: guild.description, banner_color: guild.banner_color }); setMode("edit"); }} className="text-[10px] font-mono">
+                    EDIT
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={handleDisband} disabled={actionLoading} className="text-[10px] font-mono">
+                    <Trash2 size={10} className="mr-1" /> DISBAND
+                  </Button>
+                </>
+              )}
+              {myRole !== "leader" && (
+                <Button variant="outline" size="sm" onClick={handleLeave} disabled={actionLoading} className="text-[10px] font-mono">
+                  <LogOut size={10} className="mr-1" /> LEAVE
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+      </HudCard>
+
+      {sheetMemberId && (
+        <OperatorProfileSheet
+          operatorId={sheetMemberId}
+          isOpen={!!sheetMemberId}
+          onClose={() => setSheetMemberId(null)}
+        />
       )}
-    </HudCard>
+    </>
   );
 }

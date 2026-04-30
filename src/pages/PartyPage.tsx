@@ -5,6 +5,7 @@ import { useParty } from "@/hooks/useParty";
 import { useAppData } from "@/contexts/AppDataContext";
 import { Button } from "@/components/ui/button";
 import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle } from "lucide-react";
+import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 
 export default function PartyPage() {
   const { party, members, openParties, loading, myRole, createParty, joinParty, leaveParty, disbandParty, kickMember, completePartyQuest } = useParty();
@@ -16,6 +17,9 @@ export default function PartyPage() {
   const [questId, setQuestId] = useState<string | null>(null);
   const [maxMembers, setMaxMembers] = useState(4);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Profile sheet
+  const [sheetOperatorId, setSheetOperatorId] = useState<string | null>(null);
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -31,6 +35,12 @@ export default function PartyPage() {
   const handleJoin = async (id: string) => {
     setActionLoading(true);
     await joinParty(id);
+    setActionLoading(false);
+  };
+
+  const handleKick = async (userId: string) => {
+    setActionLoading(true);
+    await kickMember(userId);
     setActionLoading(false);
   };
 
@@ -98,24 +108,36 @@ export default function PartyPage() {
 
             <p className="text-[10px] font-mono text-accent">XP POOL: {party.xp_pool}</p>
 
-            {/* Members */}
+            {/* Members — each card is tappable */}
             <div className="space-y-1.5">
               <p className="text-[10px] font-mono text-muted-foreground">MEMBERS ({members.length}/{party.max_members})</p>
               {members.map(m => (
-                <div key={m.id} className="flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2">
+                <button
+                  key={m.id}
+                  onClick={() => setSheetOperatorId(m.user_id)}
+                  className="w-full flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2 hover:border-primary/40 hover:bg-muted/50 transition-all text-left group"
+                >
                   <div className="flex items-center gap-2">
-                    {m.role === "leader" && <Crown size={10} className="text-accent" />}
+                    {m.role === "leader" && <Crown size={10} className="text-accent shrink-0" />}
                     <div>
                       <p className="text-xs font-body">{m.display_name || "Unknown"}</p>
                       <p className="text-[10px] font-mono text-muted-foreground">{m.navi_name} · LV{m.operator_level}</p>
                     </div>
                   </div>
-                  {myRole === "leader" && m.role !== "leader" && (
-                    <button onClick={() => kickMember(m.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                      <Trash2 size={11} />
-                    </button>
-                  )}
-                </div>
+                  <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                    {myRole === "leader" && m.role !== "leader" && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleKick(m.id); }}
+                        className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                    <span className="text-[9px] font-mono text-muted-foreground/50 opacity-0 group-hover:opacity-100">
+                      VIEW
+                    </span>
+                  </div>
+                </button>
               ))}
             </div>
 
@@ -167,6 +189,17 @@ export default function PartyPage() {
             </div>
           )}
         </HudCard>
+      )}
+
+      {/* Operator profile sheet */}
+      {sheetOperatorId && (
+        <OperatorProfileSheet
+          operatorId={sheetOperatorId}
+          isOpen={!!sheetOperatorId}
+          onClose={() => setSheetOperatorId(null)}
+          onRemoveFromParty={myRole === "leader" ? handleKick : undefined}
+          showRemoveFromParty={myRole === "leader"}
+        />
       )}
     </div>
   );

@@ -1,29 +1,33 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, MessageSquare, User, Swords, BookOpen, 
-  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users, Zap
+import {
+  LayoutDashboard, MessageSquare, User, Swords, BookOpen,
+  BarChart3, Settings, Compass, ChevronLeft, ChevronRight,
+  LogOut, Users, Zap, Globe,
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-
-const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/navi", icon: Compass, label: "Navi" },
-  { to: "/mavis", icon: MessageSquare, label: "Navi.EXE" },
-  { to: "/character", icon: User, label: "Character" },
-  { to: "/quests", icon: Swords, label: "Quests" },
-  { to: "/party", icon: Users, label: "Party" },
-  { to: "/journal", icon: BookOpen, label: "Journal" },
-  { to: "/stats", icon: BarChart3, label: "Stats" },
-  { to: "/upgrade", icon: Zap, label: "Upgrade" },
-  { to: "/settings", icon: Settings, label: "Settings" },
-];
+import { useAppData } from "@/contexts/AppDataContext";
 
 export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
+  const { dmUnreadCount } = useAppData();
+
+  const navItems = [
+    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/navi", icon: Compass, label: "Navi" },
+    { to: "/mavis", icon: MessageSquare, label: "Navi.EXE" },
+    { to: "/character", icon: User, label: "Character" },
+    { to: "/quests", icon: Swords, label: "Quests" },
+    { to: "/party", icon: Users, label: "Party" },
+    { to: "/social", icon: Globe, label: "Social", badge: dmUnreadCount > 0 ? dmUnreadCount : undefined },
+    { to: "/journal", icon: BookOpen, label: "Journal" },
+    { to: "/stats", icon: BarChart3, label: "Stats" },
+    { to: "/upgrade", icon: Zap, label: "Upgrade" },
+    { to: "/settings", icon: Settings, label: "Settings" },
+  ];
 
   return (
     <motion.aside
@@ -55,31 +59,51 @@ export default function AppSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-        {navItems.map(({ to, icon: Icon, label }) => {
+        {navItems.map(({ to, icon: Icon, label, badge }) => {
           const isActive = location.pathname === to;
           return (
             <NavLink
               key={to}
               to={to}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all group ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all group relative ${
                 isActive
                   ? "bg-primary/10 text-primary border border-primary/20 glow-subtle"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border border-transparent"
               }`}
             >
-              <Icon size={18} className={`shrink-0 ${isActive ? "text-primary" : ""}`} />
+              <div className="relative shrink-0">
+                <Icon size={18} className={isActive ? "text-primary" : ""} />
+                {badge !== undefined && badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-primary text-background text-[8px] font-bold font-display flex items-center justify-center px-0.5">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </div>
               <AnimatePresence>
                 {!collapsed && (
                   <motion.span
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="whitespace-nowrap font-body"
+                    className="whitespace-nowrap font-body flex-1"
                   >
                     {label}
                   </motion.span>
                 )}
               </AnimatePresence>
+              {/* Badge label when expanded */}
+              {!collapsed && badge !== undefined && badge > 0 && (
+                <AnimatePresence>
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="ml-auto min-w-[18px] h-[18px] rounded-full bg-primary text-background text-[9px] font-bold font-display flex items-center justify-center px-1"
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </motion.span>
+                </AnimatePresence>
+              )}
             </NavLink>
           );
         })}

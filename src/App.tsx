@@ -17,6 +17,7 @@ import QuestsPage from "./pages/QuestsPage";
 import JournalPage from "./pages/JournalPage";
 import StatsPage from "./pages/StatsPage";
 import PartyPage from "./pages/PartyPage";
+import SocialPage from "./pages/SocialPage";
 import SettingsPage from "./pages/SettingsPage";
 import UpgradePage from "./pages/UpgradePage";
 import CheckoutReturn from "./pages/CheckoutReturn";
@@ -28,11 +29,12 @@ import { useProfile } from "@/hooks/useProfile";
 import EvolutionEvent from "@/components/EvolutionEvent";
 import { useAppData } from "@/contexts/AppDataContext";
 import { tierFromLevel } from "@/lib/xpSystem";
+import { postToFeed } from "@/lib/feedHelpers";
 
 const queryClient = new QueryClient();
 
 function EvolutionWatcher() {
-  const { profile } = useAppData();
+  const { profile, updateProfile, feed } = useAppData();
   const [active, setActive] = useState<{ oldTier: number; newTier: number } | null>(null);
 
   const operatorLevel = (profile as any)?.operator_level ?? 1;
@@ -57,7 +59,34 @@ function EvolutionWatcher() {
       naviLevel={(profile as any)?.navi_level || 1}
       naviName={(profile as any)?.navi_name || "NAVI"}
       operatorName={(profile as any)?.display_name || "Operator"}
-      onDismiss={() => setActive(null)}
+      onDismiss={async () => {
+        // Persist tier update
+        await updateProfile({ last_evolution_tier: active.newTier } as any);
+        // Auto-post evolution to feed
+        const { evolutionTitleFromMbtiAndLevel, TIER_NAMES } = await import("@/lib/xpSystem");
+        const newTitle = evolutionTitleFromMbtiAndLevel(
+          (profile as any)?.mbti_type || "",
+          operatorLevel
+        );
+        const tierName = TIER_NAMES[active.newTier as 1 | 2 | 3 | 4 | 5] || "ASCENDING";
+        await postToFeed({
+          userId: (profile as any)?.id ?? "",
+          display_name: (profile as any)?.display_name ?? null,
+          navi_name: (profile as any)?.navi_name ?? null,
+          character_class: (profile as any)?.character_class ?? null,
+          mbti_type: (profile as any)?.mbti_type ?? null,
+          operator_level: operatorLevel,
+          content_type: "EVOLUTION",
+          content: `${(profile as any)?.display_name || "Operator"} evolved to ${tierName}: ${newTitle}`,
+          metadata: {
+            old_tier: active.oldTier,
+            new_tier: active.newTier,
+            evolution_title: newTitle,
+            mbti_type: (profile as any)?.mbti_type,
+          },
+        });
+        setActive(null);
+      }}
     />
   );
 }
@@ -90,12 +119,8 @@ function AppContent() {
   }
 
   if (!user) return <AuthPage />;
-
   if (showOnboarding === null) return null;
-
-  if (showOnboarding) {
-    return <Onboarding onComplete={() => setShowOnboarding(false)} />;
-  }
+  if (showOnboarding) return <Onboarding onComplete={() => setShowOnboarding(false)} />;
 
   return (
     <AppDataProvider>
@@ -105,18 +130,19 @@ function AppContent() {
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">
           <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/navi" element={<NaviPage />} />
-          <Route path="/mavis" element={<MavisChat />} />
-          <Route path="/character" element={<CharacterPage />} />
-          <Route path="/quests" element={<QuestsPage />} />
-          <Route path="/party" element={<PartyPage />} />
-          <Route path="/journal" element={<JournalPage />} />
-          <Route path="/stats" element={<StatsPage />} />
-          <Route path="/upgrade" element={<UpgradePage />} />
-          <Route path="/checkout/return" element={<CheckoutReturn />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<NotFound />} />
+            <Route path="/" element={<Index />} />
+            <Route path="/navi" element={<NaviPage />} />
+            <Route path="/mavis" element={<MavisChat />} />
+            <Route path="/character" element={<CharacterPage />} />
+            <Route path="/quests" element={<QuestsPage />} />
+            <Route path="/party" element={<PartyPage />} />
+            <Route path="/social" element={<SocialPage />} />
+            <Route path="/journal" element={<JournalPage />} />
+            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/upgrade" element={<UpgradePage />} />
+            <Route path="/checkout/return" element={<CheckoutReturn />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
       </div>

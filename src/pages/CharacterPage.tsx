@@ -35,7 +35,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
 
-const tabs = ["CHARACTER INFO", "NAVI / SKINS", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
+// Skills, Inventory, and Effects are placed up front so they're impossible to miss.
+const tabs = ["CHARACTER INFO", "SKILLS", "INVENTORY", "EFFECTS", "NAVI / SKINS"] as const;
 
 // ── Skin collection metadata (mirrors SkinsPage) ──────────────────────────
 const SKIN_CATEGORY_LABELS: Record<SkinCategory, string> = {

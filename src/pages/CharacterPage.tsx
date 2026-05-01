@@ -713,7 +713,11 @@ export default function CharacterPage() {
             ) : (
               <div className="space-y-3">
                 {skills.map((skill) => (
-                  <div key={skill.id} className="group">
+                  <div
+                    key={skill.id}
+                    className="group cursor-pointer rounded p-2 -mx-2 hover:bg-muted/30 transition-colors"
+                    onClick={() => setDetailSkill(skill)}
+                  >
                     <div className="flex justify-between items-center mb-0.5">
                       <span className="text-sm font-body">{skill.name}</span>
                       <div className="flex items-center gap-2">
@@ -721,7 +725,7 @@ export default function CharacterPage() {
                         {editMode && (
                           <>
                             {editingSkillId === skill.id ? (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="number"
                                   value={editingSkillLevel}
@@ -734,8 +738,8 @@ export default function CharacterPage() {
                               </div>
                             ) : (
                               <>
-                                <button onClick={() => { setEditingSkillId(skill.id); setEditingSkillLevel(skill.level); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"><Pencil size={11} /></button>
-                                <button onClick={() => deleteSkill(skill.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"><Trash2 size={11} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setEditingSkillId(skill.id); setEditingSkillLevel(skill.level); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"><Pencil size={11} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); deleteSkill(skill.id); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"><Trash2 size={11} /></button>
                               </>
                             )}
                           </>
@@ -773,7 +777,11 @@ export default function CharacterPage() {
             ) : (
               <div className="space-y-2">
                 {items.map((item) => (
-                  <div key={item.id} className={`flex items-center justify-between py-2 border-b border-border last:border-0 group ${item.equipped ? "opacity-100" : "opacity-70"}`}>
+                  <div
+                    key={item.id}
+                    onClick={() => setDetailItem(item)}
+                    className={`flex items-center justify-between py-2 px-2 -mx-2 rounded cursor-pointer hover:bg-muted/30 border-b border-border last:border-0 group ${item.equipped ? "opacity-100" : "opacity-70"}`}
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] font-mono text-muted-foreground uppercase">{item.slot}</p>
@@ -786,8 +794,8 @@ export default function CharacterPage() {
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${RARITY_COLORS[item.rarity]}`}>{item.rarity}</span>
                       {editMode && (
                         <>
-                          {!item.equipped && <button onClick={() => equipItem(item.id)} className="text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 text-[10px] font-mono">EQUIP</button>}
-                          <button onClick={() => deleteItem(item.id)} className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
+                          {!item.equipped && <button onClick={(e) => { e.stopPropagation(); equipItem(item.id); }} className="text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 text-[10px] font-mono">EQUIP</button>}
+                          <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
                         </>
                       )}
                     </div>
@@ -827,7 +835,11 @@ export default function CharacterPage() {
           ) : (
             <div className="space-y-2">
               {effects.map((effect) => (
-                <div key={effect.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 group">
+                <div
+                  key={effect.id}
+                  onClick={() => setDetailEffect(effect)}
+                  className="flex items-center justify-between py-2 px-2 -mx-2 rounded cursor-pointer hover:bg-muted/30 border-b border-border last:border-0 group"
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-body">{effect.name}</p>
@@ -839,7 +851,7 @@ export default function CharacterPage() {
                     {effect.expires_at && <p className="text-[9px] font-mono text-neon-amber">Expires: {new Date(effect.expires_at).toLocaleDateString()}</p>}
                   </div>
                   {editMode && (
-                    <button onClick={() => removeEffect(effect.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); removeEffect(effect.id); }} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
                       <Trash2 size={12} />
                     </button>
                   )}

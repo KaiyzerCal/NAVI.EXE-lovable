@@ -6,6 +6,7 @@ import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2 } from "lucide-react
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
+import UploadZone from "@/components/UploadZone";
 
 const TAG_COLORS: Record<string, string> = {
   reflection: "bg-neon-cyan/10 text-neon-cyan",
@@ -49,6 +50,11 @@ function EntryFormCard({
           <input type="text" value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
             placeholder="focus, coding, insight..."
             className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
+        </div>
+        <div>
+          <label className="text-[10px] font-mono text-muted-foreground block mb-1">ATTACHMENTS (optional)</label>
+          <UploadZone linkedEntityType="journal_entry" compact />
+          <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Uploads are saved to your Atlas and visible to NAVI for analysis.</p>
         </div>
         <div className="flex gap-2 pt-1">
           <button onClick={() => onSave(form)} disabled={!form.title.trim() || saving}

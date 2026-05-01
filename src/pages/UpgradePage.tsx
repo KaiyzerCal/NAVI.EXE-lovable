@@ -1,20 +1,31 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Zap, Check, Lock, Loader2, Crown } from "lucide-react";
+import { Zap, Check, Lock, Loader2, Crown, Coins } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import SubscriptionBadge from "@/components/SubscriptionBadge";
 
 const FREE_FEATURES  = ["3 active quests", "15 AI messages/day", "2 starter skins", "Basic NAVI personality"];
 const CORE_FEATURES  = ["Unlimited quests", "Unlimited AI messages (GPT-4o-mini)", "All 64 skins", "All personality modes", "Push notifications", "Party system", "Full stats dashboard", "Guild access"];
-const POWER_FEATURES = ["Everything in Core", "GPT-4o model for NAVI", "NAVI-to-NAVI messaging", "Agent framework", "Advanced AI memory", "Priority response speed", "Exclusive Power skins"];
+const ELITE_FEATURES = [
+  "Everything in Core",
+  "GPT-4o model upgrade for NAVI",
+  "Voice NAVI (real speech synthesis)",
+  "Agent automation & scheduling",
+  "Advanced semantic memory (25 results)",
+  "Memory consolidation & learning",
+  "Priority AI response speed",
+  "Forge tokens 2× earn rate",
+  "Exclusive Elite skins",
+];
 
 export default function UpgradePage() {
   const [params] = useSearchParams();
   const { tier, startCheckout } = useSubscription();
   const [loading, setLoading] = useState(false);
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const success = params.get("success") === "1";
   const cancelled = params.get("cancelled") === "1";
 
@@ -97,22 +108,56 @@ export default function UpgradePage() {
           )}
         </motion.div>
 
-        {/* POWER */}
-        <HudCard title="POWER OPERATOR" icon={<Crown size={14} />}>
+        {/* ELITE OPERATOR */}
+        <HudCard title="ELITE OPERATOR" icon={<Crown size={14} />}>
           <div className="space-y-2 mb-4">
-            {POWER_FEATURES.map((f) => (
+            {ELITE_FEATURES.map((f) => (
               <p key={f} className="text-xs font-body text-muted-foreground flex gap-2">
                 <span className="text-secondary">·</span>{f}
               </p>
             ))}
           </div>
-          <p className="text-lg font-display font-bold text-secondary">$19.99</p>
+          <p className="text-lg font-display font-bold text-secondary">$19.99/mo</p>
           <p className="text-[10px] font-mono text-muted-foreground mb-3">per month — Phase 3</p>
-          <div className="py-1.5 text-center rounded border border-border text-[10px] font-mono text-muted-foreground">
-            COMING SOON
-          </div>
+          {waitlistSubmitted ? (
+            <div className="py-1.5 text-center rounded border border-amber-500/40 bg-amber-500/10">
+              <span className="text-[10px] font-mono text-amber-400 font-bold tracking-widest">YOU'RE ON THE LIST</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setWaitlistSubmitted(true)}
+              className="w-full py-1.5 text-center rounded border border-secondary/40 bg-secondary/10 text-[10px] font-mono text-secondary hover:bg-secondary/20 transition-colors"
+            >
+              JOIN WAITLIST
+            </button>
+          )}
         </HudCard>
       </div>
+
+      {/* Forge Economy */}
+      <HudCard title="FORGE ECONOMY" icon={<Coins size={14} />}>
+        <p className="text-xs font-body text-muted-foreground mb-3">
+          Earn Forge tokens by completing quests. Spend them on exclusive skins, equipment, and profile upgrades.
+        </p>
+        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div className="p-2 rounded border border-border bg-muted/20">
+            <p className="text-muted-foreground">Daily Quest</p>
+            <p className="text-primary font-bold">+10 Forge</p>
+          </div>
+          <div className="p-2 rounded border border-border bg-muted/20">
+            <p className="text-muted-foreground">Weekly Quest</p>
+            <p className="text-primary font-bold">+30 Forge</p>
+          </div>
+          <div className="p-2 rounded border border-border bg-muted/20">
+            <p className="text-muted-foreground">Epic Quest</p>
+            <p className="text-primary font-bold">+100 Forge</p>
+          </div>
+          <div className="p-2 rounded border border-border bg-muted/20">
+            <p className="text-muted-foreground">Elite Bonus</p>
+            <p className="text-secondary font-bold">2× ALL</p>
+          </div>
+        </div>
+      </HudCard>
     </div>
   );
 }

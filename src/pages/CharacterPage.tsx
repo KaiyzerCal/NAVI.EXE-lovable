@@ -186,6 +186,11 @@ export default function CharacterPage() {
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [editingSkillLevel, setEditingSkillLevel] = useState(1);
 
+  // Detail modals for clickable Skills / Inventory / Effects rows
+  const [detailSkill, setDetailSkill] = useState<typeof skills[number] | null>(null);
+  const [detailItem, setDetailItem] = useState<typeof items[number] | null>(null);
+  const [detailEffect, setDetailEffect] = useState<typeof effects[number] | null>(null);
+
   const characterClass = profile.character_class || "Unknown";
   const mbtiType = profile.mbti_type || null;
   const classInfo = mbtiType ? MBTI_CLASS_MAP[mbtiType] : null;

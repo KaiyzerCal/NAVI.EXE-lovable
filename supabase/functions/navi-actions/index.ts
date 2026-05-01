@@ -92,7 +92,7 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
     case "complete_quest": {
       if (!params.quest_id) throw new Error("Missing quest_id");
       const { data: quest, error } = await sb.from("quests")
-        .select("xp_reward, name, total, linked_skill_id")
+        .select("xp_reward, name, total, type, linked_skill_id")
         .eq("id", String(params.quest_id)).eq("user_id", userId).single();
       if (error) throw error;
       if (!quest) throw new Error("Quest not found");
@@ -101,6 +101,18 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
         .eq("id", String(params.quest_id)).eq("user_id", userId);
       if (qErr) throw qErr;
       await awardXP(sb, userId, Number(quest.xp_reward || 0));
+
+      // Award Forge tokens by quest type
+      const forgeMap: Record<string, number> = { Daily: 10, Weekly: 30, Main: 50, Side: 20, Minor: 5, Epic: 100 };
+      const forgeReward = forgeMap[String((quest as any).type || "Daily")] ?? 10;
+      const { data: fb } = await sb.from("forge_balances" as any).select("id, balance, lifetime_earned").eq("user_id", userId).maybeSingle();
+      if (fb) {
+        await sb.from("forge_balances" as any).update({ balance: Number((fb as any).balance || 0) + forgeReward, lifetime_earned: Number((fb as any).lifetime_earned || 0) + forgeReward, updated_at: new Date().toISOString() }).eq("id", (fb as any).id);
+      } else {
+        await sb.from("forge_balances" as any).insert({ user_id: userId, balance: forgeReward, lifetime_earned: forgeReward });
+      }
+      await sb.from("forge_transactions" as any).insert({ user_id: userId, amount: forgeReward, transaction_type: "earn", description: `Quest completed: ${quest.name}`, reference_id: String(params.quest_id) }).catch(() => {});
+
       if (quest.linked_skill_id) {
         const { data: skill } = await sb.from("skills")
           .select("id, name, level, max_level, xp")

@@ -316,10 +316,17 @@ WEB SEARCH:
 ${webSection}
 
 ACTIONS — CRITICAL SYSTEM REQUIREMENT:
-You MUST embed action tags in your response for ANY data modification. These tags are invisible to the user but are the ONLY mechanism that actually changes data. Without them, nothing happens.
+You MUST include a \`\`\`actions block at the VERY END of your response for ANY data modification. This block is invisible to the user but is the ONLY mechanism that actually changes data. Without it, nothing happens.
 
-FORMAT: :::ACTION{"type":"...","params":{...}}:::
-Place tags BEFORE your visible confirmation text. You may chain multiple tags.
+FORMAT — place this block as the ABSOLUTE LAST thing in your response, after all visible text:
+\`\`\`actions
+{"actions":[{"type":"...","params":{...}},{"type":"...","params":{...}}]}
+\`\`\`
+
+Rules:
+- Only include the block when you are actually performing an action
+- Put ALL actions for a response in ONE block — never split them
+- The block MUST be the last thing in your response — after all visible text
 
 ACTION REFERENCE:
 Quests: create_quest, update_quest, complete_quest, update_quest_progress, delete_quest
@@ -369,25 +376,27 @@ After conversations that reveal personal info, silently create a journal entry (
 ⚠️ MANDATORY EXAMPLES — Follow this exact format:
 
 User: "create a quest called Morning Run"
-Your response: :::ACTION{"type":"create_quest","params":{"name":"Morning Run","description":"Daily morning running quest","type":"Daily","total":1,"xp_reward":50}}:::
-Done! I've set up "Morning Run" as a Daily quest worth 50 XP. Get moving! 🏃
-
-User: "make an epic quest called Save The World with 10 steps"
-Your response: :::ACTION{"type":"create_quest","params":{"name":"Save The World","description":"An epic multi-step quest","type":"Epic","total":10,"xp_reward":500}}:::
-"Save The World" is live — Epic tier, 10 steps, 500 XP on completion. Let's go.
+Your response: Done! "Morning Run" is set up as a Daily quest worth 50 XP. Let's go.
+\`\`\`actions
+{"actions":[{"type":"create_quest","params":{"name":"Morning Run","description":"Daily morning running quest","type":"Daily","total":1,"xp_reward":50}}]}
+\`\`\`
 
 User: "I finished the Morning Run quest"
-Your response: :::ACTION{"type":"complete_quest","params":{"quest_id":"<ID from APP STATE>"}}:::
-Morning Run complete! Nice work.
+Your response: Morning Run complete. Nice work.
+\`\`\`actions
+{"actions":[{"type":"complete_quest","params":{"quest_id":"<ID from APP STATE>"}},{"type":"award_xp","params":{"amount":50}}]}
+\`\`\`
 
 User: "log this: had a great meeting with the team"
-Your response: :::ACTION{"type":"create_journal","params":{"title":"Great Team Meeting","content":"Had a great meeting with the team","tags":["work"],"category":"business","importance":"medium","xp_earned":10}}:::
-Logged it. Sounds like a productive session.
+Your response: Logged it. Sounds like a productive session.
+\`\`\`actions
+{"actions":[{"type":"create_journal","params":{"title":"Great Team Meeting","content":"Had a great meeting with the team","tags":["work"],"category":"business","importance":"medium","xp_earned":10}}]}
+\`\`\`
 
 NEVER SAY: "As an AI...", "I'm just a language model...", "How can I assist you today?"
 You are ${naviName}. You belong to ${userName}. Talk like it.
 
-FINAL REMINDER: If your response describes creating, updating, completing, or deleting ANYTHING, it MUST contain :::ACTION tags. No tag = no action = you lied to the user.`;
+FINAL REMINDER: If your response describes creating, updating, completing, or deleting ANYTHING, it MUST contain a \`\`\`actions block at the end. No block = no action = you lied to the user.`;
 }
 
 serve(async (req) => {
@@ -402,6 +411,70 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API") ?? "";
+    const userId = context?.user_id as string | undefined;
+
+    // ── Subscription enforcement ──────────────────────────────────────────────
+    if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        const profileRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,daily_message_reset_at`,
+          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+        );
+        if (profileRes.ok) {
+          const profiles = await profileRes.json();
+          const p = profiles?.[0];
+          const tier = p?.subscription_tier ?? "free";
+          const today = new Date().toISOString().slice(0, 10);
+          const resetDate = p?.daily_message_reset_at ?? today;
+          const dailyCount = resetDate < today ? 0 : Number(p?.daily_message_count ?? 0);
+          const FREE_LIMIT = 50;
+          if (tier === "free" && dailyCount >= FREE_LIMIT) {
+            return new Response(
+              JSON.stringify({ error: `Daily sync quota reached (${FREE_LIMIT} messages). Upgrade to Core Operator for unlimited bandwidth.` }),
+              { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          if (tier === "free") {
+            fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+              method: "PATCH",
+              headers: {
+                apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+                "Content-Type": "application/json", Prefer: "return=minimal",
+              },
+              body: JSON.stringify({ daily_message_count: dailyCount + 1, daily_message_reset_at: today }),
+            }).catch(() => {});
+          }
+        }
+      } catch (e) { console.warn("Subscription check failed (non-blocking):", e); }
+    }
+
+    // ── Rate limiting (500 req/hour hard cap) ─────────────────────────────────
+    if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        const windowStart = new Date(Date.now() - 3600000).toISOString();
+        const rlRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/rate_limits?user_id=eq.${userId}&window_start=gt.${windowStart}&select=request_count`,
+          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+        );
+        if (rlRes.ok) {
+          const rlRows = await rlRes.json();
+          const count = (rlRows as any[]).reduce((s, r) => s + (r.request_count || 0), 0);
+          if (count >= 500) {
+            return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in a few minutes." }), {
+              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+        fetch(`${SUPABASE_URL}/rest/v1/rate_limits`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+            "Content-Type": "application/json", Prefer: "resolution=merge-duplicates",
+          },
+          body: JSON.stringify({ user_id: userId, window_start: new Date().toISOString(), request_count: 1 }),
+        }).catch(() => {});
+      } catch (e) { console.warn("Rate limit check failed (non-blocking):", e); }
+    }
 
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
 
@@ -460,6 +533,20 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "AI API error" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Fire-and-forget: personality drift signal + last_active
+    if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      const msgLen = lastUserMsg?.content?.length ?? 0;
+      const engagementScore = Math.min(10, Math.max(1, Math.floor(msgLen / 25)));
+      fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+        method: "PATCH",
+        headers: {
+          apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          "Content-Type": "application/json", Prefer: "return=minimal",
+        },
+        body: JSON.stringify({ personality_engagement_score: engagementScore, last_active: new Date().toISOString() }),
+      }).catch(() => {});
     }
 
     return new Response(response.body, {

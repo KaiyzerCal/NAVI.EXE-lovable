@@ -861,6 +861,112 @@ export default function CharacterPage() {
           )}
         </HudCard>
       )}
+
+      {/* ── Detail modals (Skill / Item / Effect) ───────────────────────── */}
+      <AnimatePresence>
+        {detailSkill && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailSkill(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground">{detailSkill.category || "GENERAL"}</p>
+                  <h3 className="font-display text-lg font-bold text-foreground">{detailSkill.name}</h3>
+                </div>
+                <button onClick={() => setDetailSkill(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-4 whitespace-pre-wrap">
+                {detailSkill.description || "No description."}
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">LEVEL</p><p className="font-display text-sm text-primary">{detailSkill.level}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">MAX</p><p className="font-display text-sm text-foreground">{(detailSkill as any).max_level ?? 100}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">XP</p><p className="font-display text-sm text-neon-green">{detailSkill.xp ?? 0}</p></div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {detailItem && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailItem(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase">{detailItem.slot}</p>
+                  <h3 className="font-display text-lg font-bold text-foreground">{detailItem.name}</h3>
+                </div>
+                <button onClick={() => setDetailItem(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${RARITY_COLORS[detailItem.rarity]}`}>{detailItem.rarity}</span>
+                {detailItem.equipped && <span className="text-[9px] font-mono text-neon-green bg-neon-green/10 px-1.5 py-0.5 rounded">EQUIPPED</span>}
+              </div>
+              {(detailItem as any).description && (
+                <p className="text-xs font-body text-muted-foreground mb-3 whitespace-pre-wrap">{(detailItem as any).description}</p>
+              )}
+              {detailItem.effect && <p className="text-xs font-mono text-neon-green mb-3">Effect: {detailItem.effect}</p>}
+              {(detailItem as any).stat_bonuses && Object.keys((detailItem as any).stat_bonuses).length > 0 && (
+                <div className="bg-muted/40 rounded p-2 mb-3">
+                  <p className="text-[9px] font-mono text-muted-foreground mb-1">STAT BONUSES</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries((detailItem as any).stat_bonuses).map(([k, v]) => (
+                      <span key={k} className="text-[10px] font-mono text-neon-green bg-neon-green/10 px-1.5 py-0.5 rounded">+{String(v)} {k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!detailItem.equipped && (
+                <Button size="sm" className="w-full text-[10px] font-mono" onClick={async () => { await equipItem(detailItem.id); setDetailItem(null); }}>
+                  EQUIP
+                </Button>
+              )}
+            </motion.div>
+          </div>
+        )}
+        {detailEffect && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailEffect(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${detailEffect.effect_type === "buff" ? "bg-neon-green/10 text-neon-green" : detailEffect.effect_type === "debuff" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+                    {detailEffect.effect_type.toUpperCase()}
+                  </span>
+                  <h3 className="font-display text-lg font-bold text-foreground mt-1">{detailEffect.name}</h3>
+                </div>
+                <button onClick={() => setDetailEffect(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-3 whitespace-pre-wrap">{detailEffect.description || "No description."}</p>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">STAT</p><p className="font-display text-sm">{(detailEffect as any).stat_affected || "—"}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">MODIFIER</p><p className="font-display text-sm text-neon-green">{((detailEffect as any).modifier_value ?? 0) > 0 ? "+" : ""}{(detailEffect as any).modifier_value ?? 0}</p></div>
+              </div>
+              {detailEffect.expires_at && <p className="text-[10px] font-mono text-neon-amber mt-2">Expires: {new Date(detailEffect.expires_at).toLocaleString()}</p>}
+              {(detailEffect as any).source && <p className="text-[9px] font-mono text-muted-foreground mt-1">Source: {(detailEffect as any).source}</p>}
+              {editMode && (
+                <Button variant="destructive" size="sm" className="w-full mt-3 text-[10px] font-mono" onClick={async () => { await removeEffect(detailEffect.id); setDetailEffect(null); }}>
+                  REMOVE EFFECT
+                </Button>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

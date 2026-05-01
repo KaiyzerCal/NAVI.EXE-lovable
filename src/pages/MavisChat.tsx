@@ -522,6 +522,37 @@ export default function MavisChat() {
 
   // ── Load recent message threads for NAVI context ───────────────────────────
   const [messageThreadContext, setMessageThreadContext] = useState<any[]>([]);
+  // ── Load recent media uploads for NAVI context ─────────────────────────────
+  const [mediaContext, setMediaContext] = useState<any[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+
+  const refreshMediaContext = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("media")
+      .select("file_name, file_type, file_url, ai_description, linked_entity_type, linked_entity_id, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    if (data) {
+      setMediaContext(
+        data.map((m: any) => ({
+          file_name: m.file_name,
+          type: m.file_type,
+          url: m.file_url,
+          ai_description: m.ai_description ?? null,
+          linked_to: m.linked_entity_type
+            ? `${m.linked_entity_type}${m.linked_entity_id ? ":" + m.linked_entity_id : ""}`
+            : null,
+          uploaded_at: m.created_at,
+        }))
+      );
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshMediaContext();
+  }, [refreshMediaContext]);
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -853,6 +884,7 @@ export default function MavisChat() {
           })),
           memory_context: memoryContext || undefined,
           message_threads: messageThreadContext.length > 0 ? messageThreadContext : undefined,
+          media: mediaContext.length > 0 ? mediaContext : undefined,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           client_now_iso: new Date().toISOString(),
         },
@@ -961,7 +993,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,

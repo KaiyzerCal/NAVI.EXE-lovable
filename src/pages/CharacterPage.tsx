@@ -757,8 +757,8 @@ export default function CharacterPage() {
         </div>
       )}
 
-      {/* ── EQUIPMENT ────────────────────────────────────────────────────── */}
-      {activeTab === "EQUIPMENT" && (
+      {/* ── INVENTORY (Equipment) ───────────────────────────────────────── */}
+      {activeTab === "INVENTORY" && (
         <div className="space-y-4">
           <HudCard title="INVENTORY & EQUIPMENT" icon={<Star size={14} />} glow>
             {equipLoading ? (

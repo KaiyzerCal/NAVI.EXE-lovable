@@ -12,7 +12,7 @@ import { FeedProvider } from "@/contexts/FeedContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
 import EvolutionEvent from "@/components/EvolutionEvent";
-import FeedbackWidget from "@/components/FeedbackWidget";
+// FeedbackWidget removed from layout — accessible via Settings if/when re-enabled.
 import AuthPage from "./pages/AuthPage";
 import Index from "./pages/Index";
 import NaviPage from "./pages/NaviPage";
@@ -177,7 +177,6 @@ function AppShell() {
           }}
         />
       )}
-      <FeedbackWidget />
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">

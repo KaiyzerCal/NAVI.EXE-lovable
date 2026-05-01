@@ -32,6 +32,8 @@ interface FeedContextType {
   loading: boolean;
   hasMore: boolean;
   newPostCount: number;
+  followingIds: string[];
+  guildMemberIds: string[];
   clearNewCount: () => void;
   loadMore: () => Promise<void>;
   submitPost: (content: string, contentType?: string, metadata?: Record<string, any>) => Promise<void>;
@@ -76,6 +78,8 @@ export function FeedProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [newPostCount, setNewPostCount] = useState(0);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [guildMemberIds, setGuildMemberIds] = useState<string[]>([]);
   const pageRef = useRef(0);
   const initialDone = useRef(false);
 
@@ -100,6 +104,34 @@ export function FeedProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user) loadInitial();
   }, [user, loadInitial]);
+
+  // Load following + guild member ids for filter tabs
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("operator_follows" as any)
+      .select("following_id")
+      .eq("follower_id", user.id)
+      .then(({ data }) => {
+        if (data) setFollowingIds((data as any[]).map((r) => r.following_id));
+      });
+
+    supabase
+      .from("guild_members" as any)
+      .select("guild_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data: gm }) => {
+        if (!gm) return;
+        supabase
+          .from("guild_members" as any)
+          .select("user_id")
+          .eq("guild_id", (gm as any).guild_id)
+          .then(({ data: members }) => {
+            if (members) setGuildMemberIds((members as any[]).map((m) => m.user_id));
+          });
+      });
+  }, [user]);
 
   // Realtime subscription at app level
   useEffect(() => {
@@ -238,6 +270,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
   return (
     <FeedContext.Provider value={{
       posts, loading, hasMore, newPostCount,
+      followingIds, guildMemberIds,
       clearNewCount, loadMore,
       submitPost, autoPost, deletePost, toggleLike,
       submitReply, fetchReplies,

@@ -200,12 +200,12 @@ function FeedSkeleton() {
   );
 }
 
-type FilterTab = "ALL" | "MY POSTS";
+type FilterTab = "ALL" | "FOLLOWING" | "MY POSTS" | "GUILD";
 
 export default function SocialPage() {
   const { user } = useAuth();
   const { profile } = useAppData();
-  const { posts, loading, hasMore, newPostCount, clearNewCount, loadMore, submitPost, deletePost, toggleLike } = useFeed();
+  const { posts, loading, hasMore, newPostCount, followingIds, guildMemberIds, clearNewCount, loadMore, submitPost, deletePost, toggleLike } = useFeed();
 
   const [composing, setComposing] = useState(false);
   const [postContent, setPostContent] = useState("");
@@ -216,7 +216,12 @@ export default function SocialPage() {
   const MAX = 280;
   const charCount = postContent.length;
 
-  const filtered = posts.filter((p) => filterTab === "MY POSTS" ? p.operator_id === user?.id : true);
+  const filtered = posts.filter((p) => {
+    if (filterTab === "MY POSTS") return p.operator_id === user?.id;
+    if (filterTab === "FOLLOWING") return followingIds.includes(p.operator_id);
+    if (filterTab === "GUILD") return guildMemberIds.includes(p.operator_id);
+    return true;
+  });
 
   const handlePost = async () => {
     if (!postContent.trim() || submitting || charCount > MAX) return;
@@ -301,8 +306,8 @@ export default function SocialPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1 mb-4">
-        {(["ALL", "MY POSTS"] as const).map((tab) => (
+      <div className="flex gap-1 mb-4 flex-wrap">
+        {(["ALL", "FOLLOWING", "GUILD", "MY POSTS"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setFilterTab(tab)}
@@ -338,7 +343,10 @@ export default function SocialPage() {
           {filtered.length === 0 && !loading && (
             <div className="text-center py-12">
               <p className="font-mono text-muted-foreground text-sm">
-                {filterTab === "MY POSTS" ? "You haven't posted yet." : "No dispatches yet. Be the first to broadcast."}
+                {filterTab === "MY POSTS" && "You haven't posted yet."}
+                {filterTab === "FOLLOWING" && "No posts from operators you follow."}
+                {filterTab === "GUILD" && "No guild posts yet. Your guild members haven't posted."}
+                {filterTab === "ALL" && "No dispatches yet. Be the first to broadcast."}
               </p>
             </div>
           )}

@@ -130,6 +130,29 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
         }
       }
       await logActivity(sb, userId, "quest_completed", `Quest completed: ${quest.name}`, Number(quest.xp_reward || 0));
+
+      // Auto-post to operator feed (fire-and-forget)
+      sb.from("profiles")
+        .select("display_name, navi_name, character_class, mbti_type, operator_level")
+        .eq("id", userId)
+        .single()
+        .then(({ data: prof }) => {
+          if (!prof) return;
+          sb.from("operator_feed").insert({
+            operator_id: userId,
+            display_name: prof.display_name ?? "Operator",
+            navi_name: prof.navi_name ?? "NAVI",
+            character_class: prof.character_class ?? null,
+            mbti_type: prof.mbti_type ?? null,
+            operator_level: prof.operator_level ?? 1,
+            content_type: "QUEST_COMPLETE",
+            content: `${prof.display_name ?? "Operator"} completed the quest: ${quest.name}`,
+            metadata: { quest_name: quest.name, quest_type: quest.type, xp_earned: Number(quest.xp_reward || 0) },
+            likes: [],
+            is_public: true,
+          }).then(() => {});
+        });
+
       return;
     }
 

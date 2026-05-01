@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { useAppData } from "@/contexts/AppDataContext";
+import { supabase } from "@/integrations/supabase/client";
 import { FeedProvider } from "@/contexts/FeedContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
@@ -32,8 +33,10 @@ import AgentPage from "./pages/AgentPage";
 import AtlasPage from "./pages/AtlasPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { tierFromLevel } from "@/lib/classEvolution";
+import { useState, useEffect, useRef } from "react";
+import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel } from "@/lib/classEvolution";
+import { useFeed } from "@/contexts/FeedContext";
+import { toast } from "@/hooks/use-toast";
 
 const queryClient = new QueryClient();
 
@@ -71,12 +74,72 @@ function AppContent() {
   );
 }
 
+const STREAK_MILESTONES = [7, 14, 30, 60, 100];
+
 function AppShell() {
   const { profile, updateProfile } = useAppData();
+  const { autoPost } = useFeed();
+  const { user } = useAuth();
   const operatorLevel = profile.operator_level ?? 1;
   const lastTier = (profile as any).last_evolution_tier ?? 1;
   const newTier = tierFromLevel(operatorLevel);
   const showEvolution = newTier > lastTier && operatorLevel > 1;
+
+  // Track operator level changes → auto-post LEVEL_UP to feed
+  const prevLevelRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevLevelRef.current !== null && prevLevelRef.current < operatorLevel) {
+      const evolutionTitle = evolutionTitleFromMbtiAndLevel(profile.mbti_type ?? "", operatorLevel);
+      autoPost(
+        "LEVEL_UP",
+        `${profile.display_name ?? "Operator"} reached Level ${operatorLevel} — ${evolutionTitle}`,
+        { old_level: prevLevelRef.current, new_level: operatorLevel, evolution_title: evolutionTitle, tier_name: tierNameFromLevel(operatorLevel) }
+      );
+    }
+    prevLevelRef.current = operatorLevel;
+  }, [operatorLevel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Track streak milestones → auto-post STREAK to feed
+  const prevStreakRef = useRef<number | null>(null);
+  useEffect(() => {
+    const streak = profile.current_streak ?? 0;
+    if (prevStreakRef.current !== null && prevStreakRef.current < streak) {
+      const crossed = STREAK_MILESTONES.filter((m) => m > (prevStreakRef.current ?? 0) && m <= streak);
+      if (crossed.length > 0) {
+        autoPost(
+          "STREAK",
+          `${profile.display_name ?? "Operator"} hit a ${streak}-day streak`,
+          { streak_days: streak }
+        );
+      }
+    }
+    prevStreakRef.current = streak;
+  }, [profile.current_streak]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Global DM toast notification
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`global-dm-toast-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "direct_messages", filter: `recipient_id=eq.${user.id}` },
+        async (payload) => {
+          const msg = payload.new as any;
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("id", msg.sender_id)
+            .single();
+          toast({
+            title: `${sender?.display_name ?? "Operator"} sent you a message`,
+            description: msg.content?.slice(0, 60) ?? "",
+          });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build chat context for EvolutionEvent's NAVI message
   const chatContext = {
@@ -103,7 +166,15 @@ function AppShell() {
           naviName={profile.navi_name}
           displayName={profile.display_name}
           chatContext={chatContext}
-          onDismiss={(tier) => updateProfile({ last_evolution_tier: tier } as any)}
+          onDismiss={(tier) => {
+            updateProfile({ last_evolution_tier: tier } as any);
+            const evolutionTitle = evolutionTitleFromMbtiAndLevel(profile.mbti_type ?? "", operatorLevel);
+            autoPost(
+              "EVOLUTION",
+              `${profile.display_name ?? "Operator"} evolved to ${tierNameFromLevel(operatorLevel)}: ${evolutionTitle}`,
+              { old_tier: lastTier, new_tier: tier, evolution_title: evolutionTitle, mbti_type: profile.mbti_type }
+            );
+          }}
         />
       )}
       <FeedbackWidget />

@@ -6,18 +6,18 @@ export function useUnreadMessages() {
   const { user } = useAuth();
   const [totalUnread, setTotalUnread] = useState(0);
   const [unreadByThread, setUnreadByThread] = useState<Record<string, number>>({});
+  const [unreadDMs, setUnreadDMs] = useState(0);
 
-  const fetchUnread = useCallback(async () => {
-    if (!user) return;
+  const fetchNaviUnread = useCallback(async () => {
+    if (!user) return 0;
     const { data } = await supabase
       .from("navi_message_threads")
       .select("id, sender_user_id, sender_unread, receiver_unread")
       .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`);
 
-    if (!data) return;
     const byThread: Record<string, number> = {};
     let total = 0;
-    for (const t of data) {
+    for (const t of data ?? []) {
       const count = t.sender_user_id === user.id
         ? (t.sender_unread ?? 0)
         : (t.receiver_unread ?? 0);
@@ -25,18 +25,37 @@ export function useUnreadMessages() {
       total += count;
     }
     setUnreadByThread(byThread);
-    setTotalUnread(total);
+    return total;
   }, [user]);
+
+  const fetchDMUnread = useCallback(async () => {
+    if (!user) return 0;
+    const { count } = await supabase
+      .from("direct_messages" as any)
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", user.id)
+      .is("read_at", null)
+      .eq("deleted_by_recipient", false);
+    return count ?? 0;
+  }, [user]);
+
+  const fetchUnread = useCallback(async () => {
+    const [naviTotal, dmTotal] = await Promise.all([fetchNaviUnread(), fetchDMUnread()]);
+    setUnreadDMs(dmTotal);
+    setTotalUnread(naviTotal + dmTotal);
+  }, [fetchNaviUnread, fetchDMUnread]);
 
   useEffect(() => { fetchUnread(); }, [fetchUnread]);
 
-  // Realtime: re-fetch whenever any thread row changes (unread counters update)
+  // Realtime: re-fetch when navi thread counts or DM read_at changes
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel(`unread-count-watch-${user.id}-${Math.random().toString(36).slice(2)}`)
+      .channel(`unread-count-watch-${user.id}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "navi_message_threads" }, fetchUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "navi_message_threads" }, fetchUnread)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, fetchUnread)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "direct_messages" }, fetchUnread)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchUnread]);
@@ -52,5 +71,5 @@ export function useUnreadMessages() {
     setTotalUnread((p) => Math.max(0, p - prev));
   }
 
-  return { totalUnread, unreadByThread, markThreadRead, refresh: fetchUnread };
+  return { totalUnread, unreadByThread, unreadDMs, markThreadRead, refresh: fetchUnread };
 }

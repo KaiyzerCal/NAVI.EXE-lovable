@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, MessageSquare, UserMinus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { tierFromLevel, TIER_NAMES } from "@/lib/classEvolution";
+import { tierFromLevel, TIER_NAMES, TIER_COLORS } from "@/lib/classEvolution";
 import DirectMessageModal from "./DirectMessageModal";
 
 interface OperatorProfile {
@@ -34,14 +34,6 @@ export interface OperatorProfileSheetProps {
   onRemoveFromParty?: () => void;
   isPartyLeader?: boolean;
 }
-
-const TIER_COLORS: Record<number, string> = {
-  1: "#94a3b8",
-  2: "#4ade80",
-  3: "#38bdf8",
-  4: "#a78bfa",
-  5: "#f97316",
-};
 
 function Skeleton({ className }: { className: string }) {
   return <div className={`bg-muted/50 rounded animate-pulse ${className}`} />;

@@ -10,6 +10,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { Quest, QuestType, CreateQuestInput } from "@/hooks/useQuests";
+import UploadZone from "@/components/UploadZone";
 
 const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
   Main:   { color: "text-accent",       bg: "bg-accent/10",       border: "border-accent/40",       icon: <Star size={10} />,     label: "MAIN" },
@@ -111,6 +112,11 @@ function QuestFormCard({
             min={1}
             className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors"
           />
+        </div>
+        <div>
+          <label className="text-[10px] font-mono text-muted-foreground block mb-1">ATTACHMENTS (optional)</label>
+          <UploadZone linkedEntityType="quest" compact />
+          <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Files attached here become reference material NAVI can read.</p>
         </div>
         <div className="flex gap-2 pt-1">
           <button

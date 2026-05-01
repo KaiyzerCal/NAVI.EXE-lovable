@@ -1,8 +1,9 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw, Paperclip } from "lucide-react";
 import VoiceInput from "@/components/VoiceInput";
+import UploadZone from "@/components/UploadZone";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -521,6 +522,37 @@ export default function MavisChat() {
 
   // ── Load recent message threads for NAVI context ───────────────────────────
   const [messageThreadContext, setMessageThreadContext] = useState<any[]>([]);
+  // ── Load recent media uploads for NAVI context ─────────────────────────────
+  const [mediaContext, setMediaContext] = useState<any[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+
+  const refreshMediaContext = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("media")
+      .select("file_name, file_type, file_url, ai_description, linked_entity_type, linked_entity_id, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    if (data) {
+      setMediaContext(
+        data.map((m: any) => ({
+          file_name: m.file_name,
+          type: m.file_type,
+          url: m.file_url,
+          ai_description: m.ai_description ?? null,
+          linked_to: m.linked_entity_type
+            ? `${m.linked_entity_type}${m.linked_entity_id ? ":" + m.linked_entity_id : ""}`
+            : null,
+          uploaded_at: m.created_at,
+        }))
+      );
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshMediaContext();
+  }, [refreshMediaContext]);
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -852,6 +884,7 @@ export default function MavisChat() {
           })),
           memory_context: memoryContext || undefined,
           message_threads: messageThreadContext.length > 0 ? messageThreadContext : undefined,
+          media: mediaContext.length > 0 ? mediaContext : undefined,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           client_now_iso: new Date().toISOString(),
         },
@@ -960,7 +993,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,
@@ -1106,6 +1139,27 @@ export default function MavisChat() {
       </AnimatePresence>
 
       {/* Input box */}
+      {/* Inline attachment uploader — toggled by paperclip button */}
+      <AnimatePresence>
+        {showUpload && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden mb-2"
+          >
+            <div className="border border-primary/20 rounded-lg p-2 bg-card">
+              <UploadZone
+                compact
+                linkedEntityType="chat"
+                onUploadComplete={() => { refreshMediaContext(); }}
+              />
+              <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Attached files become reference material NAVI can read in this chat.</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">
         {/* Glowing NAVI orb */}
         <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
@@ -1143,6 +1197,16 @@ export default function MavisChat() {
           onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
           disabled={isLoading}
         />
+        {/* Attach files */}
+        <button
+          onClick={() => setShowUpload((v) => !v)}
+          className={`w-9 h-9 rounded border flex items-center justify-center transition-colors shrink-0 ${
+            showUpload ? "bg-primary/15 border-primary/40 text-primary" : "bg-muted/40 border-border text-muted-foreground hover:text-primary hover:border-primary/30"
+          }`}
+          title="Attach files"
+        >
+          <Paperclip size={14} />
+        </button>
         {/* Textarea — clearly visible, grows with content */}
         <textarea
           ref={textareaRef}

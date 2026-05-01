@@ -35,7 +35,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
 
-const tabs = ["CHARACTER INFO", "NAVI / SKINS", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
+// Skills, Inventory, and Effects are placed up front so they're impossible to miss.
+const tabs = ["CHARACTER INFO", "SKILLS", "INVENTORY", "EFFECTS", "NAVI / SKINS"] as const;
 
 // ── Skin collection metadata (mirrors SkinsPage) ──────────────────────────
 const SKIN_CATEGORY_LABELS: Record<SkinCategory, string> = {
@@ -184,6 +185,11 @@ export default function CharacterPage() {
   const [newItemEffect, setNewItemEffect] = useState("");
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [editingSkillLevel, setEditingSkillLevel] = useState(1);
+
+  // Detail modals for clickable Skills / Inventory / Effects rows
+  const [detailSkill, setDetailSkill] = useState<typeof skills[number] | null>(null);
+  const [detailItem, setDetailItem] = useState<typeof items[number] | null>(null);
+  const [detailEffect, setDetailEffect] = useState<typeof effects[number] | null>(null);
 
   const characterClass = profile.character_class || "Unknown";
   const mbtiType = profile.mbti_type || null;
@@ -707,7 +713,11 @@ export default function CharacterPage() {
             ) : (
               <div className="space-y-3">
                 {skills.map((skill) => (
-                  <div key={skill.id} className="group">
+                  <div
+                    key={skill.id}
+                    className="group cursor-pointer rounded p-2 -mx-2 hover:bg-muted/30 transition-colors"
+                    onClick={() => setDetailSkill(skill)}
+                  >
                     <div className="flex justify-between items-center mb-0.5">
                       <span className="text-sm font-body">{skill.name}</span>
                       <div className="flex items-center gap-2">
@@ -715,7 +725,7 @@ export default function CharacterPage() {
                         {editMode && (
                           <>
                             {editingSkillId === skill.id ? (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="number"
                                   value={editingSkillLevel}
@@ -728,8 +738,8 @@ export default function CharacterPage() {
                               </div>
                             ) : (
                               <>
-                                <button onClick={() => { setEditingSkillId(skill.id); setEditingSkillLevel(skill.level); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"><Pencil size={11} /></button>
-                                <button onClick={() => deleteSkill(skill.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"><Trash2 size={11} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setEditingSkillId(skill.id); setEditingSkillLevel(skill.level); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"><Pencil size={11} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); deleteSkill(skill.id); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"><Trash2 size={11} /></button>
                               </>
                             )}
                           </>
@@ -756,8 +766,8 @@ export default function CharacterPage() {
         </div>
       )}
 
-      {/* ── EQUIPMENT ────────────────────────────────────────────────────── */}
-      {activeTab === "EQUIPMENT" && (
+      {/* ── INVENTORY (Equipment) ───────────────────────────────────────── */}
+      {activeTab === "INVENTORY" && (
         <div className="space-y-4">
           <HudCard title="INVENTORY & EQUIPMENT" icon={<Star size={14} />} glow>
             {equipLoading ? (
@@ -767,7 +777,11 @@ export default function CharacterPage() {
             ) : (
               <div className="space-y-2">
                 {items.map((item) => (
-                  <div key={item.id} className={`flex items-center justify-between py-2 border-b border-border last:border-0 group ${item.equipped ? "opacity-100" : "opacity-70"}`}>
+                  <div
+                    key={item.id}
+                    onClick={() => setDetailItem(item)}
+                    className={`flex items-center justify-between py-2 px-2 -mx-2 rounded cursor-pointer hover:bg-muted/30 border-b border-border last:border-0 group ${item.equipped ? "opacity-100" : "opacity-70"}`}
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] font-mono text-muted-foreground uppercase">{item.slot}</p>
@@ -780,8 +794,8 @@ export default function CharacterPage() {
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${RARITY_COLORS[item.rarity]}`}>{item.rarity}</span>
                       {editMode && (
                         <>
-                          {!item.equipped && <button onClick={() => equipItem(item.id)} className="text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 text-[10px] font-mono">EQUIP</button>}
-                          <button onClick={() => deleteItem(item.id)} className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
+                          {!item.equipped && <button onClick={(e) => { e.stopPropagation(); equipItem(item.id); }} className="text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 text-[10px] font-mono">EQUIP</button>}
+                          <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
                         </>
                       )}
                     </div>
@@ -821,7 +835,11 @@ export default function CharacterPage() {
           ) : (
             <div className="space-y-2">
               {effects.map((effect) => (
-                <div key={effect.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 group">
+                <div
+                  key={effect.id}
+                  onClick={() => setDetailEffect(effect)}
+                  className="flex items-center justify-between py-2 px-2 -mx-2 rounded cursor-pointer hover:bg-muted/30 border-b border-border last:border-0 group"
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-body">{effect.name}</p>
@@ -833,7 +851,7 @@ export default function CharacterPage() {
                     {effect.expires_at && <p className="text-[9px] font-mono text-neon-amber">Expires: {new Date(effect.expires_at).toLocaleDateString()}</p>}
                   </div>
                   {editMode && (
-                    <button onClick={() => removeEffect(effect.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); removeEffect(effect.id); }} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
                       <Trash2 size={12} />
                     </button>
                   )}
@@ -843,6 +861,112 @@ export default function CharacterPage() {
           )}
         </HudCard>
       )}
+
+      {/* ── Detail modals (Skill / Item / Effect) ───────────────────────── */}
+      <AnimatePresence>
+        {detailSkill && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailSkill(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground">{detailSkill.category || "GENERAL"}</p>
+                  <h3 className="font-display text-lg font-bold text-foreground">{detailSkill.name}</h3>
+                </div>
+                <button onClick={() => setDetailSkill(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-4 whitespace-pre-wrap">
+                {detailSkill.description || "No description."}
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">LEVEL</p><p className="font-display text-sm text-primary">{detailSkill.level}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">MAX</p><p className="font-display text-sm text-foreground">{(detailSkill as any).max_level ?? 100}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">XP</p><p className="font-display text-sm text-neon-green">{detailSkill.xp ?? 0}</p></div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {detailItem && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailItem(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase">{detailItem.slot}</p>
+                  <h3 className="font-display text-lg font-bold text-foreground">{detailItem.name}</h3>
+                </div>
+                <button onClick={() => setDetailItem(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${RARITY_COLORS[detailItem.rarity]}`}>{detailItem.rarity}</span>
+                {detailItem.equipped && <span className="text-[9px] font-mono text-neon-green bg-neon-green/10 px-1.5 py-0.5 rounded">EQUIPPED</span>}
+              </div>
+              {(detailItem as any).description && (
+                <p className="text-xs font-body text-muted-foreground mb-3 whitespace-pre-wrap">{(detailItem as any).description}</p>
+              )}
+              {detailItem.effect && <p className="text-xs font-mono text-neon-green mb-3">Effect: {detailItem.effect}</p>}
+              {(detailItem as any).stat_bonuses && Object.keys((detailItem as any).stat_bonuses).length > 0 && (
+                <div className="bg-muted/40 rounded p-2 mb-3">
+                  <p className="text-[9px] font-mono text-muted-foreground mb-1">STAT BONUSES</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries((detailItem as any).stat_bonuses).map(([k, v]) => (
+                      <span key={k} className="text-[10px] font-mono text-neon-green bg-neon-green/10 px-1.5 py-0.5 rounded">+{String(v)} {k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!detailItem.equipped && (
+                <Button size="sm" className="w-full text-[10px] font-mono" onClick={async () => { await equipItem(detailItem.id); setDetailItem(null); }}>
+                  EQUIP
+                </Button>
+              )}
+            </motion.div>
+          </div>
+        )}
+        {detailEffect && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailEffect(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${detailEffect.effect_type === "buff" ? "bg-neon-green/10 text-neon-green" : detailEffect.effect_type === "debuff" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+                    {detailEffect.effect_type.toUpperCase()}
+                  </span>
+                  <h3 className="font-display text-lg font-bold text-foreground mt-1">{detailEffect.name}</h3>
+                </div>
+                <button onClick={() => setDetailEffect(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-3 whitespace-pre-wrap">{detailEffect.description || "No description."}</p>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">STAT</p><p className="font-display text-sm">{(detailEffect as any).stat_affected || "—"}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">MODIFIER</p><p className="font-display text-sm text-neon-green">{((detailEffect as any).modifier_value ?? 0) > 0 ? "+" : ""}{(detailEffect as any).modifier_value ?? 0}</p></div>
+              </div>
+              {detailEffect.expires_at && <p className="text-[10px] font-mono text-neon-amber mt-2">Expires: {new Date(detailEffect.expires_at).toLocaleString()}</p>}
+              {(detailEffect as any).source && <p className="text-[9px] font-mono text-muted-foreground mt-1">Source: {(detailEffect as any).source}</p>}
+              {editMode && (
+                <Button variant="destructive" size="sm" className="w-full mt-3 text-[10px] font-mono" onClick={async () => { await removeEffect(detailEffect.id); setDetailEffect(null); }}>
+                  REMOVE EFFECT
+                </Button>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

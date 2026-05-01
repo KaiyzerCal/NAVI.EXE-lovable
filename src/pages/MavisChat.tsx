@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw, Paperclip } from "lucide-react";
 import VoiceInput from "@/components/VoiceInput";
 import UploadZone from "@/components/UploadZone";
 import ReactMarkdown from "react-markdown";
@@ -1139,6 +1139,27 @@ export default function MavisChat() {
       </AnimatePresence>
 
       {/* Input box */}
+      {/* Inline attachment uploader — toggled by paperclip button */}
+      <AnimatePresence>
+        {showUpload && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden mb-2"
+          >
+            <div className="border border-primary/20 rounded-lg p-2 bg-card">
+              <UploadZone
+                compact
+                linkedEntityType="chat"
+                onUploadComplete={() => { refreshMediaContext(); }}
+              />
+              <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Attached files become reference material NAVI can read in this chat.</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">
         {/* Glowing NAVI orb */}
         <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
@@ -1176,6 +1197,16 @@ export default function MavisChat() {
           onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
           disabled={isLoading}
         />
+        {/* Attach files */}
+        <button
+          onClick={() => setShowUpload((v) => !v)}
+          className={`w-9 h-9 rounded border flex items-center justify-center transition-colors shrink-0 ${
+            showUpload ? "bg-primary/15 border-primary/40 text-primary" : "bg-muted/40 border-border text-muted-foreground hover:text-primary hover:border-primary/30"
+          }`}
+          title="Attach files"
+        >
+          <Paperclip size={14} />
+        </button>
         {/* Textarea — clearly visible, grows with content */}
         <textarea
           ref={textareaRef}

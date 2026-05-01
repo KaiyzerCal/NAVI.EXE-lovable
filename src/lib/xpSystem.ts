@@ -1,7 +1,7 @@
-import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS } from "./classEvolution";
+import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS, TIER_COLORS, classNameFromMbti, tierThreshold, nextTierThreshold } from "./classEvolution";
 
 export type { EvolutionTier } from "./classEvolution";
-export { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS };
+export { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS, TIER_COLORS, classNameFromMbti, tierThreshold, nextTierThreshold };
 
 // XP required to advance from `level` to `level + 1`.
 // Formula: 50 * level * (level + 1) / 2

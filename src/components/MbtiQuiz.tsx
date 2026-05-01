@@ -2,8 +2,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import HudCard from "@/components/HudCard";
-import { Brain } from "lucide-react";
-import { MBTI_CLASS_MAP } from "@/lib/classEvolution";
+import { Brain, ChevronLeft } from "lucide-react";
+import { MBTI_CLASS_MAP, TIER_NAMES, TIER_COLORS } from "@/lib/classEvolution";
 
 export { MBTI_CLASS_MAP } from "@/lib/classEvolution";
 
@@ -133,6 +133,7 @@ const QUESTIONS = [
 export default function MbtiQuiz({ onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
+  const [result, setResult] = useState<string | null>(null);
 
   const handleAnswer = (axis: string) => {
     const newAnswers = [...answers, axis];
@@ -148,11 +149,69 @@ export default function MbtiQuiz({ onComplete }: Props) {
         count("T") >= count("F") ? "T" : "F",
         count("J") >= count("P") ? "J" : "P",
       ].join("");
-
-      const classInfo = MBTI_CLASS_MAP[mbti];
-      onComplete(mbti, classInfo?.className || mbti);
+      setResult(mbti);
     }
   };
+
+  const handleBack = () => {
+    if (step === 0) return;
+    setAnswers(answers.slice(0, -1));
+    setStep(step - 1);
+  };
+
+  if (result) {
+    const classInfo = MBTI_CLASS_MAP[result];
+    return (
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <HudCard title="CALIBRATION COMPLETE" icon={<Brain size={14} />} glow>
+          <div className="text-center mb-6">
+            <p className="text-xs font-mono text-muted-foreground mb-1">OPERATOR TYPE IDENTIFIED</p>
+            <h2 className="font-display text-5xl font-black text-primary tracking-widest mb-1">{result}</h2>
+            <p className="text-base font-bold text-foreground">{classInfo?.className ?? result}</p>
+            <p className="text-xs font-body text-muted-foreground mt-1">{classInfo?.desc ?? ""}</p>
+          </div>
+
+          <div className="mb-6">
+            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-3">
+              Evolution Path — 5 Tiers
+            </p>
+            <div className="space-y-2">
+              {classInfo?.tiers.map((title, i) => {
+                const tier = (i + 1) as 1 | 2 | 3 | 4 | 5;
+                const color = TIER_COLORS[tier];
+                const thresholds: Record<number, string> = { 1: "Lv 1–10", 2: "Lv 11–25", 3: "Lv 26–50", 4: "Lv 51–75", 5: "Lv 76–100" };
+                return (
+                  <div
+                    key={tier}
+                    className="flex items-center gap-3 px-3 py-2 rounded border"
+                    style={{ borderColor: `${color}30`, background: `${color}08` }}
+                  >
+                    <div
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-mono font-bold shrink-0"
+                      style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}
+                    >
+                      {tier}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold truncate" style={{ color }}>{title}</p>
+                      <p className="text-[9px] font-mono text-muted-foreground">{TIER_NAMES[tier]} · {thresholds[tier]}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <Button
+            className="w-full font-mono tracking-widest"
+            onClick={() => onComplete(result, classInfo?.className || result)}
+          >
+            INITIALIZE OPERATOR →
+          </Button>
+        </HudCard>
+      </motion.div>
+    );
+  }
 
   const current = QUESTIONS[step];
 
@@ -180,7 +239,7 @@ export default function MbtiQuiz({ onComplete }: Props) {
 
         <p className="text-sm font-body mb-4">{current.q}</p>
 
-        <div className="space-y-2">
+        <div className="space-y-2 mb-4">
           {current.a.map((answer, i) => (
             <Button
               key={i}
@@ -192,6 +251,15 @@ export default function MbtiQuiz({ onComplete }: Props) {
             </Button>
           ))}
         </div>
+
+        {step > 0 && (
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
+          >
+            <ChevronLeft size={12} /> BACK
+          </button>
+        )}
       </HudCard>
     </motion.div>
   );

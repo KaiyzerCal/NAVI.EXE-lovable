@@ -7,6 +7,7 @@ import {
   tierFromLevel,
   TIER_NAMES,
   TIER_THRESHOLDS,
+  TIER_COLORS,
   evolutionTitleFromMbtiAndLevel,
   totalXpForLevel,
   tierProgressPercent,
@@ -196,10 +197,6 @@ export default function CharacterPage() {
   const tierPercent = tierProgressPercent(operatorXp);
   const { max: tierMax } = TIER_THRESHOLDS[currentTier];
   const nextTierXp = currentTier < 5 ? totalXpForLevel(TIER_THRESHOLDS[(currentTier + 1) as 2|3|4|5].min) : null;
-  const TIER_COLORS: Record<number, string> = {
-    1: "#38bdf8", 2: "#a78bfa", 3: "#fbbf24", 4: "#f97316", 5: "#ec4899",
-  };
-
   const baseStats = computeBaseStats(
     questStats.completed,
     entries.length,

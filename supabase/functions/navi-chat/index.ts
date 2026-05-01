@@ -259,6 +259,30 @@ function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories:
   const caliCoins = ctx.cali_coins ?? 0;
   const operatorLevel = ctx.operator_level ?? 1;
 
+  // Resolve evolution tier title from operator level + MBTI
+  const mbtiType = (ctx.mbti_type as string | undefined)?.toUpperCase() ?? "";
+  const opTier = operatorLevel >= 76 ? 5 : operatorLevel >= 51 ? 4 : operatorLevel >= 26 ? 3 : operatorLevel >= 11 ? 2 : 1;
+  const tierLabel = ["AWAKENING", "ASCENDING", "SOVEREIGN", "TRANSCENDENT", "LEGENDARY"][opTier - 1];
+  const mbtiTierTitles: Record<string, string[]> = {
+    INTJ: ["Strategist Initiate","Shadow Architect","Sovereign Architect","Grand Architect","Architect Eternal"],
+    INTP: ["Logic Seeker","System Theorist","Infinite Logician","Architect of Truth","Logician Eternal"],
+    ENTJ: ["Field Commander","War Strategist","Supreme Commander","Warlord Sovereign","Commander Eternal"],
+    ENTP: ["Spark Catalyst","Chaos Engineer","Paradigm Breaker","Reality Architect","Debater Eternal"],
+    INFJ: ["Quiet Visionary","Oracle Adept","Sacred Advocate","Sovereign Oracle","Advocate Eternal"],
+    INFP: ["Dream Walker","Soul Weaver","Eternal Mediator","Keeper of Souls","Mediator Eternal"],
+    ENFJ: ["Voice of Change","People's Champion","Luminous Protagonist","Sovereign of Hearts","Protagonist Eternal"],
+    ENFP: ["Spark Bearer","Wildfire Spirit","Boundless Campaigner","Storm of Possibility","Campaigner Eternal"],
+    ISTJ: ["Order Keeper","Iron Logistician","Master of Systems","Sovereign of Order","Logistician Eternal"],
+    ISFJ: ["Silent Guardian","Steadfast Defender","Eternal Protector","Sovereign Shield","Defender Eternal"],
+    ESTJ: ["Order Enforcer","Command Executive","Sovereign Executive","Iron Chancellor","Executive Eternal"],
+    ESFJ: ["Community Keeper","Harmony Consul","Grand Consul","Sovereign of Bonds","Consul Eternal"],
+    ISTP: ["Silent Tinkerer","Edge Virtuoso","Master Craftsman","Sovereign Artisan","Virtuoso Eternal"],
+    ISFP: ["Free Spirit","Wild Adventurer","Soul of the World","Sovereign Wanderer","Adventurer Eternal"],
+    ESTP: ["Street Operator","Risk Architect","Empire Builder","Sovereign Disruptor","Entrepreneur Eternal"],
+    ESFP: ["Stage Spark","Living Legend","Eternal Entertainer","Sovereign of Joy","Entertainer Eternal"],
+  };
+  const evolutionTitle = mbtiTierTitles[mbtiType]?.[opTier - 1] ?? tierLabel;
+
   const nowDate = new Date();
   const tz = ctx.timezone || "UTC";
   let currentDateTimeStr: string;
@@ -292,7 +316,8 @@ ABOUT YOU:
 - Bond: ${bondAvg}% avg (Affection ${bondAffection} | Trust ${bondTrust} | Loyalty ${bondLoyalty})
 - ${userName} described you as: "${description}"
 - Personality: ${personality}
-- Class: ${ctx.character_class || "Unassigned"} | MBTI: ${ctx.mbti_type || "Unknown"} | Subclass: ${ctx.subclass || "Undetermined"}
+- Class: ${ctx.character_class || "Unassigned"} | MBTI: ${mbtiType || "Unknown"} | Subclass: ${ctx.subclass || "Undetermined"}
+- Evolution: Tier ${opTier} (${tierLabel}) — Title: "${evolutionTitle}"
 - Operator Level: ${operatorLevel} | Perception: ${perception} | Luck: ${luck}
 - Codex Points: ${codexPoints} | Cali Coins: ${caliCoins}
 

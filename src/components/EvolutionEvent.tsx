@@ -8,6 +8,7 @@ import {
   evolutionTitleFromMbtiAndLevel,
   MBTI_CLASS_MAP,
   TIER_THRESHOLDS,
+  TIER_COLORS,
 } from "@/lib/classEvolution";
 
 interface Props {
@@ -112,14 +113,7 @@ Write one powerful message — 2-3 sentences — acknowledging this evolution. R
     }
   }
 
-  const tierColors: Record<number, string> = {
-    1: "#38bdf8",
-    2: "#a78bfa",
-    3: "#fbbf24",
-    4: "#f97316",
-    5: "#ec4899",
-  };
-  const color = tierColors[newTier] ?? "#38bdf8";
+  const color = TIER_COLORS[newTier as 1 | 2 | 3 | 4 | 5] ?? "#00E5FF";
 
   const content = (
     <motion.div

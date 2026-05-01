@@ -123,3 +123,25 @@ export function evolutionTitleFromMbtiAndLevel(mbti: string, level: number): str
   const tier = tierFromLevel(level);
   return info.tiers[tier - 1];
 }
+
+export const TIER_COLORS: Record<EvolutionTier, string> = {
+  1: "#00E5FF",
+  2: "#7B2FFF",
+  3: "#FFBF00",
+  4: "#FF6B00",
+  5: "#FF2D9B",
+};
+
+export function classNameFromMbti(mbti: string): string {
+  return MBTI_CLASS_MAP[mbti?.toUpperCase()]?.className ?? "Operator";
+}
+
+export function tierThreshold(tier: 1 | 2 | 3 | 4 | 5): number {
+  return TIER_THRESHOLDS[tier].min;
+}
+
+export function nextTierThreshold(level: number): number {
+  const tier = tierFromLevel(level);
+  if (tier >= 5) return 100;
+  return TIER_THRESHOLDS[(tier + 1) as EvolutionTier].min;
+}

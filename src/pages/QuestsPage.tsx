@@ -534,23 +534,65 @@ export default function QuestsPage() {
                 <div className="space-y-1.5">
                   {QUEST_TEMPLATES.filter((t) => t.category === templateCategory).map((tpl) => {
                     const cfg = TYPE_CONFIG[tpl.type];
+                    const isOpen = expandedTemplate === tpl.name;
                     return (
-                      <div key={tpl.name} className="flex items-center gap-3 p-3 rounded border border-border bg-card/50 hover:border-primary/20 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${cfg.bg} ${cfg.color} ${cfg.border}`}>{cfg.icon} {cfg.label}</span>
-                            <span className="text-xs font-body font-bold text-foreground truncate">{tpl.name}</span>
-                          </div>
-                          <p className="text-[10px] font-mono text-muted-foreground truncate">{tpl.description}</p>
-                        </div>
-                        <p className="text-[10px] font-mono text-green-400 shrink-0 mr-2">+{tpl.xp_reward} XP</p>
+                      <div key={tpl.name} className="rounded border border-border bg-card/50 hover:border-primary/20 transition-colors overflow-hidden">
                         <button
-                          onClick={async () => { setSaving(true); await createQuest({ name: tpl.name, description: tpl.description, type: tpl.type, total: tpl.total, xp_reward: tpl.xp_reward } as CreateQuestInput); setSaving(false); toast({ title: "Quest created", description: `"${tpl.name}" added to your log.` }); }}
-                          disabled={saving}
-                          className="shrink-0 px-2.5 py-1.5 rounded border border-primary/30 bg-primary/10 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-50"
+                          onClick={() => setExpandedTemplate(isOpen ? null : tpl.name)}
+                          className="w-full flex items-center gap-3 p-3 text-left"
                         >
-                          USE
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${cfg.bg} ${cfg.color} ${cfg.border}`}>{cfg.icon} {cfg.label}</span>
+                              <span className="text-xs font-body font-bold text-foreground truncate">{tpl.name}</span>
+                            </div>
+                            <p className="text-[10px] font-mono text-muted-foreground truncate">{tpl.description}</p>
+                          </div>
+                          <p className="text-[10px] font-mono text-green-400 shrink-0">+{tpl.xp_reward} XP</p>
+                          {isOpen ? <ChevronUp size={14} className="text-muted-foreground shrink-0" /> : <ChevronDown size={14} className="text-muted-foreground shrink-0" />}
                         </button>
+                        <AnimatePresence>
+                          {isOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden border-t border-border"
+                            >
+                              <div className="p-3 space-y-2 bg-muted/10">
+                                <div>
+                                  <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-1">DESCRIPTION</p>
+                                  <p className="text-xs font-body text-foreground/90 whitespace-pre-wrap">{tpl.description}</p>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div>
+                                    <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">TYPE</p>
+                                    <p className={`text-xs font-mono ${cfg.color}`}>{cfg.label}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">STEPS</p>
+                                    <p className="text-xs font-mono text-foreground">{tpl.total}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">XP</p>
+                                    <p className="text-xs font-mono text-green-400">+{tpl.xp_reward}</p>
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">CATEGORY</p>
+                                  <p className="text-xs font-mono text-foreground">{tpl.category}</p>
+                                </div>
+                                <button
+                                  onClick={async (e) => { e.stopPropagation(); setSaving(true); await createQuest({ name: tpl.name, description: tpl.description, type: tpl.type, total: tpl.total, xp_reward: tpl.xp_reward } as CreateQuestInput); setSaving(false); toast({ title: "Quest created", description: `"${tpl.name}" added to your log.` }); }}
+                                  disabled={saving}
+                                  className="w-full px-2.5 py-2 rounded border border-primary/30 bg-primary/10 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-50"
+                                >
+                                  USE THIS TEMPLATE
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     );
                   })}

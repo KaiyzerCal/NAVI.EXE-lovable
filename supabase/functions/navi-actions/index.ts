@@ -102,16 +102,19 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
       if (qErr) throw qErr;
       await awardXP(sb, userId, Number(quest.xp_reward || 0));
 
-      // Award Forge tokens by quest type
-      const forgeMap: Record<string, number> = { Daily: 10, Weekly: 30, Main: 50, Side: 20, Minor: 5, Epic: 100 };
-      const forgeReward = forgeMap[String((quest as any).type || "Daily")] ?? 10;
-      const { data: fb } = await sb.from("forge_balances" as any).select("id, balance, lifetime_earned").eq("user_id", userId).maybeSingle();
-      if (fb) {
-        await sb.from("forge_balances" as any).update({ balance: Number((fb as any).balance || 0) + forgeReward, lifetime_earned: Number((fb as any).lifetime_earned || 0) + forgeReward, updated_at: new Date().toISOString() }).eq("id", (fb as any).id);
-      } else {
-        await sb.from("forge_balances" as any).insert({ user_id: userId, balance: forgeReward, lifetime_earned: forgeReward });
+      // Award Codex Points + Cali Coins by quest type (replaces former Forge economy)
+      const codexMap: Record<string, number> = { Daily: 10, Weekly: 30, Main: 50, Side: 20, Minor: 5, Epic: 100 };
+      const caliMap:  Record<string, number> = { Daily: 2,  Weekly: 8,  Main: 12, Side: 5,  Minor: 1, Epic: 25  };
+      const qType = String((quest as any).type || "Daily");
+      const codexReward = codexMap[qType] ?? 10;
+      const caliReward  = caliMap[qType] ?? 2;
+      const { data: prof } = await sb.from("profiles").select("codex_points, cali_coins").eq("id", userId).single();
+      if (prof) {
+        await sb.from("profiles").update({
+          codex_points: Number((prof as any).codex_points || 0) + codexReward,
+          cali_coins:   Number((prof as any).cali_coins   || 0) + caliReward,
+        }).eq("id", userId);
       }
-      await sb.from("forge_transactions" as any).insert({ user_id: userId, amount: forgeReward, transaction_type: "earn", description: `Quest completed: ${quest.name}`, reference_id: String(params.quest_id) }).catch(() => {});
 
       if (quest.linked_skill_id) {
         const { data: skill } = await sb.from("skills")

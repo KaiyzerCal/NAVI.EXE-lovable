@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Swords, Plus, Check, X, Star, Zap, Target, BookOpen,
   Layers, Pencil, Copy, RotateCcw, Eye, Loader2,
+  Briefcase, Heart, Brain, Users, Coins, Globe,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -21,6 +22,69 @@ const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string
   Epic:   { color: "text-pink-400",     bg: "bg-pink-500/10",     border: "border-pink-500/30",     icon: <Swords size={10} />,   label: "EPIC" },
 };
 const TYPE_ORDER: QuestType[] = ["Main", "Side", "Weekly", "Daily", "Minor", "Epic"];
+
+// ─── Domain (ATLAS-style) configuration ──────────────────────────────────────
+type DomainKey = "CAREER" | "HEALTH" | "MIND" | "SOCIAL" | "FINANCE";
+interface Domain {
+  key: DomainKey;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+  border: string;
+  bar: "cyan" | "green" | "purple" | "amber";
+  keywords: string[];
+}
+const DOMAINS: Domain[] = [
+  { key: "CAREER",  label: "CAREER",  icon: <Briefcase size={18} />, color: "text-blue-400",   border: "border-blue-500/30",   bar: "cyan",   keywords: ["work", "career", "job", "business", "project", "client", "income"] },
+  { key: "HEALTH",  label: "HEALTH",  icon: <Heart size={18} />,     color: "text-green-400",  border: "border-green-500/30",  bar: "green",  keywords: ["fitness", "health", "gym", "workout", "run", "diet", "sleep", "wellness"] },
+  { key: "MIND",    label: "MIND",    icon: <Brain size={18} />,     color: "text-purple-400", border: "border-purple-500/30", bar: "purple", keywords: ["study", "learn", "read", "book", "course", "skill", "knowledge", "meditat"] },
+  { key: "SOCIAL",  label: "SOCIAL",  icon: <Users size={18} />,     color: "text-yellow-400", border: "border-yellow-500/30", bar: "amber",  keywords: ["friend", "family", "relationship", "party", "social", "network", "community"] },
+  { key: "FINANCE", label: "FINANCE", icon: <Coins size={18} />,     color: "text-orange-400", border: "border-orange-500/30", bar: "amber",  keywords: ["finance", "money", "budget", "invest", "save", "debt", "expense"] },
+];
+function questInDomain(q: Quest, kws: string[]) {
+  const t = `${q.name} ${q.description ?? ""}`.toLowerCase();
+  return kws.some((k) => t.includes(k));
+}
+function DomainRoomCard({ domain, quests, onPick }: { domain: Domain; quests: Quest[]; onPick: (q: Quest) => void }) {
+  const dq = quests.filter((q) => questInDomain(q, domain.keywords));
+  const active = dq.filter((q) => !q.completed);
+  const done = dq.filter((q) => q.completed);
+  const total = dq.length;
+  const preview = active.slice(0, 3);
+  return (
+    <motion.div
+      variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+      className={`bg-card border ${domain.border} rounded p-4 flex flex-col gap-3`}
+    >
+      <div className="flex items-center gap-2">
+        <span className={domain.color}>{domain.icon}</span>
+        <h3 className={`font-display text-sm font-bold tracking-widest ${domain.color}`}>{domain.label}</h3>
+        <span className="ml-auto text-[10px] font-mono text-muted-foreground">
+          {active.length} active · {done.length} done
+        </span>
+      </div>
+      <div>
+        <ProgressBar value={done.length} max={Math.max(total, 1)} variant={domain.bar} showValue={false} size="sm" />
+        <p className="text-[10px] font-mono text-muted-foreground mt-1">{done.length}/{total} quests completed</p>
+      </div>
+      <div className="space-y-1">
+        {preview.length === 0 ? (
+          <p className="text-xs font-mono text-muted-foreground italic">No active quests in this domain.</p>
+        ) : (
+          preview.map((q) => (
+            <button key={q.id} onClick={() => onPick(q)} className="w-full text-left flex items-start gap-2 hover:bg-muted/40 rounded px-1 py-0.5 transition-colors">
+              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${domain.color.replace("text-", "bg-")}`} />
+              <p className="text-xs font-body text-foreground/80 leading-tight truncate">{q.name}</p>
+            </button>
+          ))
+        )}
+        {active.length > 3 && (
+          <p className="text-[10px] font-mono text-muted-foreground pl-3.5">+{active.length - 3} more</p>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 
 interface QuestFormState {
   name: string;
@@ -294,6 +358,10 @@ export default function QuestsPage() {
     );
   }
 
+  const classifiedIds = new Set<string>();
+  DOMAINS.forEach((d) => quests.forEach((q) => { if (questInDomain(q, d.keywords)) classifiedIds.add(q.id); }));
+  const unclassified = quests.filter((q) => !classifiedIds.has(q.id) && !q.completed);
+
   return (
     <div>
       <PageHeader title="QUESTS" subtitle="// MISSION CONTROL">
@@ -317,6 +385,41 @@ export default function QuestsPage() {
             <p className="text-[9px] font-mono text-muted-foreground">{s.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* ATLAS — Domain Rooms */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Globe size={14} className="text-primary" />
+          <h2 className="font-display text-xs font-bold tracking-widest text-primary">// OPERATOR WORLD · DOMAIN ROOMS</h2>
+        </div>
+        <motion.div
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
+        >
+          {DOMAINS.map((d) => (
+            <DomainRoomCard key={d.key} domain={d} quests={quests} onPick={setViewingQuest} />
+          ))}
+        </motion.div>
+        {unclassified.length > 0 && (
+          <div className="mt-3">
+            <HudCard title="UNCLASSIFIED" icon={<Swords size={14} />}>
+              <p className="text-[10px] font-mono text-muted-foreground mb-2">
+                {unclassified.length} quest{unclassified.length !== 1 ? "s" : ""} without a domain match
+              </p>
+              <div className="space-y-1">
+                {unclassified.map((q) => (
+                  <button key={q.id} onClick={() => setViewingQuest(q)} className="w-full text-left flex items-start gap-2 hover:bg-muted/40 rounded px-1 py-0.5 transition-colors">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
+                    <p className="text-xs font-body text-foreground/80 truncate">{q.name}</p>
+                  </button>
+                ))}
+              </div>
+            </HudCard>
+          </div>
+        )}
       </div>
 
       {/* New / Edit Form */}

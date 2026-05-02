@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Zap, Check, Lock, Loader2, Crown, Coins } from "lucide-react";
+import { Zap, Check, Lock, Loader2, Crown } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import SubscriptionBadge from "@/components/SubscriptionBadge";
 
@@ -17,7 +17,7 @@ const ELITE_FEATURES = [
   "Advanced semantic memory (25 results)",
   "Memory consolidation & learning",
   "Priority AI response speed",
-  "Forge tokens 2× earn rate",
+  "Codex Points & Cali Coins 2× earn rate",
   "Exclusive Elite skins",
 ];
 
@@ -134,30 +134,6 @@ export default function UpgradePage() {
         </HudCard>
       </div>
 
-      {/* Forge Economy */}
-      <HudCard title="FORGE ECONOMY" icon={<Coins size={14} />}>
-        <p className="text-xs font-body text-muted-foreground mb-3">
-          Earn Forge tokens by completing quests. Spend them on exclusive skins, equipment, and profile upgrades.
-        </p>
-        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-          <div className="p-2 rounded border border-border bg-muted/20">
-            <p className="text-muted-foreground">Daily Quest</p>
-            <p className="text-primary font-bold">+10 Forge</p>
-          </div>
-          <div className="p-2 rounded border border-border bg-muted/20">
-            <p className="text-muted-foreground">Weekly Quest</p>
-            <p className="text-primary font-bold">+30 Forge</p>
-          </div>
-          <div className="p-2 rounded border border-border bg-muted/20">
-            <p className="text-muted-foreground">Epic Quest</p>
-            <p className="text-primary font-bold">+100 Forge</p>
-          </div>
-          <div className="p-2 rounded border border-border bg-muted/20">
-            <p className="text-muted-foreground">Elite Bonus</p>
-            <p className="text-secondary font-bold">2× ALL</p>
-          </div>
-        </div>
-      </HudCard>
     </div>
   );
 }

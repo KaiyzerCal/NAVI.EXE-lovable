@@ -30,7 +30,6 @@ import GuildPage from "./pages/GuildPage";
 import SocialPage from "./pages/SocialPage";
 import InboxPage from "./pages/InboxPage";
 import AgentPage from "./pages/AgentPage";
-import AtlasPage from "./pages/AtlasPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -189,7 +188,6 @@ function AppShell() {
           <Route path="/party" element={<PartyPage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/stats" element={<StatsPage />} />
-          <Route path="/atlas" element={<AtlasPage />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/guild" element={<GuildPage />} />
           <Route path="/social" element={<SocialPage />} />

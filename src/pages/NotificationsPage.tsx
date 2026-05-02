@@ -35,7 +35,7 @@ interface Notification {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 type IconConfig = {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<any>;
   color: string;
 };
 

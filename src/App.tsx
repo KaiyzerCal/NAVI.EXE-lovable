@@ -32,7 +32,6 @@ import InboxPage from "./pages/InboxPage";
 import AgentPage from "./pages/AgentPage";
 import SearchPage from "./pages/SearchPage";
 import NotificationsPage from "./pages/NotificationsPage";
-import AtlasPage from "./pages/AtlasPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -206,7 +205,6 @@ function AppShell() {
           <Route path="/agents" element={<AgentPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/atlas" element={<AtlasPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>

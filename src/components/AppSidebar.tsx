@@ -2,13 +2,12 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, MessageSquare, User, Swords, BookOpen,
   BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
-  Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Coins,
+  Gamepad2, Shield, Radio, Inbox, Zap, Bot,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
-import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -19,7 +18,6 @@ const navItems = [
   { to: "/party", icon: Users, label: "Party" },
   { to: "/journal", icon: BookOpen, label: "Journal" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
-  { to: "/atlas", icon: Globe, label: "ATLAS" },
   { to: "/games", icon: Gamepad2, label: "Games" },
   { to: "/guild", icon: Shield, label: "Guild" },
   { to: "/social", icon: Radio, label: "Feed" },
@@ -32,19 +30,8 @@ const navItems = [
 export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { signOut, user } = useAuth();
+  const { signOut } = useAuth();
   const { totalUnread } = useUnreadMessages();
-  const [forgeBalance, setForgeBalance] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("forge_balances" as any)
-      .select("balance")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => setForgeBalance(data ? Number((data as any).balance ?? 0) : 0));
-  }, [user]);
 
   return (
     <motion.aside
@@ -119,21 +106,6 @@ export default function AppSidebar() {
           );
         })}
       </nav>
-
-      {/* Forge Balance */}
-      {forgeBalance !== null && (
-        <div className={`mx-2 mb-1 px-3 py-2 rounded border border-amber-500/20 bg-amber-500/5 flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
-          <Coins size={13} className="text-amber-400 shrink-0" />
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="text-[10px] font-mono text-amber-400 font-bold whitespace-nowrap">
-                {forgeBalance} FORGE
-              </motion.p>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
 
       {/* Sign out */}
       <button

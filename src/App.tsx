@@ -30,6 +30,8 @@ import GuildPage from "./pages/GuildPage";
 import SocialPage from "./pages/SocialPage";
 import InboxPage from "./pages/InboxPage";
 import AgentPage from "./pages/AgentPage";
+import SearchPage from "./pages/SearchPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -195,6 +197,8 @@ function AppShell() {
           <Route path="/upgrade" element={<UpgradePage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/agents" element={<AgentPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>

@@ -2,12 +2,14 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, MessageSquare, User, Swords, BookOpen,
   BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
-  Gamepad2, Shield, Radio, Inbox, Zap, Bot,
+  Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Coins, Search, Bell,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useNotificationCount } from "@/pages/NotificationsPage";
+import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -22,6 +24,8 @@ const navItems = [
   { to: "/guild", icon: Shield, label: "Guild" },
   { to: "/social", icon: Radio, label: "Feed" },
   { to: "/inbox", icon: Inbox, label: "Inbox" },
+  { to: "/search", icon: Search, label: "Search" },
+  { to: "/notifications", icon: Bell, label: "Notifications" },
   { to: "/agents", icon: Bot, label: "Agents" },
   { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },
@@ -30,8 +34,20 @@ const navItems = [
 export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const { totalUnread } = useUnreadMessages();
+  const notifCount = useNotificationCount();
+  const [forgeBalance, setForgeBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("forge_balances" as any)
+      .select("balance")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => setForgeBalance(data ? Number((data as any).balance ?? 0) : 0));
+  }, [user]);
 
   return (
     <motion.aside
@@ -66,7 +82,12 @@ export default function AppSidebar() {
         {navItems.map(({ to, icon: Icon, label }) => {
           const isActive = location.pathname === to;
           const isInbox = to === "/inbox";
-          const badge = isInbox && totalUnread > 0 ? totalUnread : 0;
+          const isNotifications = to === "/notifications";
+          const badge = isInbox && totalUnread > 0
+            ? totalUnread
+            : isNotifications && notifCount > 0
+            ? notifCount
+            : 0;
           return (
             <NavLink
               key={to}
@@ -106,6 +127,21 @@ export default function AppSidebar() {
           );
         })}
       </nav>
+
+      {/* Forge Balance */}
+      {forgeBalance !== null && (
+        <div className={`mx-2 mb-1 px-3 py-2 rounded border border-amber-500/20 bg-amber-500/5 flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
+          <Coins size={13} className="text-amber-400 shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="text-[10px] font-mono text-amber-400 font-bold whitespace-nowrap">
+                {forgeBalance} FORGE
+              </motion.p>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Sign out */}
       <button

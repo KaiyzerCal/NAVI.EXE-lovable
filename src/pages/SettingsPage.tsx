@@ -2,10 +2,12 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
 import { User, Bell, Database, Shield, Check, Sun, Moon } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ENCOURAGEMENT_OPTIONS = ["Low", "Moderate", "High"] as const;
 const STYLE_OPTIONS = ["Casual", "Direct", "Poetic", "Technical"] as const;
@@ -65,23 +67,54 @@ function OptionRow<T extends string>({
 
 export default function SettingsPage() {
   const { profile, updateProfile, profileLoading: loading } = useAppData();
+  const { user } = useAuth();
   const { theme, setTheme } = useTheme();
   const [personality, setPersonality] = useState<NaviPersonalitySettings>(DEFAULT_PERSONALITY);
   const [saving, setSaving] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [naviName, setNaviName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const usernameDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notifications, setNotifications] = useState({
     questReminders: true, streakWarnings: true, xpMilestones: false, dailySummary: true,
   });
 
   // Sync local state FROM profile once it loads from Supabase
-  // Without this, useState initializer runs before profile is fetched
   useEffect(() => {
     if (loading) return;
     setDisplayName(profile.display_name ?? "");
     setNaviName(profile.navi_name ?? "NAVI");
+    setUsername((profile as any).username ?? "");
     setPersonality(parsePersonality(profile.navi_personality));
   }, [loading, profile.display_name]); // re-sync when profile loads
+
+  // Validate username uniqueness with debounce
+  useEffect(() => {
+    if (usernameDebounce.current) clearTimeout(usernameDebounce.current);
+    const trimmed = username.trim();
+    if (!trimmed || trimmed === ((profile as any).username ?? "")) {
+      setUsernameError(null);
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(trimmed)) {
+      setUsernameError("3–20 chars, letters/numbers/underscores only");
+      return;
+    }
+    setCheckingUsername(true);
+    usernameDebounce.current = setTimeout(async () => {
+      const { data } = await (supabase as any)
+        .from("profiles")
+        .select("id")
+        .eq("username", trimmed)
+        .neq("id", user?.id ?? "")
+        .maybeSingle();
+      setUsernameError(data ? "Username already taken" : null);
+      setCheckingUsername(false);
+    }, 400);
+    return () => { if (usernameDebounce.current) clearTimeout(usernameDebounce.current); };
+  }, [username]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updatePersonality = async (updates: Partial<NaviPersonalitySettings>) => {
     const next = { ...personality, ...updates };
@@ -90,9 +123,15 @@ export default function SettingsPage() {
   };
 
   const saveProfile = async () => {
+    if (usernameError || checkingUsername) return;
     setSaving(true);
     try {
-      await updateProfile({ display_name: displayName.trim() || null, navi_name: naviName.trim() || "NAVI" });
+      const trimmedUsername = username.trim() || null;
+      await updateProfile({
+        display_name: displayName.trim() || null,
+        navi_name: naviName.trim() || "NAVI",
+        username: trimmedUsername,
+      } as any);
       toast({ title: "Profile saved", description: "Changes persisted to database." });
     } finally {
       setSaving(false);
@@ -116,6 +155,25 @@ export default function SettingsPage() {
                 className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
             </div>
             <div>
+              <label className="text-xs font-mono text-muted-foreground block mb-1">USERNAME <span className="opacity-50">(@handle)</span></label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-3 flex items-center text-muted-foreground text-sm pointer-events-none">@</span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="your_handle"
+                  maxLength={20}
+                  className={`w-full bg-muted border rounded pl-7 pr-3 py-2 text-sm font-body text-foreground outline-none transition-colors ${usernameError ? "border-destructive/60 focus:border-destructive" : "border-border focus:border-primary/40"}`}
+                />
+              </div>
+              {usernameError && <p className="text-[10px] font-mono text-destructive mt-1">{usernameError}</p>}
+              {checkingUsername && <p className="text-[10px] font-mono text-muted-foreground mt-1">Checking availability...</p>}
+              {!usernameError && !checkingUsername && username.trim() && username.trim() !== ((profile as any).username ?? "") && (
+                <p className="text-[10px] font-mono text-green-400 mt-1">@{username.trim()} is available</p>
+              )}
+            </div>
+            <div>
               <label className="text-xs font-mono text-muted-foreground block mb-1">NAVI NAME</label>
               <input type="text" value={naviName} onChange={(e) => setNaviName(e.target.value)}
                 className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
@@ -126,7 +184,7 @@ export default function SettingsPage() {
                 {profile.character_class || "Not assigned — take the MBTI quiz on the Character page"}
               </div>
             </div>
-            <button onClick={saveProfile} disabled={saving}
+            <button onClick={saveProfile} disabled={saving || !!usernameError || checkingUsername}
               className="px-4 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors disabled:opacity-50">
               {saving ? "SAVING..." : "SAVE PROFILE"}
             </button>

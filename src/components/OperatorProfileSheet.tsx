@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, MessageSquare, UserMinus, Loader2 } from "lucide-react";
+import { X, MessageSquare, UserMinus, Loader2, UserPlus, UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { tierFromLevel, TIER_NAMES, TIER_COLORS } from "@/lib/classEvolution";
+import { useAuth } from "@/contexts/AuthContext";
 import DirectMessageModal from "./DirectMessageModal";
 
 interface OperatorProfile {
@@ -46,11 +47,14 @@ export default function OperatorProfileSheet({
   onRemoveFromParty,
   isPartyLeader = false,
 }: OperatorProfileSheetProps) {
+  const { user } = useAuth();
   const [profile, setProfile] = useState<OperatorProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDM, setShowDM] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [togglingFollow, setTogglingFollow] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !operatorId) return;
@@ -69,7 +73,18 @@ export default function OperatorProfileSheet({
         else setProfile(data as OperatorProfile);
         setLoading(false);
       });
-  }, [isOpen, operatorId]);
+
+    // Load follow status
+    if (user && user.id !== operatorId) {
+      (supabase as any)
+        .from("operator_follows")
+        .select("following_id")
+        .eq("follower_id", user.id)
+        .eq("following_id", operatorId)
+        .maybeSingle()
+        .then(({ data }: { data: any }) => setIsFollowing(!!data));
+    }
+  }, [isOpen, operatorId, user]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -77,6 +92,25 @@ export default function OperatorProfileSheet({
       setShowDM(false);
     }
   }, [isOpen]);
+
+  const toggleFollow = useCallback(async () => {
+    if (!user || togglingFollow || !profile) return;
+    setTogglingFollow(true);
+    const next = !isFollowing;
+    setIsFollowing(next);
+    if (next) {
+      await (supabase as any)
+        .from("operator_follows")
+        .upsert({ follower_id: user.id, following_id: profile.id }, { onConflict: "follower_id,following_id" });
+    } else {
+      await (supabase as any)
+        .from("operator_follows")
+        .delete()
+        .eq("follower_id", user.id)
+        .eq("following_id", profile.id);
+    }
+    setTogglingFollow(false);
+  }, [user, profile, isFollowing, togglingFollow]);
 
   const tier = (profile?.last_evolution_tier ?? tierFromLevel(profile?.operator_level ?? 1)) as 1 | 2 | 3 | 4 | 5;
   const tierColor = TIER_COLORS[tier] ?? TIER_COLORS[1];
@@ -267,6 +301,26 @@ export default function OperatorProfileSheet({
 
                     {/* Action buttons */}
                     <div className="flex flex-col gap-2 pt-1">
+                      {user && user.id !== profile.id && (
+                        <button
+                          onClick={toggleFollow}
+                          disabled={togglingFollow}
+                          className={`w-full py-2.5 rounded-lg border font-mono text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 ${
+                            isFollowing
+                              ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/5 hover:text-muted-foreground"
+                              : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+                          }`}
+                        >
+                          {togglingFollow ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : isFollowing ? (
+                            <UserCheck size={14} />
+                          ) : (
+                            <UserPlus size={14} />
+                          )}
+                          {isFollowing ? "FOLLOWING" : "FOLLOW"}
+                        </button>
+                      )}
                       <button
                         onClick={() => setShowDM(true)}
                         className="w-full py-2.5 rounded-lg border border-primary/50 bg-primary/10 text-primary font-mono text-sm font-bold hover:bg-primary/20 active:bg-primary/30 transition-colors flex items-center justify-center gap-2"

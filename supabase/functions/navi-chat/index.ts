@@ -283,6 +283,33 @@ function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories:
   };
   const evolutionTitle = mbtiTierTitles[mbtiType]?.[opTier - 1] ?? tierLabel;
 
+  // ── NAVI Mood System ──────────────────────────────────────────────────────────
+  const recentCompletions = (ctx.quests as any[] | undefined)?.filter((q: any) => q.completed).length ?? 0;
+  const activeQuestCount = (ctx.quests as any[] | undefined)?.filter((q: any) => !q.completed).length ?? 0;
+  const journalCount = (ctx.journal_entries as any[] | undefined)?.length ?? 0;
+
+  type NaviMood = { label: string; guidance: string };
+  let naviMood: NaviMood;
+  if (streak === 0 && recentCompletions === 0 && activeQuestCount === 0) {
+    naviMood = { label: "DORMANT", guidance: `${userName} has gone quiet. No streak, no completions, no active quests. Don't lecture. Gently re-engage. Ask what's actually going on. Keep it light — one question, not an intervention.` };
+  } else if (streak === 0 && (recentCompletions > 0 || activeQuestCount > 0)) {
+    naviMood = { label: "REBUILDING", guidance: `${userName} broke their streak but is still showing up — they have active quests or recent completions. Acknowledge the effort, not the gap. Forward motion matters more than the number.` };
+  } else if (streak >= 1 && streak <= 3 && journalCount === 0) {
+    naviMood = { label: "DRIFTING", guidance: `${userName} has a low streak and isn't journaling. They're present but not fully engaged. Nudge them toward reflection. One good question about their week.` };
+  } else if (streak >= 4 && streak <= 13 && recentCompletions > 0) {
+    naviMood = { label: "BUILDING", guidance: `${userName} is building momentum — consistent streak, completing things. Reinforce the pattern without over-celebrating. Keep them focused on what's next.` };
+  } else if (streak >= 14 && recentCompletions >= 3 && journalCount > 0) {
+    naviMood = { label: "THRIVING", guidance: `${userName} is in full flow — long streak, high completion rate, journaling. Match their energy. Push them toward bigger targets. They can handle more right now.` };
+  } else if (activeQuestCount >= 6 && journalCount === 0) {
+    naviMood = { label: "OVERLOADED", guidance: `${userName} has a heavy quest load but isn't reflecting. They might be burning through tasks without processing. Gently surface whether they're overwhelmed or just heads-down.` };
+  } else if (streak >= 7 && recentCompletions === 0) {
+    naviMood = { label: "GRINDING", guidance: `${userName} is showing up every day but not finishing things. Something might be blocked. Explore that without judgment — ask what's actually stuck.` };
+  } else {
+    naviMood = { label: "ACTIVE", guidance: `${userName} is engaged and moving. Respond to what they bring. Don't manufacture urgency — just be present and useful.` };
+  }
+
+  const moodSection = `\nNAVI MOOD ASSESSMENT — ${naviMood.label}:\n${naviMood.guidance}\n`;
+
   const nowDate = new Date();
   const tz = ctx.timezone || "UTC";
   let currentDateTimeStr: string;
@@ -326,7 +353,7 @@ ${evolutionState}
 
 PERSONALITY — ${personality}:
 ${personalityDesc}
-
+${moodSection}
 HOW TO TALK:
 - Be conversational. Talk like a real partner would — natural, warm, flowing.
 - Short messages are fine. One sentence replies are fine. Match their energy and length.

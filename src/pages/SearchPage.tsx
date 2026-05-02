@@ -55,14 +55,28 @@ export default function SearchPage() {
       setLoading(true);
       setSearched(true);
 
-      const { data, error } = await (supabase as any)
+      const COLS = "id, display_name, username, navi_name, character_class, mbti_type, operator_level, subscription_tier";
+      const term = q.trim();
+
+      // Try combined display_name + username search; fall back to display_name only
+      // if the username column doesn't exist yet (schema pending migration).
+      let { data, error } = await (supabase as any)
         .from("profiles")
-        .select(
-          "id, display_name, username, navi_name, character_class, mbti_type, operator_level, subscription_tier"
-        )
-        .or(`display_name.ilike.%${q.trim()}%,username.ilike.%${q.trim()}%`)
+        .select(COLS)
+        .or(`display_name.ilike.%${term}%,username.ilike.%${term}%`)
         .neq("id", user.id)
         .limit(30);
+
+      if (error) {
+        const fallback = await (supabase as any)
+          .from("profiles")
+          .select(COLS)
+          .ilike("display_name", `%${term}%`)
+          .neq("id", user.id)
+          .limit(30);
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (!error && data) {
         setResults(data as OperatorResult[]);

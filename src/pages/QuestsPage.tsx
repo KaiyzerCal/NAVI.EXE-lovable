@@ -31,49 +31,130 @@ interface Domain {
   icon: React.ReactNode;
   color: string;
   border: string;
+  glowBorder: string;
+  glow: string;
+  activityBg: string;
+  badgeBg: string;
   bar: "cyan" | "green" | "purple" | "amber";
   keywords: string[];
 }
 const DOMAINS: Domain[] = [
-  { key: "CAREER",  label: "CAREER",  icon: <Briefcase size={18} />, color: "text-blue-400",   border: "border-blue-500/30",   bar: "cyan",   keywords: ["work", "career", "job", "business", "project", "client", "income"] },
-  { key: "HEALTH",  label: "HEALTH",  icon: <Heart size={18} />,     color: "text-green-400",  border: "border-green-500/30",  bar: "green",  keywords: ["fitness", "health", "gym", "workout", "run", "diet", "sleep", "wellness"] },
-  { key: "MIND",    label: "MIND",    icon: <Brain size={18} />,     color: "text-purple-400", border: "border-purple-500/30", bar: "purple", keywords: ["study", "learn", "read", "book", "course", "skill", "knowledge", "meditat"] },
-  { key: "SOCIAL",  label: "SOCIAL",  icon: <Users size={18} />,     color: "text-yellow-400", border: "border-yellow-500/30", bar: "amber",  keywords: ["friend", "family", "relationship", "party", "social", "network", "community"] },
-  { key: "FINANCE", label: "FINANCE", icon: <Coins size={18} />,     color: "text-orange-400", border: "border-orange-500/30", bar: "amber",  keywords: ["finance", "money", "budget", "invest", "save", "debt", "expense"] },
+  { key: "CAREER",  label: "CAREER",  icon: <Briefcase size={18} />, color: "text-blue-400",   border: "border-blue-500/30",   glowBorder: "border-blue-500",   glow: "shadow-blue-500/40",   activityBg: "bg-blue-500",   badgeBg: "bg-blue-400/10 border-blue-500/30",   bar: "cyan",   keywords: ["work", "career", "job", "business", "project", "client", "income", "revenue", "sales", "code", "build", "launch"] },
+  { key: "HEALTH",  label: "HEALTH",  icon: <Heart size={18} />,     color: "text-green-400",  border: "border-green-500/30",  glowBorder: "border-green-500",  glow: "shadow-green-500/40",  activityBg: "bg-green-500",  badgeBg: "bg-green-400/10 border-green-500/30",  bar: "green",  keywords: ["fitness", "health", "gym", "workout", "run", "diet", "sleep", "wellness", "exercise", "training"] },
+  { key: "MIND",    label: "MIND",    icon: <Brain size={18} />,     color: "text-purple-400", border: "border-purple-500/30", glowBorder: "border-purple-500", glow: "shadow-purple-500/40", activityBg: "bg-purple-500", badgeBg: "bg-purple-400/10 border-purple-500/30", bar: "purple", keywords: ["study", "learn", "read", "book", "course", "skill", "knowledge", "meditat", "mindset", "focus", "journal"] },
+  { key: "SOCIAL",  label: "SOCIAL",  icon: <Users size={18} />,     color: "text-yellow-400", border: "border-yellow-500/30", glowBorder: "border-yellow-500", glow: "shadow-yellow-500/40", activityBg: "bg-yellow-500", badgeBg: "bg-yellow-400/10 border-yellow-500/30", bar: "amber",  keywords: ["friend", "family", "relationship", "party", "social", "network", "community", "team", "event"] },
+  { key: "FINANCE", label: "FINANCE", icon: <Coins size={18} />,     color: "text-orange-400", border: "border-orange-500/30", glowBorder: "border-amber-400",  glow: "shadow-amber-400/40",  activityBg: "bg-amber-500",  badgeBg: "bg-orange-400/10 border-orange-500/30", bar: "amber",  keywords: ["finance", "money", "budget", "invest", "save", "debt", "expense", "crypto", "stock"] },
 ];
-function questInDomain(q: Quest, kws: string[]) {
-  const t = `${q.name} ${q.description ?? ""}`.toLowerCase();
+
+function getEvolutionLevel(score: number): 0 | 1 | 2 | 3 {
+  if (score < 2) return 0;
+  if (score < 5) return 1;
+  if (score < 10) return 2;
+  return 3;
+}
+const EVOLUTION_LABELS = ["DORMANT", "AWAKENING", "ACTIVE", "EVOLVED"] as const;
+function textInDomain(text: string, kws: string[]) {
+  const t = text.toLowerCase();
   return kws.some((k) => t.includes(k));
 }
-function DomainRoomCard({ domain, quests, onPick }: { domain: Domain; quests: Quest[]; onPick: (q: Quest) => void }) {
+function questInDomain(q: Quest, kws: string[]) {
+  return textInDomain(`${q.name} ${q.description ?? ""}`, kws);
+}
+function DomainRoomCard({
+  domain, quests, entryCount, skillCount, onPick,
+}: {
+  domain: Domain; quests: Quest[]; entryCount: number; skillCount: number; onPick: (q: Quest) => void;
+}) {
   const dq = quests.filter((q) => questInDomain(q, domain.keywords));
   const active = dq.filter((q) => !q.completed);
   const done = dq.filter((q) => q.completed);
   const total = dq.length;
   const preview = active.slice(0, 3);
+
+  const activityScore = dq.length + entryCount * 0.5 + skillCount * 0.3;
+  const level = getEvolutionLevel(activityScore);
+  const isDim = level === 0;
+  const isPulsing = level === 3;
+
+  const borderClass = level === 0 ? "border-border" : level === 1 ? domain.border : domain.glowBorder;
+  const shadowClass = level >= 2 ? `shadow-lg ${domain.glow}` : "";
+
   return (
     <motion.div
       variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-      className={`bg-card border ${domain.border} rounded p-4 flex flex-col gap-3`}
+      transition={{ duration: 0.4 }}
+      className={`relative bg-card border ${borderClass} ${shadowClass} rounded p-4 flex flex-col gap-3 transition-all duration-500`}
     >
-      <div className="flex items-center gap-2">
-        <span className={domain.color}>{domain.icon}</span>
-        <h3 className={`font-display text-sm font-bold tracking-widest ${domain.color}`}>{domain.label}</h3>
-        <span className="ml-auto text-[10px] font-mono text-muted-foreground">
-          {active.length} active · {done.length} done
-        </span>
+      {isPulsing && (
+        <motion.div
+          className={`absolute inset-0 rounded border ${domain.glowBorder} pointer-events-none`}
+          animate={{ opacity: [0.6, 0.15, 0.6] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        />
+      )}
+
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-9 h-9 rounded flex items-center justify-center shrink-0 transition-colors duration-500 ${isDim ? "bg-muted/30 text-muted-foreground" : `border ${domain.glowBorder} ${domain.color}`}`}>
+            {domain.icon}
+          </div>
+          <div>
+            <h3 className={`font-display text-sm font-bold tracking-widest ${isDim ? "text-muted-foreground" : domain.color}`}>{domain.label}</h3>
+            <span className={`font-mono text-[10px] tracking-widest opacity-70 ${isDim ? "text-muted-foreground/50" : domain.color}`}>
+              {EVOLUTION_LABELS[level]}
+            </span>
+          </div>
+        </div>
+        <div className={`text-[10px] font-mono font-bold px-2 py-1 rounded border ${isDim ? "bg-muted/10 text-muted-foreground border-border" : `${domain.badgeBg} ${domain.color}`}`}>
+          LVL {level}
+        </div>
       </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {[
+          { label: "QUESTS", value: dq.length },
+          { label: "ENTRIES", value: entryCount },
+          { label: "SKILLS", value: skillCount },
+        ].map(({ label, value }) => (
+          <div key={label} className="flex flex-col items-center gap-0.5 bg-muted/10 rounded py-2 px-1">
+            <span className={`font-display font-bold text-lg leading-none ${isDim ? "text-muted-foreground" : domain.color}`}>{value}</span>
+            <span className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Activity score bar */}
+      <div className="space-y-1">
+        <div className="flex justify-between items-center">
+          <span className="font-mono text-[10px] text-muted-foreground tracking-widest">ACTIVITY</span>
+          <span className={`font-mono text-[10px] font-bold ${isDim ? "text-muted-foreground" : domain.color}`}>{activityScore.toFixed(1)}</span>
+        </div>
+        <div className="h-1 bg-muted/20 rounded-full overflow-hidden">
+          <motion.div
+            className={`h-full rounded-full ${isDim ? "bg-muted/40" : domain.activityBg}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min((activityScore / 10) * 100, 100)}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          />
+        </div>
+      </div>
+
+      {/* Quest progress */}
       <div>
         <ProgressBar value={done.length} max={Math.max(total, 1)} variant={domain.bar} showValue={false} size="sm" />
-        <p className="text-[10px] font-mono text-muted-foreground mt-1">{done.length}/{total} quests completed</p>
+        <p className="text-[10px] font-mono text-muted-foreground mt-1">{done.length}/{total} quests done</p>
       </div>
+
+      {/* Active quest previews */}
       <div className="space-y-1">
         {preview.length === 0 ? (
           <p className="text-xs font-mono text-muted-foreground italic">No active quests in this domain.</p>
         ) : (
           preview.map((q) => (
             <button key={q.id} onClick={() => onPick(q)} className="w-full text-left flex items-start gap-2 hover:bg-muted/40 rounded px-1 py-0.5 transition-colors">
-              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${domain.color.replace("text-", "bg-")}`} />
+              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${isDim ? "bg-muted-foreground/50" : domain.activityBg}`} />
               <p className="text-xs font-body text-foreground/80 leading-tight truncate">{q.name}</p>
             </button>
           ))
@@ -318,7 +399,7 @@ function QuestDetailModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function QuestsPage() {
-  const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest } = useAppData();
+  const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest, entries, skills } = useAppData();
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
@@ -491,9 +572,13 @@ export default function QuestsPage() {
           animate="show"
           className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
         >
-          {DOMAINS.map((d) => (
-            <DomainRoomCard key={d.key} domain={d} quests={quests} onPick={setViewingQuest} />
-          ))}
+          {DOMAINS.map((d) => {
+            const entryCount = entries.filter((e) => textInDomain(`${e.title} ${e.content}`, d.keywords)).length;
+            const skillCount = skills.filter((s) => textInDomain(`${s.name} ${s.description} ${s.category}`, d.keywords)).length;
+            return (
+              <DomainRoomCard key={d.key} domain={d} quests={quests} entryCount={entryCount} skillCount={skillCount} onPick={setViewingQuest} />
+            );
+          })}
         </motion.div>
         {unclassified.length > 0 && (
           <div className="mt-3">

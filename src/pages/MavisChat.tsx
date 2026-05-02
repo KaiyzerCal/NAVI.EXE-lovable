@@ -1192,21 +1192,22 @@ export default function MavisChat() {
             transition={isLoading ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : {}}
           />
         </div>
-        {/* Voice input */}
-        <VoiceInput
-          onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
-          disabled={isLoading}
-        />
-        {/* Attach files */}
-        <button
-          onClick={() => setShowUpload((v) => !v)}
-          className={`w-9 h-9 rounded border flex items-center justify-center transition-colors shrink-0 ${
-            showUpload ? "bg-primary/15 border-primary/40 text-primary" : "bg-muted/40 border-border text-muted-foreground hover:text-primary hover:border-primary/30"
-          }`}
-          title="Attach files"
-        >
-          <Paperclip size={14} />
-        </button>
+        {/* Stacked: attach (top) + voice (bottom) to give the textarea more room */}
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            onClick={() => setShowUpload((v) => !v)}
+            className={`w-8 h-8 rounded border flex items-center justify-center transition-colors ${
+              showUpload ? "bg-primary/15 border-primary/40 text-primary" : "bg-muted/40 border-border text-muted-foreground hover:text-primary hover:border-primary/30"
+            }`}
+            title="Attach files"
+          >
+            <Paperclip size={12} />
+          </button>
+          <VoiceInput
+            onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
+            disabled={isLoading}
+          />
+        </div>
         {/* Textarea — clearly visible, grows with content */}
         <textarea
           ref={textareaRef}

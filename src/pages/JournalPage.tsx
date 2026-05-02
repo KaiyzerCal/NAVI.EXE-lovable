@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film, Image as ImageIcon } from "lucide-react";
+import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film, Image as ImageIcon, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
@@ -137,6 +137,8 @@ export default function JournalPage() {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<"all" | "image" | "video" | "document">("all");
   const [lightboxFile, setLightboxFile] = useState<any | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   const fetchMedia = useCallback(async () => {
     if (!user) return;
@@ -156,7 +158,6 @@ export default function JournalPage() {
 
   const deleteMedia = async (m: any) => {
     if (!confirm(`Delete ${m.file_name}?`)) return;
-    // Try to delete the storage object (best-effort) by parsing its public URL
     try {
       const marker = "/mavis-media/";
       const idx = m.file_url.indexOf(marker);
@@ -270,6 +271,54 @@ export default function JournalPage() {
         )}
       </AnimatePresence>
 
+      {/* Search + Tag filters */}
+      {entries.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <Search size={13} className="text-muted-foreground" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search entries..."
+              className="w-full bg-card border border-border rounded-lg pl-9 pr-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/50 transition-colors placeholder:text-muted-foreground/60"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          {/* Tag chips */}
+          {(() => {
+            const allTags = Array.from(new Set(entries.flatMap((e) => e.tags)));
+            if (allTags.length === 0) return null;
+            return (
+              <div className="flex gap-1.5 flex-wrap">
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded transition-colors ${
+                      selectedTag === tag
+                        ? tagColor(tag) + " ring-1 ring-current"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Empty state */}
       {entries.length === 0 ? (
         <div className="text-center py-16">
@@ -279,9 +328,21 @@ export default function JournalPage() {
             WRITE FIRST ENTRY
           </button>
         </div>
-      ) : (
+      ) : (() => {
+        const q = searchQuery.trim().toLowerCase();
+        const filtered = entries.filter((e) => {
+          const matchesSearch = !q || e.title.toLowerCase().includes(q) || e.content.toLowerCase().includes(q);
+          const matchesTag = !selectedTag || e.tags.includes(selectedTag);
+          return matchesSearch && matchesTag;
+        });
+        if (filtered.length === 0) return (
+          <div className="text-center py-12">
+            <p className="text-xs font-mono text-muted-foreground">NO ENTRIES MATCH FILTER</p>
+          </div>
+        );
+        return (
         <div className="space-y-3">
-          {entries.map((entry, i) => (
+          {filtered.map((entry, i) => (
             <motion.div
               key={entry.id}
               initial={{ opacity: 0, y: 8 }}
@@ -322,7 +383,8 @@ export default function JournalPage() {
             </motion.div>
           ))}
         </div>
-      )}
+        );
+      })()}
         </>
       )}
 

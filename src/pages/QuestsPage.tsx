@@ -5,7 +5,7 @@ import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Swords, Plus, Check, X, Star, Zap, Target, BookOpen,
-  Layers, Pencil, Copy, RotateCcw, Eye, Loader2,
+  Layers, Pencil, Copy, RotateCcw, Eye, Loader2, ChevronDown, ChevronUp,
   Briefcase, Heart, Brain, Users, Coins, Globe,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -86,6 +86,40 @@ function DomainRoomCard({ domain, quests, onPick }: { domain: Domain; quests: Qu
   );
 }
 
+// ─── Quest Templates ──────────────────────────────────────────────────────────
+interface QuestTemplate {
+  name: string;
+  description: string;
+  type: QuestType;
+  xp_reward: number;
+  total: number;
+  category: string;
+}
+
+const QUEST_TEMPLATES: QuestTemplate[] = [
+  { category: "Fitness", name: "Morning Run", description: "Run 5km before 9am", type: "Daily", xp_reward: 50, total: 1 },
+  { category: "Fitness", name: "Strength Circuit", description: "Complete 3 sets of push-ups, pull-ups, and squats", type: "Daily", xp_reward: 60, total: 3 },
+  { category: "Fitness", name: "30-Day Fitness Challenge", description: "Complete a daily workout for 30 consecutive days", type: "Epic", xp_reward: 100, total: 30 },
+  { category: "Fitness", name: "Hydration Protocol", description: "Drink 2L of water today", type: "Minor", xp_reward: 20, total: 1 },
+  { category: "Fitness", name: "Weekly Long Run", description: "Complete a 10km+ run this week", type: "Weekly", xp_reward: 80, total: 1 },
+  { category: "Business", name: "Deep Work Block", description: "Complete 2 hours of focused, distraction-free work", type: "Daily", xp_reward: 60, total: 1 },
+  { category: "Business", name: "Revenue Goal", description: "Hit monthly revenue target", type: "Main", xp_reward: 100, total: 1 },
+  { category: "Business", name: "Content Creation", description: "Create and publish 1 piece of content", type: "Side", xp_reward: 70, total: 1 },
+  { category: "Business", name: "Weekly Review", description: "Review goals, wins, and blockers for the week", type: "Weekly", xp_reward: 50, total: 1 },
+  { category: "Business", name: "Client Outreach", description: "Send 5 outreach messages to potential clients", type: "Minor", xp_reward: 40, total: 5 },
+  { category: "Learning", name: "Daily Reading", description: "Read 20+ pages of a non-fiction book", type: "Daily", xp_reward: 40, total: 1 },
+  { category: "Learning", name: "Learn a New Skill", description: "Complete an online course or tutorial", type: "Side", xp_reward: 80, total: 1 },
+  { category: "Learning", name: "Language Practice", description: "Practice a language for 15+ minutes", type: "Minor", xp_reward: 30, total: 1 },
+  { category: "Learning", name: "Finish a Book", description: "Read and finish an entire book", type: "Epic", xp_reward: 90, total: 1 },
+  { category: "Relationships", name: "Check In", description: "Reach out and genuinely connect with a friend or family member", type: "Minor", xp_reward: 30, total: 1 },
+  { category: "Relationships", name: "Quality Time", description: "Spend intentional time with someone you care about", type: "Side", xp_reward: 60, total: 1 },
+  { category: "Relationships", name: "30-Day Connection Challenge", description: "Make a meaningful connection with someone new each week", type: "Epic", xp_reward: 80, total: 4 },
+  { category: "Creativity", name: "Daily Creative Output", description: "Create something — art, writing, music, or design", type: "Daily", xp_reward: 50, total: 1 },
+  { category: "Creativity", name: "Side Project Sprint", description: "Work on a personal creative project for 1+ hour", type: "Weekly", xp_reward: 70, total: 1 },
+  { category: "Creativity", name: "Ship Something", description: "Launch or publish a creative project publicly", type: "Main", xp_reward: 100, total: 1 },
+];
+
+const TEMPLATE_CATEGORIES = ["Fitness", "Business", "Learning", "Relationships", "Creativity"];
 interface QuestFormState {
   name: string;
   description: string;
@@ -291,6 +325,8 @@ export default function QuestsPage() {
   const [viewingQuest, setViewingQuest] = useState<Quest | null>(null);
   const [editingQuest, setEditingQuest] = useState<Quest | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateCategory, setTemplateCategory] = useState<string>("Fitness");
 
   const filtered = quests.filter((q) => {
     const statusMatch = filter === "active" ? !q.completed : filter === "completed" ? q.completed : true;
@@ -385,6 +421,62 @@ export default function QuestsPage() {
             <p className="text-[9px] font-mono text-muted-foreground">{s.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Templates */}
+      <div className="mb-4 border border-border rounded-lg overflow-hidden">
+        <button
+          onClick={() => setShowTemplates((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/20 transition-colors"
+        >
+          <span className="text-xs font-mono text-muted-foreground">// QUEST TEMPLATES</span>
+          {showTemplates ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+        </button>
+        <AnimatePresence>
+          {showTemplates && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="border-t border-border px-4 pt-3 pb-4">
+                <div className="flex gap-1.5 flex-wrap mb-3">
+                  {TEMPLATE_CATEGORIES.map((cat) => (
+                    <button key={cat} onClick={() => setTemplateCategory(cat)}
+                      className={`px-3 py-1 rounded text-[10px] font-mono transition-colors ${templateCategory === cat ? "bg-primary/10 text-primary border border-primary/30" : "text-muted-foreground border border-border hover:border-primary/20"}`}>
+                      {cat.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {QUEST_TEMPLATES.filter((t) => t.category === templateCategory).map((tpl) => {
+                    const cfg = TYPE_CONFIG[tpl.type];
+                    return (
+                      <div key={tpl.name} className="flex items-center gap-3 p-3 rounded border border-border bg-card/50 hover:border-primary/20 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${cfg.bg} ${cfg.color} ${cfg.border}`}>{cfg.icon} {cfg.label}</span>
+                            <span className="text-xs font-body font-bold text-foreground truncate">{tpl.name}</span>
+                          </div>
+                          <p className="text-[10px] font-mono text-muted-foreground truncate">{tpl.description}</p>
+                        </div>
+                        <p className="text-[10px] font-mono text-green-400 shrink-0 mr-2">+{tpl.xp_reward} XP</p>
+                        <button
+                          onClick={async () => { setSaving(true); await createQuest({ name: tpl.name, description: tpl.description, type: tpl.type, total: tpl.total, xp_reward: tpl.xp_reward } as CreateQuestInput); setSaving(false); toast({ title: "Quest created", description: `"${tpl.name}" added to your log.` }); }}
+                          disabled={saving}
+                          className="shrink-0 px-2.5 py-1.5 rounded border border-primary/30 bg-primary/10 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-50"
+                        >
+                          USE
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ATLAS — Domain Rooms */}

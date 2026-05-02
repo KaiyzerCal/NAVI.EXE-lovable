@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye, Cpu, Wand2 } from "lucide-react";
+import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye, Cpu, Wand2, RefreshCw } from "lucide-react";
 import { useState, useEffect, Suspense } from "react";
 import { getNaviCharacter } from "@/components/navi-characters";
 import { Input } from "@/components/ui/input";
@@ -171,6 +171,8 @@ export default function NaviPage() {
   const [unlockConditions, setUnlockConditions] = useState<Record<string, { unlock_type: string; unlock_value: number; description: string }>>({});
   const [editMode, setEditMode] = useState(false);
   const [skinViewMode, setSkinViewMode] = useNaviRenderMode();
+  const [omniSyncing, setOmniSyncing] = useState(false);
+  const [omniSyncMsg, setOmniSyncMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -187,6 +189,22 @@ export default function NaviPage() {
     supabase.from("profiles").select("equipped_skin").eq("id", user.id).single()
       .then(({ data }) => { if (data?.equipped_skin) setEquippedSkin(data.equipped_skin); });
   }, [user]);
+
+  const handleOmniSync = async () => {
+    if (!user || omniSyncing) return;
+    setOmniSyncing(true);
+    setOmniSyncMsg(null);
+    const { data, error } = await supabase.functions.invoke("navi-consolidate-memories", {
+      body: { user_id: user.id },
+    });
+    if (error) {
+      setOmniSyncMsg("Sync failed — try again later.");
+    } else {
+      const count = (data as any)?.memories_saved ?? (data as any)?.count ?? "?";
+      setOmniSyncMsg(`Memory sync complete — ${count} memories consolidated.`);
+    }
+    setOmniSyncing(false);
+  };
 
   const handleEquipSkin = async (skinName: string) => {
     setEquippedSkin(skinName);
@@ -315,6 +333,31 @@ export default function NaviPage() {
           ▶ TAP TO CHAT WITH NAVI
         </p>
       </motion.div>
+
+      {/* OmniSync Memory */}
+      <HudCard title="OMNISYNC MEMORY" icon={<RefreshCw size={14} />} className="mb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-body text-foreground mb-0.5">Memory Consolidation</p>
+            <p className="text-[10px] font-mono text-muted-foreground">
+              Compress and distill long-term NAVI memory from your journal, quests, and sessions into a structured context store.
+            </p>
+            {omniSyncMsg && (
+              <p className={`text-[10px] font-mono mt-2 ${omniSyncMsg.includes("failed") ? "text-destructive" : "text-green-400"}`}>
+                {omniSyncMsg}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={handleOmniSync}
+            disabled={omniSyncing}
+            className="shrink-0 flex items-center gap-2 px-3 py-2 rounded border border-primary/30 bg-primary/10 text-primary text-xs font-mono hover:bg-primary/20 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={omniSyncing ? "animate-spin" : ""} />
+            {omniSyncing ? "SYNCING..." : "OMNISYNC"}
+          </button>
+        </div>
+      </HudCard>
 
       {/* Personality Selector */}
       <HudCard title="PERSONALITY" icon={<Shield size={14} />} glow className="mb-4">

@@ -408,6 +408,7 @@ export default function QuestsPage() {
   const [saving, setSaving] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateCategory, setTemplateCategory] = useState<string>("Fitness");
+  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
 
   const filtered = quests.filter((q) => {
     const statusMatch = filter === "active" ? !q.completed : filter === "completed" ? q.completed : true;

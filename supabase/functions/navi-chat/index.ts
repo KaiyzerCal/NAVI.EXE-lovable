@@ -939,10 +939,13 @@ serve(async (req) => {
       });
     }
 
-    // Fire-and-forget: personality drift signal + last_active
+    // Fire-and-forget: personality drift signal + last_active + adaptive personality drift
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
       const msgLen = lastUserMsg?.content?.length ?? 0;
       const engagementScore = Math.min(10, Math.max(1, Math.floor(msgLen / 25)));
+      const currentPersonality = context?.navi_personality ?? "GUARDIAN";
+
+      // 1. Update last_active + engagement score
       fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
         method: "PATCH",
         headers: {
@@ -950,6 +953,52 @@ serve(async (req) => {
           "Content-Type": "application/json", Prefer: "return=minimal",
         },
         body: JSON.stringify({ personality_engagement_score: engagementScore, last_active: new Date().toISOString() }),
+      }).catch(() => {});
+
+      // 2. Record personality session score for adaptive drift
+      fetch(`${SUPABASE_URL}/rest/v1/personality_session_scores`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          "Content-Type": "application/json", Prefer: "return=minimal",
+        },
+        body: JSON.stringify({ user_id: userId, personality: currentPersonality, score: engagementScore }),
+      }).then(async () => {
+        // 3. After recording, check if we should drift personality (every ~20 sessions)
+        try {
+          const sessRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/personality_session_scores?user_id=eq.${userId}&order=created_at.desc&limit=40&select=personality,score`,
+            { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+          );
+          if (!sessRes.ok) return;
+          const sessions: { personality: string; score: number }[] = await sessRes.json();
+          if (sessions.length < 20) return;
+
+          // Tally weighted scores per personality over last 40 sessions
+          const totals: Record<string, number> = {};
+          for (const s of sessions) {
+            totals[s.personality] = (totals[s.personality] ?? 0) + (s.score ?? 1);
+          }
+          const dominant = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0];
+          if (!dominant || dominant === currentPersonality) return;
+
+          // Drift: only update if dominant is significantly ahead (>20% more score)
+          const dominantScore = totals[dominant] ?? 0;
+          const currentScore = totals[currentPersonality] ?? 0;
+          if (dominantScore > currentScore * 1.2) {
+            await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+              method: "PATCH",
+              headers: {
+                apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+                "Content-Type": "application/json", Prefer: "return=minimal",
+              },
+              body: JSON.stringify({ navi_personality: dominant }),
+            });
+            console.log(`[NAVI] Personality drifted: ${currentPersonality} → ${dominant} (score ${currentScore} → ${dominantScore})`);
+          }
+        } catch (e) {
+          console.warn("[NAVI] Personality drift check failed:", e);
+        }
       }).catch(() => {});
     }
 

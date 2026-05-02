@@ -32,6 +32,7 @@ import InboxPage from "./pages/InboxPage";
 import AgentPage from "./pages/AgentPage";
 import SearchPage from "./pages/SearchPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import AtlasPage from "./pages/AtlasPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -100,7 +101,7 @@ function AppShell() {
     prevLevelRef.current = operatorLevel;
   }, [operatorLevel]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Track streak milestones → auto-post STREAK to feed
+  // Track streak milestones → auto-post STREAK to feed + award streak freeze
   const prevStreakRef = useRef<number | null>(null);
   useEffect(() => {
     const streak = profile.current_streak ?? 0;
@@ -112,6 +113,12 @@ function AppShell() {
           `${profile.display_name ?? "Operator"} hit a ${streak}-day streak`,
           { streak_days: streak }
         );
+      }
+      // Award 1 streak freeze for every 7-day milestone
+      if (streak > 0 && streak % 7 === 0 && user) {
+        supabase.functions.invoke("navi-actions", {
+          body: { actions: [{ type: "award_streak_freeze", params: {} }] },
+        }).catch(() => {});
       }
     }
     prevStreakRef.current = streak;
@@ -199,6 +206,7 @@ function AppShell() {
           <Route path="/agents" element={<AgentPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/atlas" element={<AtlasPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>

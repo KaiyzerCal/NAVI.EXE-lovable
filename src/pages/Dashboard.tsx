@@ -2,12 +2,14 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2 } from "lucide-react";
+import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2, Snowflake, Shield } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useNavigate } from "react-router-dom";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { getNaviCharacter } from "@/components/navi-characters";
 import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const fadeIn = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.3 } };
 const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/navi-skins`;
@@ -16,9 +18,32 @@ const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/pub
 const xpForLevel = (level: number) => level * 500;
 
 export default function Dashboard() {
-  const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading } = useAppData();
+  const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading, refetchProfile } = useAppData();
   const navigate = useNavigate();
   const [naviRenderMode] = useNaviRenderMode();
+  const { user, session } = useAuth();
+  const { toast } = useToast();
+  const [usingFreeze, setUsingFreeze] = useState(false);
+
+  const handleUseFreeze = async () => {
+    setUsingFreeze(true);
+    try {
+      const token = session?.access_token;
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ actions: [{ type: "use_streak_freeze", params: {} }] }),
+      });
+      await refetchProfile();
+      toast({ title: "Streak Freeze Used", description: "Your streak is protected for today." });
+    } finally {
+      setUsingFreeze(false);
+    }
+  };
 
   const loading = profileLoading || questsLoading || journalLoading;
 
@@ -137,13 +162,39 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
+      {/* Streak Freeze */}
+      {((profile as any).streak_freeze_count > 0 || profile.current_streak > 0) && (
+        <motion.div {...fadeIn} className="bg-card border border-blue-400/20 rounded p-4 mb-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 shrink-0">
+              <Snowflake size={18} className="text-blue-400" />
+              <div>
+                <p className="text-[10px] font-mono text-blue-400 leading-none">STREAK FREEZE</p>
+                <p className="font-display text-xl font-bold text-blue-400">{(profile as any).streak_freeze_count ?? 0}</p>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-mono text-muted-foreground">Protects your streak if you miss a day. Earned every 7-day milestone.</p>
+              <p className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">Earn 1 freeze every 7 days</p>
+            </div>
+            <button
+              onClick={handleUseFreeze}
+              disabled={usingFreeze || ((profile as any).streak_freeze_count ?? 0) === 0}
+              className="shrink-0 px-3 py-1.5 rounded border border-blue-400/40 bg-blue-400/10 text-blue-400 text-[11px] font-mono hover:bg-blue-400/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              <Shield size={12} />
+              {usingFreeze ? "USING..." : "USE FREEZE"}
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
           { label: "ACTIVE QUESTS",   value: stats.active,            icon: <Swords size={16} />,   color: "text-neon-amber" },
           { label: "QUESTS DONE",     value: stats.completed,         icon: <Star size={16} />,     color: "text-neon-purple" },
           { label: "JOURNAL ENTRIES", value: entries.length,          icon: <BookOpen size={16} />, color: "text-neon-green" },
-          { label: "STREAK",          value: `${profile.current_streak}d`, icon: <Activity size={16} />, color: "text-neon-cyan" },
         ].map((stat, i) => (
           <motion.div key={stat.label} {...fadeIn} transition={{ delay: i * 0.05 }}>
             <HudCard title={stat.label} icon={stat.icon}>
@@ -151,6 +202,16 @@ export default function Dashboard() {
             </HudCard>
           </motion.div>
         ))}
+        <motion.div {...fadeIn} transition={{ delay: 3 * 0.05 }}>
+          <HudCard title="STREAK" icon={<Activity size={16} />}>
+            <p className="font-display text-2xl font-bold text-neon-cyan">{profile.current_streak}d</p>
+            {(profile as any).streak_freeze_count > 0 && (
+              <span className="text-[9px] font-mono text-blue-400 mt-1 block">
+                {(profile as any).streak_freeze_count} FREEZE{(profile as any).streak_freeze_count !== 1 ? "S" : ""} AVAILABLE
+              </span>
+            )}
+          </HudCard>
+        </motion.div>
       </div>
 
       {/* Bottom Grid */}

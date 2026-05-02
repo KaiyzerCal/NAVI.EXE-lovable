@@ -2,7 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, MessageSquare, User, Swords, BookOpen,
   BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
-  Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Search, Bell,
+  Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Search, Bell, Map,
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,6 +25,7 @@ const navItems = [
   { to: "/inbox", icon: Inbox, label: "Inbox" },
   { to: "/search", icon: Search, label: "Search" },
   { to: "/notifications", icon: Bell, label: "Notifications" },
+  { to: "/atlas", icon: Map, label: "Atlas" },
   { to: "/agents", icon: Bot, label: "Agents" },
   { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },

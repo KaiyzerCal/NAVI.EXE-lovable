@@ -21,6 +21,7 @@ const profileAllowedKeys = [
   "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception",
   "luck", "codex_points", "cali_coins", "operator_level", "operator_xp",
   "onboarding_done", "notification_settings", "user_navi_description", "last_active",
+  "streak_freeze_count",
 ] as const;
 
 function asStringArray(value: unknown): string[] {
@@ -115,6 +116,16 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
           cali_coins:   Number((prof as any).cali_coins   || 0) + caliReward,
         }).eq("id", userId);
       }
+
+      // Award Forge coins on quest completion
+      const forgeMap: Record<string, number> = { Daily: 20, Weekly: 60, Main: 100, Side: 40, Minor: 10, Epic: 200 };
+      const forgeReward = forgeMap[qType] ?? 20;
+      // Upsert forge_balances
+      const { data: fb } = await sb.from("forge_balances" as any).select("balance").eq("user_id", userId).maybeSingle();
+      const newBal = Number((fb as any)?.balance ?? 0) + forgeReward;
+      await sb.from("forge_balances" as any).upsert({ user_id: userId, balance: newBal, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      // Insert forge_transaction
+      await sb.from("forge_transactions" as any).insert({ user_id: userId, amount: forgeReward, reason: `Quest completed: ${quest.name}`, source: "quest" });
 
       if (quest.linked_skill_id) {
         const { data: skill } = await sb.from("skills")
@@ -427,6 +438,28 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
         const { error } = await sb.from("buffs").delete().eq("user_id", userId).ilike("name", String(params.name));
         if (error) throw error;
       }
+      return;
+    }
+
+    case "use_streak_freeze": {
+      const { data: p, error: pe } = await sb.from("profiles")
+        .select("streak_freeze_count, current_streak")
+        .eq("id", userId).single();
+      if (pe || !p) throw new Error("Profile not found");
+      const freezes = Number((p as any).streak_freeze_count ?? 0);
+      if (freezes <= 0) throw new Error("No streak freezes available");
+      await sb.from("profiles").update({
+        streak_freeze_count: freezes - 1,
+      }).eq("id", userId);
+      await logActivity(sb, userId, "streak_freeze_used", "Streak freeze consumed — streak protected", 0);
+      return;
+    }
+
+    case "award_streak_freeze": {
+      const { data: p } = await sb.from("profiles").select("streak_freeze_count").eq("id", userId).single();
+      const current = Number((p as any)?.streak_freeze_count ?? 0);
+      await sb.from("profiles").update({ streak_freeze_count: current + 1 }).eq("id", userId);
+      await logActivity(sb, userId, "streak_freeze_earned", "Streak freeze earned (7-day milestone)", 0);
       return;
     }
 

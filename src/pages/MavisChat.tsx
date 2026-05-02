@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
+import { executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -226,7 +226,7 @@ async function streamChat({
   signal: AbortSignal;
   accessToken: string;
   onDelta: (text: string) => void;
-  onDone: () => void;
+  onDone: (actions: NaviAction[]) => void;
 }) {
   const resp = await fetch(CHAT_URL, {
     method: "POST",
@@ -249,6 +249,7 @@ async function streamChat({
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let extractedActions: NaviAction[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -262,9 +263,14 @@ async function streamChat({
       if (line.endsWith("\r")) line = line.slice(0, -1);
       if (!line.startsWith("data: ")) continue;
       const json = line.slice(6).trim();
-      if (json === "[DONE]") { onDone(); return; }
+      if (json === "[DONE]") { onDone(extractedActions); return; }
       try {
         const parsed = JSON.parse(json);
+        // Handle navi_actions event injected by the edge function
+        if (parsed.navi_actions && Array.isArray(parsed.navi_actions)) {
+          extractedActions = parsed.navi_actions;
+          continue;
+        }
         const content = parsed.choices?.[0]?.delta?.content;
         if (content) onDelta(content);
       } catch {
@@ -273,7 +279,7 @@ async function streamChat({
       }
     }
   }
-  onDone();
+  onDone(extractedActions);
 }
 
 const INITIAL_MESSAGE: DisplayMessage = {
@@ -890,27 +896,26 @@ export default function MavisChat() {
         },
         onDelta: (chunk) => {
           assistantContent += chunk;
-          // Strip action tags from display
-          const { cleanText } = parseActions(assistantContent);
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant" && last.id === "streaming") {
-              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: cleanText } : m));
+              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantContent } : m));
             }
-            return [...prev, { id: "streaming", role: "assistant", content: cleanText, timestamp: new Date() }];
+            return [...prev, { id: "streaming", role: "assistant", content: assistantContent, timestamp: new Date() }];
           });
         },
-        onDone: async () => {
+        onDone: async (functionCallingActions) => {
           if (controller.signal.aborted) return;
 
-          const { cleanText, actions: parsedActions } = parseActions(assistantContent);
-          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText, { quests, entries, skills });
+          const cleanText = assistantContent;
+          // Use function-calling actions; fall back to heuristics only if none extracted
+          const actions = functionCallingActions.length > 0
+            ? functionCallingActions
+            : inferFallbackActions(userContent, cleanText, { quests, entries, skills });
 
-          console.log("[NAVI] Raw response length:", assistantContent.length);
-          console.log("[NAVI] Raw response preview:", assistantContent.slice(0, 500));
-          console.log("[NAVI] Contains :::ACTION:", assistantContent.includes(":::ACTION"));
-          console.log("[NAVI] Parsed actions count:", parsedActions.length);
-          console.log("[NAVI] Fallback actions used:", parsedActions.length === 0 && actions.length > 0);
+          console.log("[NAVI] Response length:", assistantContent.length);
+          console.log("[NAVI] Function-calling actions:", functionCallingActions.length);
+          console.log("[NAVI] Fallback used:", functionCallingActions.length === 0 && actions.length > 0);
           console.log("[NAVI] Actions:", JSON.stringify(actions, null, 2));
 
           if (actions.length > 0) {

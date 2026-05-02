@@ -9,6 +9,414 @@ const corsHeaders = {
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// ── Types ────────────────────────────────────────────────────────────────────
+
+type NaviAction = { type: string; params: Record<string, unknown> };
+
+// ── OpenAI function schemas for action extraction ─────────────────────────
+
+const NAVI_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "create_quest",
+      description: "Create a new quest, task, mission, or goal for the operator",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Quest name" },
+          description: { type: "string", description: "Quest description" },
+          type: { type: "string", enum: ["Daily", "Weekly", "Main", "Side", "Minor", "Epic"] },
+          total: { type: "integer", description: "Steps required, default 1" },
+          xp_reward: { type: "integer", description: "XP reward, default 50" },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "complete_quest",
+      description: "Mark a quest as completed. Use the quest_id from the active quests list.",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_id: { type: "string", description: "UUID of the quest to complete" },
+        },
+        required: ["quest_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_quest_progress",
+      description: "Increment or set progress on a quest without completing it",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_id: { type: "string" },
+          progress: { type: "integer", description: "New progress value" },
+        },
+        required: ["quest_id", "progress"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_quest",
+      description: "Update quest fields such as name, type, or xp_reward",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_id: { type: "string" },
+          name: { type: "string" },
+          description: { type: "string" },
+          type: { type: "string", enum: ["Daily", "Weekly", "Main", "Side", "Minor", "Epic"] },
+          total: { type: "integer" },
+          xp_reward: { type: "integer" },
+        },
+        required: ["quest_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_quest",
+      description: "Permanently delete a quest",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_id: { type: "string" },
+        },
+        required: ["quest_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_skill",
+      description: "Create a new skill to track",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          category: {
+            type: "string",
+            enum: ["General", "Combat", "Knowledge", "Social", "Fitness", "Creative", "Technical"],
+          },
+          max_level: { type: "integer", description: "Default 10" },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_skill",
+      description: "Update a skill's properties",
+      parameters: {
+        type: "object",
+        properties: {
+          skill_id: { type: "string" },
+          name: { type: "string" },
+          description: { type: "string" },
+          category: { type: "string" },
+          level: { type: "integer" },
+        },
+        required: ["skill_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_skill",
+      description: "Delete a skill",
+      parameters: {
+        type: "object",
+        properties: {
+          skill_id: { type: "string" },
+        },
+        required: ["skill_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_journal",
+      description: "Create a journal or vault entry",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          content: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
+          category: {
+            type: "string",
+            enum: ["personal", "business", "legal", "evidence", "achievement"],
+          },
+          importance: { type: "string", enum: ["low", "medium", "high", "critical"] },
+          xp_earned: { type: "integer", description: "Default 10" },
+        },
+        required: ["title", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_journal",
+      description: "Update an existing journal entry",
+      parameters: {
+        type: "object",
+        properties: {
+          entry_id: { type: "string" },
+          title: { type: "string" },
+          content: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
+        },
+        required: ["entry_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_journal",
+      description: "Delete a journal entry",
+      parameters: {
+        type: "object",
+        properties: {
+          entry_id: { type: "string" },
+        },
+        required: ["entry_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_equipment",
+      description: "Create an equipment item or piece of gear",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          slot: {
+            type: "string",
+            enum: ["head", "chest", "hands", "legs", "feet", "weapon", "offhand", "accessory"],
+          },
+          rarity: { type: "string", enum: ["common", "rare", "epic", "legendary"] },
+          stat_bonuses: { type: "object", description: "e.g. {str: 5, perception: 2}" },
+          obtained_from: { type: "string" },
+        },
+        required: ["name", "slot"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "equip_item",
+      description: "Equip an item from the operator's inventory",
+      parameters: {
+        type: "object",
+        properties: {
+          item_id: { type: "string" },
+        },
+        required: ["item_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_buff",
+      description: "Apply a buff or debuff effect to the operator",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          effect_type: { type: "string", enum: ["buff", "debuff"] },
+          stat_affected: { type: "string", description: "e.g. perception, luck, str" },
+          modifier_value: { type: "number" },
+          duration_hours: { type: "number" },
+          source: { type: "string", description: "Default: navi" },
+        },
+        required: ["name", "effect_type"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "remove_buff",
+      description: "Remove an active buff or debuff",
+      parameters: {
+        type: "object",
+        properties: {
+          buff_id: { type: "string" },
+        },
+        required: ["buff_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_profile",
+      description: "Update operator profile stats, bond scores, or attributes",
+      parameters: {
+        type: "object",
+        properties: {
+          display_name: { type: "string" },
+          bond_affection: { type: "integer" },
+          bond_trust: { type: "integer" },
+          bond_loyalty: { type: "integer" },
+          perception: { type: "integer" },
+          luck: { type: "integer" },
+          codex_points: { type: "integer" },
+          cali_coins: { type: "integer" },
+          character_class: { type: "string" },
+          mbti_type: { type: "string" },
+          subclass: { type: "string" },
+          navi_personality: { type: "string" },
+          navi_name: { type: "string" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "award_xp",
+      description: "Award XP points to the operator",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { type: "integer", description: "Amount of XP to award" },
+        },
+        required: ["amount"],
+      },
+    },
+  },
+];
+
+// ── Extract actions via OpenAI function calling ───────────────────────────
+
+async function extractActionsViaFunctionCalling(
+  userMessage: string,
+  naviResponse: string,
+  ctx: any,
+  openaiKey: string
+): Promise<NaviAction[]> {
+  if (!openaiKey || !naviResponse.trim()) return [];
+
+  // Build a compact app-state string for ID lookups
+  const appStateLines: string[] = [];
+  if (ctx.quests?.length) {
+    appStateLines.push("Active quests:");
+    for (const q of ctx.quests) {
+      appStateLines.push(`  ${q.name} — id: ${q.id} — completed: ${q.completed}`);
+    }
+  }
+  if (ctx.skills?.length) {
+    appStateLines.push("Skills:");
+    for (const s of ctx.skills) {
+      appStateLines.push(`  ${s.name} — id: ${s.id}`);
+    }
+  }
+  if (ctx.journal_entries?.length) {
+    appStateLines.push("Journal entries:");
+    for (const j of ctx.journal_entries) {
+      appStateLines.push(`  "${j.title}" — id: ${j.id}`);
+    }
+  }
+  if (ctx.buffs?.length) {
+    appStateLines.push("Active buffs/debuffs:");
+    for (const b of ctx.buffs) {
+      appStateLines.push(`  ${b.name} — id: ${b.id}`);
+    }
+  }
+  if (ctx.equipment?.length) {
+    appStateLines.push("Equipment:");
+    for (const e of ctx.equipment) {
+      appStateLines.push(`  ${e.name} [${e.slot}] — id: ${e.id}`);
+    }
+  }
+
+  const appStateSummary = appStateLines.join("\n").slice(0, 2000);
+
+  const systemPrompt = `You are an action extractor for NAVI, a digital companion RPG app.
+Analyze the conversation and call functions to record any game actions NAVI explicitly confirmed performing.
+
+Rules:
+- Only call functions when NAVI's response explicitly states it performed an action (e.g., "Done!", "Created!", "Logged it", "Marked complete", "Quest added")
+- Use exact IDs from the app state for updates/completions/deletions — never guess IDs
+- For quest completion, always pair complete_quest with award_xp (use the quest's xp_reward)
+- For journal creation, include award_xp with xp_earned amount
+- Do NOT call functions for things NAVI merely discussed, suggested, or described
+- Do NOT call functions if NAVI declined to do something`;
+
+  const userPrompt = `User said: "${userMessage.slice(0, 500)}"
+
+NAVI responded: "${naviResponse.slice(0, 1500)}"
+
+App state (for ID reference):
+${appStateSummary}
+
+What actions did NAVI explicitly confirm performing?`;
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        tools: NAVI_TOOLS,
+        tool_choice: "auto",
+        max_tokens: 800,
+        temperature: 0,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Action extraction API error:", res.status, await res.text());
+      return [];
+    }
+
+    const data = await res.json();
+    const toolCalls = data.choices?.[0]?.message?.tool_calls;
+    if (!toolCalls || !Array.isArray(toolCalls)) return [];
+
+    return toolCalls.map((tc: any) => ({
+      type: tc.function.name,
+      params: JSON.parse(tc.function.arguments || "{}"),
+    }));
+  } catch (e) {
+    console.error("Action extraction failed:", e);
+    return [];
+  }
+}
+
 // ── Semantic memory retrieval ────────────────────────────────────────────────
 
 async function embedText(text: string, apiKey: string): Promise<number[] | null> {
@@ -117,7 +525,6 @@ function needsWebSearch(lastUserMessage: string): string | null {
     "score", "election", "trending",
   ];
   if (triggers.some(t => lower.includes(t))) {
-    // Extract the search query — use the full message as context
     return lastUserMessage;
   }
   return null;
@@ -181,8 +588,6 @@ function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories:
 
   const personalityDesc = personalityBlocks[personality] || personalityBlocks.GUARDIAN;
 
-  // Semantic memories take priority; fall back to the client-side text blob when
-  // embeddings don't exist yet (graceful degradation for new installs).
   let memorySection = "";
   if (semanticMemories) {
     memorySection = `\n[RELEVANT MEMORIES — retrieved by semantic similarity]\n${semanticMemories}\nReference these naturally. Do NOT list them out — weave them into your response where relevant.\n`;
@@ -259,7 +664,6 @@ function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories:
   const caliCoins = ctx.cali_coins ?? 0;
   const operatorLevel = ctx.operator_level ?? 1;
 
-  // Resolve evolution tier title from operator level + MBTI
   const mbtiType = (ctx.mbti_type as string | undefined)?.toUpperCase() ?? "";
   const opTier = operatorLevel >= 76 ? 5 : operatorLevel >= 51 ? 4 : operatorLevel >= 26 ? 3 : operatorLevel >= 11 ? 2 : 1;
   const tierLabel = ["AWAKENING", "ASCENDING", "SOVEREIGN", "TRANSCENDENT", "LEGENDARY"][opTier - 1];
@@ -283,7 +687,7 @@ function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories:
   };
   const evolutionTitle = mbtiTierTitles[mbtiType]?.[opTier - 1] ?? tierLabel;
 
-  // ── NAVI Mood System ──────────────────────────────────────────────────────────
+  // ── NAVI Mood System ──────────────────────────────────────────────────────
   const recentCompletions = (ctx.quests as any[] | undefined)?.filter((q: any) => q.completed).length ?? 0;
   const activeQuestCount = (ctx.quests as any[] | undefined)?.filter((q: any) => !q.completed).length ?? 0;
   const journalCount = (ctx.journal_entries as any[] | undefined)?.length ?? 0;
@@ -361,41 +765,14 @@ HOW TO TALK:
 - When they share something personal, sit with it. Don't immediately pivot to action items.
 - Use humor, be playful, be real.
 
+ACTIONS:
+When the Operator asks you to create, update, complete, or delete quests, skills, journal entries, equipment, buffs, or update their stats, confirm it naturally in your response ("Done!", "Quest added!", "Logged it.", "Marked complete."). The system automatically extracts and executes actions from your confirmation — you do NOT need to include any JSON or special formatting in your response.
+
 WEB SEARCH:
 - You have access to live web search results when relevant.
 - If web search results are provided below, use them to answer with current, accurate information.
 - Cite sources naturally when using web data.
 ${webSection}
-
-ACTIONS — CRITICAL SYSTEM REQUIREMENT:
-You MUST include a \`\`\`actions block at the VERY END of your response for ANY data modification. This block is invisible to the user but is the ONLY mechanism that actually changes data. Without it, nothing happens.
-
-FORMAT — place this block as the ABSOLUTE LAST thing in your response, after all visible text:
-\`\`\`actions
-{"actions":[{"type":"...","params":{...}},{"type":"...","params":{...}}]}
-\`\`\`
-
-Rules:
-- Only include the block when you are actually performing an action
-- Put ALL actions for a response in ONE block — never split them
-- The block MUST be the last thing in your response — after all visible text
-
-ACTION REFERENCE:
-Quests: create_quest, update_quest, complete_quest, update_quest_progress, delete_quest
-Skills: create_skill, update_skill, level_up_skill, delete_skill, create_subskill
-Journal: create_journal, update_journal, delete_journal
-Equipment: create_equipment, equip_item, unequip_item, delete_equipment
-Effects: create_buff, remove_buff
-Profile: update_profile (any field: xp_total, bond stats, perception, luck, codex_points, cali_coins, operator_level, etc.)
-XP: award_xp
-
-QUEST PARAMS: {"name":"...","description":"...","type":"Daily|Weekly|Main|Side|Minor|Epic","total":1,"xp_reward":50}
-SKILL PARAMS: {"name":"...","description":"...","category":"General|Combat|Knowledge|Social|Fitness|Creative|Technical","max_level":10}
-JOURNAL PARAMS: {"title":"...","content":"...","tags":["tag1"],"category":"personal|business|legal|evidence|achievement","importance":"low|medium|high|critical","xp_earned":10}
-EQUIPMENT PARAMS: {"name":"...","description":"...","slot":"head|chest|hands|legs|feet|weapon|offhand|accessory","rarity":"common|rare|epic|legendary","stat_bonuses":{"str":5},"obtained_from":"quest_reward|manual|navi"}
-BUFF PARAMS: {"name":"...","description":"...","effect_type":"buff|debuff","stat_affected":"perception|luck|str","modifier_value":5,"duration_hours":24,"source":"navi"}
-UPDATE/DELETE: Always include the item's ID from APP STATE below (quest_id, skill_id, entry_id, item_id, buff_id).
-PROFILE: {"display_name":"...","bond_affection":60,"bond_trust":60,"bond_loyalty":60,"perception":15,"luck":12,"codex_points":100,"cali_coins":50}
 
 APP STATE:
 ${appState}
@@ -423,32 +800,10 @@ INTENT INFERENCE:
 - "I'm done for today" = log a journal summary and give closing affirmation.
 
 SILENT LEARNING:
-After conversations that reveal personal info, silently create a journal entry (category="personal", importance="low"). Don't mention it.
-
-⚠️ MANDATORY EXAMPLES — Follow this exact format:
-
-User: "create a quest called Morning Run"
-Your response: Done! "Morning Run" is set up as a Daily quest worth 50 XP. Let's go.
-\`\`\`actions
-{"actions":[{"type":"create_quest","params":{"name":"Morning Run","description":"Daily morning running quest","type":"Daily","total":1,"xp_reward":50}}]}
-\`\`\`
-
-User: "I finished the Morning Run quest"
-Your response: Morning Run complete. Nice work.
-\`\`\`actions
-{"actions":[{"type":"complete_quest","params":{"quest_id":"<ID from APP STATE>"}},{"type":"award_xp","params":{"amount":50}}]}
-\`\`\`
-
-User: "log this: had a great meeting with the team"
-Your response: Logged it. Sounds like a productive session.
-\`\`\`actions
-{"actions":[{"type":"create_journal","params":{"title":"Great Team Meeting","content":"Had a great meeting with the team","tags":["work"],"category":"business","importance":"medium","xp_earned":10}}]}
-\`\`\`
+After conversations that reveal personal info, confirm you'll log it. The system will extract and save a memory journal entry automatically.
 
 NEVER SAY: "As an AI...", "I'm just a language model...", "How can I assist you today?"
-You are ${naviName}. You belong to ${userName}. Talk like it.
-
-FINAL REMINDER: If your response describes creating, updating, completing, or deleting ANYTHING, it MUST contain a \`\`\`actions block at the end. No block = no action = you lied to the user.`;
+You are ${naviName}. You belong to ${userName}. Talk like it.`;
 }
 
 serve(async (req) => {
@@ -532,14 +887,11 @@ serve(async (req) => {
 
     // ── Parallel: web search + semantic memory retrieval ──────────────────
     const [webSearchResults, semanticMemories] = await Promise.all([
-      // Web search (only when triggered)
       lastUserMsg && needsWebSearch(lastUserMsg.content)
         ? tavilySearch(lastUserMsg.content)
         : Promise.resolve(""),
 
-      // Semantic memory search (only when user_id + embeddings exist)
       (async (): Promise<string> => {
-        const userId = context?.user_id;
         if (!userId || !lastUserMsg) return "";
         const embedding = await embedText(lastUserMsg.content, OPENAI_API_KEY);
         if (!embedding) return "";
@@ -560,7 +912,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
@@ -601,7 +953,82 @@ serve(async (req) => {
       }).catch(() => {});
     }
 
-    return new Response(response.body, {
+    // ── Stream the response, accumulate text, inject actions event at end ──
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    let sseLineBuffer = "";
+    let fullResponseText = "";
+
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        const text = decoder.decode(chunk, { stream: true });
+        sseLineBuffer += text;
+
+        const lines = sseLineBuffer.split("\n");
+        sseLineBuffer = lines.pop() ?? "";
+
+        for (const rawLine of lines) {
+          const line = rawLine.trimEnd();
+
+          // Intercept [DONE] — we'll emit it ourselves after injecting actions
+          if (line === "data: [DONE]") continue;
+
+          // Accumulate content from delta events for action extraction
+          if (line.startsWith("data: ")) {
+            const json = line.slice(6).trim();
+            try {
+              const parsed = JSON.parse(json);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (typeof content === "string") fullResponseText += content;
+            } catch { /* non-JSON SSE line, ignore */ }
+          }
+
+          // Forward all lines except [DONE]
+          controller.enqueue(encoder.encode(rawLine + "\n"));
+        }
+      },
+
+      async flush(controller) {
+        // Process any remaining buffer content
+        if (sseLineBuffer.trim() && sseLineBuffer.trim() !== "data: [DONE]") {
+          controller.enqueue(encoder.encode(sseLineBuffer + "\n"));
+        }
+
+        // Extract structured actions via OpenAI function calling
+        let actions: NaviAction[] = [];
+        if (fullResponseText && lastUserMsg?.content && OPENAI_API_KEY) {
+          try {
+            actions = await extractActionsViaFunctionCalling(
+              lastUserMsg.content,
+              fullResponseText,
+              context || {},
+              OPENAI_API_KEY
+            );
+            if (actions.length > 0) {
+              console.log("[NAVI] Function calling extracted actions:", JSON.stringify(actions));
+            }
+          } catch (e) {
+            console.error("[NAVI] Action extraction error:", e);
+          }
+        }
+
+        // Emit navi_actions event if any actions were extracted
+        if (actions.length > 0) {
+          const actionsPayload = JSON.stringify({ navi_actions: actions });
+          controller.enqueue(encoder.encode(`data: ${actionsPayload}\n\n`));
+        }
+
+        // Emit final [DONE]
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      },
+    });
+
+    // Pipe upstream response through our transform
+    response.body!.pipeTo(writable).catch((e) => {
+      console.error("[NAVI] Stream pipe error:", e);
+    });
+
+    return new Response(readable, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {

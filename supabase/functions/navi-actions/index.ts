@@ -13,7 +13,13 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400", // Tell the browser to remember this for 24 hours
 };
 
-const xpForLevel = (lv: number) => lv * 500;
+// Canonical XP curve — mirrors src/lib/xpSystem.ts so client + edge agree.
+// xpRequiredForLevel(L) = floor(50 * L * (L+1) / 2)
+const xpForLevel = (lv: number) => {
+  if (lv >= 100) return Number.POSITIVE_INFINITY;
+  const l = Math.max(1, Math.min(100, lv));
+  return Math.floor((50 * l * (l + 1)) / 2);
+};
 
 const profileAllowedKeys = [
   "display_name", "character_class", "mbti_type", "xp_total", "navi_level",
@@ -117,15 +123,7 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
         }).eq("id", userId);
       }
 
-      // Award Forge coins on quest completion
-      const forgeMap: Record<string, number> = { Daily: 20, Weekly: 60, Main: 100, Side: 40, Minor: 10, Epic: 200 };
-      const forgeReward = forgeMap[qType] ?? 20;
-      // Upsert forge_balances
-      const { data: fb } = await sb.from("forge_balances" as any).select("balance").eq("user_id", userId).maybeSingle();
-      const newBal = Number((fb as any)?.balance ?? 0) + forgeReward;
-      await sb.from("forge_balances" as any).upsert({ user_id: userId, balance: newBal, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-      // Insert forge_transaction
-      await sb.from("forge_transactions" as any).insert({ user_id: userId, amount: forgeReward, reason: `Quest completed: ${quest.name}`, source: "quest" });
+      // (Forge economy removed — quest completions now grant codex points + cali coins above.)
 
       if (quest.linked_skill_id) {
         const { data: skill } = await sb.from("skills")

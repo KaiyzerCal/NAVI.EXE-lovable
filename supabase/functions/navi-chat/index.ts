@@ -484,31 +484,14 @@ async function embedText(text: string, apiKey: string): Promise<number[] | null>
   }
 }
 
+// Semantic memory retrieval is currently disabled — the `search_navi_memories`
+// RPC has not been provisioned. We rely on the `memory_context` block already
+// passed in from the client (compiled from `navi_core_memory`).
 async function searchNaViMemories(
-  userId: string,
-  embedding: number[]
+  _userId: string,
+  _embedding: number[]
 ): Promise<{ content: string; memory_type: string; importance: number; similarity: number }[]> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return [];
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_navi_memories`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      },
-      body: JSON.stringify({
-        p_user_id: userId,
-        query_embedding: embedding,
-        match_threshold: 0.70,
-        match_count: 10,
-      }),
-    });
-    if (!res.ok) return [];
-    return await res.json();
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 const LEVEL_TITLES: Record<number, string> = {
@@ -871,10 +854,12 @@ serve(async (req) => {
     const userId = context?.user_id as string | undefined;
 
     // ── Subscription enforcement ──────────────────────────────────────────────
+    // Uses the actual schema columns: profiles.daily_message_count and
+    // profiles.message_count_reset_date. Free tier is capped at FREE_LIMIT/day.
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
       try {
         const profileRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,daily_message_reset_at`,
+          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,message_count_reset_date`,
           { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
         );
         if (profileRes.ok) {
@@ -882,7 +867,7 @@ serve(async (req) => {
           const p = profiles?.[0];
           const tier = p?.subscription_tier ?? "free";
           const today = new Date().toISOString().slice(0, 10);
-          const resetDate = p?.daily_message_reset_at ?? today;
+          const resetDate = p?.message_count_reset_date ?? today;
           const dailyCount = resetDate < today ? 0 : Number(p?.daily_message_count ?? 0);
           const FREE_LIMIT = 50;
           if (tier === "free" && dailyCount >= FREE_LIMIT) {
@@ -898,39 +883,11 @@ serve(async (req) => {
                 apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
                 "Content-Type": "application/json", Prefer: "return=minimal",
               },
-              body: JSON.stringify({ daily_message_count: dailyCount + 1, daily_message_reset_at: today }),
+              body: JSON.stringify({ daily_message_count: dailyCount + 1, message_count_reset_date: today }),
             }).catch(() => {});
           }
         }
       } catch (e) { console.warn("Subscription check failed (non-blocking):", e); }
-    }
-
-    // ── Rate limiting (500 req/hour hard cap) ─────────────────────────────────
-    if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-      try {
-        const windowStart = new Date(Date.now() - 3600000).toISOString();
-        const rlRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/rate_limits?user_id=eq.${userId}&window_start=gt.${windowStart}&select=request_count`,
-          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-        );
-        if (rlRes.ok) {
-          const rlRows = await rlRes.json();
-          const count = (rlRows as any[]).reduce((s, r) => s + (r.request_count || 0), 0);
-          if (count >= 500) {
-            return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in a few minutes." }), {
-              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-        }
-        fetch(`${SUPABASE_URL}/rest/v1/rate_limits`, {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-            "Content-Type": "application/json", Prefer: "resolution=merge-duplicates",
-          },
-          body: JSON.stringify({ user_id: userId, window_start: new Date().toISOString(), request_count: 1 }),
-        }).catch(() => {});
-      } catch (e) { console.warn("Rate limit check failed (non-blocking):", e); }
     }
 
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
@@ -989,66 +946,22 @@ serve(async (req) => {
       });
     }
 
-    // Fire-and-forget: personality drift signal + last_active + adaptive personality drift
+    // Fire-and-forget: bump last_active + engagement score on profile.
+    // Adaptive personality drift was removed — it depended on a
+    // `personality_session_scores` table that has not been provisioned.
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
       const msgLen = lastUserMsg?.content?.length ?? 0;
       const engagementScore = Math.min(10, Math.max(1, Math.floor(msgLen / 25)));
-      const currentPersonality = context?.navi_personality ?? "GUARDIAN";
-
-      // 1. Update last_active + engagement score
       fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
         method: "PATCH",
         headers: {
           apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
           "Content-Type": "application/json", Prefer: "return=minimal",
         },
-        body: JSON.stringify({ personality_engagement_score: engagementScore, last_active: new Date().toISOString() }),
-      }).catch(() => {});
-
-      // 2. Record personality session score for adaptive drift
-      fetch(`${SUPABASE_URL}/rest/v1/personality_session_scores`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-          "Content-Type": "application/json", Prefer: "return=minimal",
-        },
-        body: JSON.stringify({ user_id: userId, personality: currentPersonality, score: engagementScore }),
-      }).then(async () => {
-        // 3. After recording, check if we should drift personality (every ~20 sessions)
-        try {
-          const sessRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/personality_session_scores?user_id=eq.${userId}&order=created_at.desc&limit=40&select=personality,score`,
-            { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-          );
-          if (!sessRes.ok) return;
-          const sessions: { personality: string; score: number }[] = await sessRes.json();
-          if (sessions.length < 20) return;
-
-          // Tally weighted scores per personality over last 40 sessions
-          const totals: Record<string, number> = {};
-          for (const s of sessions) {
-            totals[s.personality] = (totals[s.personality] ?? 0) + (s.score ?? 1);
-          }
-          const dominant = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0];
-          if (!dominant || dominant === currentPersonality) return;
-
-          // Drift: only update if dominant is significantly ahead (>20% more score)
-          const dominantScore = totals[dominant] ?? 0;
-          const currentScore = totals[currentPersonality] ?? 0;
-          if (dominantScore > currentScore * 1.2) {
-            await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
-              method: "PATCH",
-              headers: {
-                apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-                "Content-Type": "application/json", Prefer: "return=minimal",
-              },
-              body: JSON.stringify({ navi_personality: dominant }),
-            });
-            console.log(`[NAVI] Personality drifted: ${currentPersonality} → ${dominant} (score ${currentScore} → ${dominantScore})`);
-          }
-        } catch (e) {
-          console.warn("[NAVI] Personality drift check failed:", e);
-        }
+        body: JSON.stringify({
+          personality_engagement_score: engagementScore,
+          last_active: new Date().toISOString(),
+        }),
       }).catch(() => {});
     }
 

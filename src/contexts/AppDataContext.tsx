@@ -120,7 +120,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const tasks: Promise<any>[] = [];
     if (wants("profile") || wants("activity_log")) tasks.push(refetchProfile());
     if (wants("quests")) tasks.push(refetchQuests());
-    if (wants("skills")) tasks.push(refetchSkills());
+    // Subskills live under the skills hook; refresh skills whenever subskills change.
+    if (wants("skills") || wants("subskills")) tasks.push(refetchSkills());
     if (wants("journal")) tasks.push(refetchJournal());
     if (wants("equipment")) tasks.push(refetchEquipment());
     if (wants("buffs")) tasks.push(refetchEffects());

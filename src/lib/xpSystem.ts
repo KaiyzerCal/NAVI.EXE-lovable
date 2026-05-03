@@ -1,4 +1,5 @@
 import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS, TIER_COLORS, classNameFromMbti, tierThreshold, nextTierThreshold } from "./classEvolution";
+import type { EvolutionTier } from "./classEvolution";
 
 export type { EvolutionTier } from "./classEvolution";
 export { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS, TIER_COLORS, classNameFromMbti, tierThreshold, nextTierThreshold };
@@ -51,8 +52,8 @@ export function progressPercent(currentXp: number): number {
 export function xpToNextTier(currentXp: number): number {
   const level = levelFromTotalXp(currentXp);
   const tier = tierFromLevel(level);
-  if (tier >= 5) return 0;
-  const nextTierMin = TIER_THRESHOLDS[(tier + 1) as 2 | 3 | 4 | 5].min;
+  if (tier >= 20) return 0;
+  const nextTierMin = TIER_THRESHOLDS[(tier + 1) as EvolutionTier].min;
   return Math.max(0, totalXpForLevel(nextTierMin) - currentXp);
 }
 
@@ -60,8 +61,8 @@ export function xpToNextTier(currentXp: number): number {
 export function tierProgressPercent(currentXp: number): number {
   const level = levelFromTotalXp(currentXp);
   const tier = tierFromLevel(level);
+  if (tier >= 20) return 100;
   const { min, max } = TIER_THRESHOLDS[tier];
-  if (tier >= 5) return 100;
   const tierStart = totalXpForLevel(min);
   const tierEnd = totalXpForLevel(max + 1);
   if (tierEnd === tierStart) return 100;

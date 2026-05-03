@@ -2,6 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import ProgressBar from "@/components/ProgressBar";
 import HudCard from "@/components/HudCard";
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Swords, Plus, Check, X, Star, Zap, Target, BookOpen,
@@ -13,6 +14,7 @@ import { useAppData } from "@/contexts/AppDataContext";
 import type { Quest, QuestType, CreateQuestInput } from "@/hooks/useQuests";
 import UploadZone from "@/components/UploadZone";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useSubscription } from "@/hooks/useSubscription";
 import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
@@ -401,8 +403,10 @@ function QuestDetailModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function QuestsPage() {
+  const navigate = useNavigate();
   const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest, entries, skills } = useAppData();
   const paywall = usePaywall();
+  const { tier } = useSubscription();
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
@@ -500,12 +504,13 @@ export default function QuestsPage() {
       <PageHeader title="QUESTS" subtitle="// MISSION CONTROL">
         <button
           onClick={() => {
-            if (atQuestLimit) {
+            if (tier === "free" && activeCount >= 3) {
               toast({
-                title: "Quest limit reached",
-                description: `Free tier: ${paywall.limits.MAX_ACTIVE_QUESTS} active quests max. Upgrade to Core for unlimited.`,
+                title: "Upgrade to Core for unlimited quests",
+                description: `Free tier: ${paywall.limits.MAX_ACTIVE_QUESTS} active quests max.`,
                 variant: "destructive",
               });
+              navigate("/upgrade");
               return;
             }
             setShowNewForm(true);
@@ -527,6 +532,16 @@ export default function QuestsPage() {
             title="QUEST LIMIT REACHED"
             description={`Free tier is capped at ${paywall.limits.MAX_ACTIVE_QUESTS} active quests. Upgrade to Core for unlimited quests.`}
           />
+        </div>
+      )}
+
+      {/* Free tier banner */}
+      {tier === "free" && (
+        <div className="mb-4 p-3 rounded border border-amber-400/30 bg-amber-400/5 flex items-center justify-between gap-3">
+          <p className="text-xs font-mono text-amber-400">{activeCount}/3 active quests — Free tier</p>
+          <button onClick={() => navigate("/upgrade")} className="text-[10px] font-mono text-primary border border-primary/30 px-2 py-1 rounded hover:bg-primary/10">
+            UPGRADE
+          </button>
         </div>
       )}
 
@@ -622,7 +637,22 @@ export default function QuestsPage() {
                                   <p className="text-xs font-mono text-foreground">{tpl.category}</p>
                                 </div>
                                 <button
-                                  onClick={async (e) => { e.stopPropagation(); setSaving(true); await createQuest({ name: tpl.name, description: tpl.description, type: tpl.type, total: tpl.total, xp_reward: tpl.xp_reward } as CreateQuestInput); setSaving(false); toast({ title: "Quest created", description: `"${tpl.name}" added to your log.` }); }}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (tier === "free" && activeCount >= 3) {
+                                      toast({
+                                        title: "Upgrade to Core for unlimited quests",
+                                        description: `Free tier: ${paywall.limits.MAX_ACTIVE_QUESTS} active quests max.`,
+                                        variant: "destructive",
+                                      });
+                                      navigate("/upgrade");
+                                      return;
+                                    }
+                                    setSaving(true);
+                                    await createQuest({ name: tpl.name, description: tpl.description, type: tpl.type, total: tpl.total, xp_reward: tpl.xp_reward } as CreateQuestInput);
+                                    setSaving(false);
+                                    toast({ title: "Quest created", description: `"${tpl.name}" added to your log.` });
+                                  }}
                                   disabled={saving}
                                   className="w-full px-2.5 py-2 rounded border border-primary/30 bg-primary/10 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-50"
                                 >

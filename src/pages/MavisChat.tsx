@@ -6,10 +6,11 @@ import VoiceInput from "@/components/VoiceInput";
 import UploadZone from "@/components/UploadZone";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
+import { executeAction as executeClientAction, type NaviAction, type NaviActionResult } from "@/lib/naviActions";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -290,6 +291,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 };
 
 export default function MavisChat() {
+  const navigate = useNavigate();
   const { user, session } = useAuth();
   const {
     profile, updateProfile, refetchProfile,
@@ -299,10 +301,15 @@ export default function MavisChat() {
     skills, refetchSkills,
     items: equipment, refetchEquipment,
     effects: buffs, refetchEffects,
+    refreshAppData,
     chatMessages: messages, setChatMessages: setMessages,
     conversationId, setConversationId,
     chatDbLoaded, setChatDbLoaded,
   } = useAppData();
+  const daily_message_count = (profile as any).daily_message_count ?? 0;
+  const subscriptionTier = (profile as any).subscription_tier ?? "free";
+  const atMessageLimit = subscriptionTier === "free" && daily_message_count >= 15;
+
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const dbLoading = !chatDbLoaded;
@@ -907,20 +914,22 @@ export default function MavisChat() {
         onDone: async (functionCallingActions) => {
           if (controller.signal.aborted) return;
 
-          const cleanText = assistantContent;
-          // Use function-calling actions; fall back to heuristics only if none extracted
+          // Strip raw ```actions``` blocks from visible text — never show raw JSON to the user
+          const { cleanText } = (await import("@/lib/naviActions")).parseActions(assistantContent);
+
+          // 1. Collect actions: server-provided first, fallback heuristics only if none
           const actions = functionCallingActions.length > 0
             ? functionCallingActions
             : inferFallbackActions(userContent, cleanText, { quests, entries, skills });
 
-          console.log("[NAVI] Response length:", assistantContent.length);
           console.log("[NAVI] Function-calling actions:", functionCallingActions.length);
-          console.log("[NAVI] Fallback used:", functionCallingActions.length === 0 && actions.length > 0);
           console.log("[NAVI] Actions:", JSON.stringify(actions, null, 2));
 
-          if (actions.length > 0) {
-            let failedActions: NaviAction[] = [];
+          const allResults: NaviActionResult[] = [];
 
+          if (actions.length > 0) {
+            // 2. Try server edge function (primary path)
+            let serverResults: NaviActionResult[] | null = null;
             try {
               const actionResp = await fetch(NAVI_ACTIONS_URL, {
                 method: "POST",
@@ -931,53 +940,86 @@ export default function MavisChat() {
                 },
                 body: JSON.stringify({ actions }),
               });
-
               const actionJson = await actionResp.json().catch(() => ({ results: [] }));
-              console.log("[NAVI] Action response status:", actionResp.status);
-              console.log("[NAVI] Action response body:", JSON.stringify(actionJson));
-
-              if (!actionResp.ok) {
-                throw new Error(actionJson.error || `Action request failed (${actionResp.status})`);
-              }
-
-              const failures = Array.isArray(actionJson.results)
-                ? actionJson.results
-                    .map((result: { success: boolean }, index: number) => (!result.success ? actions[index] : null))
-                    .filter((result): result is NaviAction => Boolean(result))
-                : [];
-
-              if (failures.length > 0) {
-                console.error("[NAVI] Action failures:", failures);
-                failedActions = failures;
+              console.log("[NAVI] Server action response:", actionResp.status, JSON.stringify(actionJson));
+              if (actionResp.ok && Array.isArray(actionJson.results)) {
+                serverResults = actionJson.results as NaviActionResult[];
               }
             } catch (err) {
-              console.error("[NAVI] Backend action execution failed:", err);
-              failedActions = actions;
+              console.error("[NAVI] Server action request failed:", err);
             }
 
-            if (failedActions.length > 0) {
-              const fallbackActions = failedActions.filter((action) => CLIENT_FALLBACK_ACTION_TYPES.has(action.type));
-
-              for (const action of fallbackActions) {
-                try {
-                  await executeClientAction(user.id, action);
-                } catch (fallbackError) {
-                  console.error("[NAVI] Client fallback failed:", action.type, fallbackError);
+            if (serverResults) {
+              // Identify actions the server failed on and retry via client fallback
+              for (let i = 0; i < actions.length; i++) {
+                const serverResult = serverResults[i];
+                if (serverResult?.success === false && CLIENT_FALLBACK_ACTION_TYPES.has(actions[i].type)) {
+                  console.log("[NAVI] Client fallback for:", actions[i].type);
+                  const clientResult = await executeClientAction(user.id, actions[i]).catch((e) => ({
+                    type: actions[i].type, success: false as const, message: "Client fallback failed", error: String(e),
+                  }));
+                  allResults.push(clientResult);
+                } else {
+                  allResults.push(serverResult ?? { type: actions[i].type, success: false, message: "No result from server" });
+                }
+              }
+            } else {
+              // Server completely failed — run all CLIENT_FALLBACK_ACTION_TYPES on client
+              for (const action of actions) {
+                if (CLIENT_FALLBACK_ACTION_TYPES.has(action.type)) {
+                  const clientResult = await executeClientAction(user.id, action).catch((e) => ({
+                    type: action.type, success: false as const, message: "Client fallback failed", error: String(e),
+                  }));
+                  allResults.push(clientResult);
+                } else {
+                  allResults.push({ type: action.type, success: false, message: "Server unavailable and no client fallback for this action" });
                 }
               }
             }
 
-            await Promise.all([
-              refetchQuests(),
-              refetchJournal(),
-              refetchSkills(),
-              refetchEquipment(),
-              refetchEffects(),
-              refetchProfile(),
-              refetchAchievements(),
-            ]);
+            // 3. Refresh app data from union of all affected tables + sections
+            const sectionsToRefresh = Array.from(new Set([
+              ...allResults.flatMap((r) => r.affectedTables ?? []),
+              ...allResults.flatMap((r) => r.refreshSections ?? []),
+            ]));
+            await refreshAppData(sectionsToRefresh.length > 0 ? sectionsToRefresh : undefined);
+
+            // 4. Navigate if any result requests it
+            const navTarget = allResults.find((r) => r.navigateTo)?.navigateTo;
+            if (navTarget) navigate(navTarget);
+
+            // 5. Build visible execution summary — NAVI only claims success if at least one action succeeded
+            const successes = allResults.filter((r) => r.success);
+            const failures = allResults.filter((r) => !r.success);
+
+            if (allResults.length > 0) {
+              let summary = "";
+              if (successes.length > 0 && failures.length === 0) {
+                summary = successes.map((r) => r.message).join(" ") + (successes.some((r) => r.levelBefore !== undefined && r.levelAfter !== undefined && r.levelBefore !== r.levelAfter) ? ` Operator level: ${successes.find((r) => r.levelBefore !== r.levelAfter)?.levelBefore} → ${successes.find((r) => r.levelBefore !== r.levelAfter)?.levelAfter}.` : "");
+              } else if (failures.length > 0 && successes.length === 0) {
+                summary = `I tried, but it failed: ${failures.map((r) => r.error ?? r.message).join("; ")}`;
+              } else {
+                const okPart = successes.map((r) => r.message).join(" ");
+                const failPart = `However: ${failures.map((r) => r.error ?? r.message).join("; ")}`;
+                summary = `${okPart} ${failPart}`;
+              }
+
+              if (summary) {
+                const summaryMsg: DisplayMessage = {
+                  id: `exec-${Date.now()}`,
+                  role: "assistant",
+                  content: `*${summary.trim()}*`,
+                  timestamp: new Date(),
+                };
+                setMessages((prev) => [...prev, summaryMsg]);
+                try {
+                  await saveMessage(conversationId, user.id, "assistant", summaryMsg.content);
+                } catch {}
+              }
+            }
           }
 
+          // Finalize the streaming message with clean text (no raw JSON blocks)
           try {
             const assistantId = await saveMessage(conversationId, user.id, "assistant", cleanText);
             setMessages((prev) =>
@@ -998,7 +1040,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refreshAppData, navigate, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,
@@ -1143,6 +1185,24 @@ export default function MavisChat() {
         )}
       </AnimatePresence>
 
+      {/* Free tier message quota bar */}
+      {subscriptionTier === "free" && (
+        <div className="px-4 py-1.5 border-t border-border flex items-center justify-between text-[10px] font-mono">
+          <span className="text-muted-foreground">{daily_message_count}/15 messages today</span>
+          <button onClick={() => navigate("/upgrade")} className="text-primary hover:underline">Upgrade →</button>
+        </div>
+      )}
+
+      {/* Paywall overlay when at message limit */}
+      {atMessageLimit && (
+        <div className="p-4 border border-primary/20 rounded bg-card/80 text-center mb-2">
+          <p className="text-sm font-mono text-muted-foreground mb-2">Daily message limit reached.</p>
+          <button onClick={() => navigate("/upgrade")} className="px-4 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono">
+            UPGRADE TO CORE
+          </button>
+        </div>
+      )}
+
       {/* Input box */}
       {/* Inline attachment uploader — toggled by paperclip button */}
       <AnimatePresence>
@@ -1237,7 +1297,7 @@ export default function MavisChat() {
         ) : (
           <button
             onClick={sendMessage}
-            disabled={!input.trim()}
+            disabled={!input.trim() || atMessageLimit}
             className="w-9 h-9 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
             title="Send message"
           >

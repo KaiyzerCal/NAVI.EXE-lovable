@@ -9,6 +9,7 @@ import {
   MBTI_CLASS_MAP,
   TIER_THRESHOLDS,
   TIER_COLORS,
+  type EvolutionTier,
 } from "@/lib/classEvolution";
 
 interface Props {
@@ -33,7 +34,7 @@ export default function EvolutionEvent({
   onDismiss,
 }: Props) {
   const newTier = tierFromLevel(operatorLevel);
-  const oldTier = lastEvolutionTier as 1 | 2 | 3 | 4 | 5;
+  const oldTier = lastEvolutionTier as EvolutionTier;
 
   const oldTitle = mbtiType
     ? evolutionTitleFromMbtiAndLevel(mbtiType, TIER_THRESHOLDS[oldTier].max)
@@ -113,7 +114,7 @@ Write one powerful message — 2-3 sentences — acknowledging this evolution. R
     }
   }
 
-  const color = TIER_COLORS[newTier as 1 | 2 | 3 | 4 | 5] ?? "#00E5FF";
+  const color = TIER_COLORS[newTier] ?? "#00E5FF";
 
   const content = (
     <motion.div

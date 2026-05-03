@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Zap, Check, Lock, Loader2, Crown, Package, Swords, ChevronDown, ChevronUp, Coins } from "lucide-react";
+import { Zap, Check, Lock, Loader2, Crown, Package, Swords, ChevronDown, ChevronUp, Coins, BookOpen, Snowflake, ShoppingBag } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import SubscriptionBadge from "@/components/SubscriptionBadge";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,7 +33,7 @@ interface QuestPack {
   category: string;
   duration_days: number;
   quest_count: number;
-  forge_price: number;
+  cali_price: number;
   quest_templates: any[];
 }
 
@@ -47,7 +47,7 @@ export default function UpgradePage() {
   const [params] = useSearchParams();
   const { tier, startCheckout } = useSubscription();
   const { user, session } = useAuth();
-  const { profile } = useAppData();
+  const { profile, refetchProfile } = useAppData();
   const [loading, setLoading] = useState(false);
   const [eliteLoading, setEliteLoading] = useState(false);
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
@@ -58,7 +58,8 @@ export default function UpgradePage() {
   const success = params.get("success") === "1";
   const cancelled = params.get("cancelled") === "1";
 
-  const forgeBalance = (profile as any).forge_balance ?? 0;
+  const caliBalance  = (profile as any).cali_coins   ?? 0;
+  const codexBalance = (profile as any).codex_points  ?? 0;
 
   useEffect(() => {
     (async () => {
@@ -98,6 +99,10 @@ export default function UpgradePage() {
 
   async function handlePackPurchase(pack: QuestPack) {
     if (!user || !session?.access_token) return;
+    if (caliBalance < pack.cali_price) {
+      toast({ title: "Not enough Cali coins.", description: `You need ${pack.cali_price} CALI to unlock this pack.`, variant: "destructive" });
+      return;
+    }
     setPurchasingPack(pack.id);
     try {
       // Insert quest templates as quests for the user
@@ -117,11 +122,40 @@ export default function UpgradePage() {
       // Record purchase
       await (supabase as any).from("operator_quest_packs").insert({ user_id: user.id, pack_id: pack.id });
       setOwnedPackIds((prev) => new Set([...prev, pack.id]));
+
+      // Deduct Cali coins
+      await supabase.functions.invoke("navi-actions", {
+        body: { actions: [{ type: "spend_cali", params: { amount: pack.cali_price, reason: `Quest pack: ${pack.name}` } }] },
+      });
+      await refetchProfile();
+
       toast({ title: `${pack.name} Activated!`, description: `${pack.quest_count} quests have been added to your board.` });
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Could not activate quest pack.", variant: "destructive" });
     } finally {
       setPurchasingPack(null);
+    }
+  }
+
+  const [purchasingFreeze, setPurchasingFreeze] = useState(false);
+  async function handleBuyStreakFreeze() {
+    if (caliBalance < 200) return;
+    setPurchasingFreeze(true);
+    try {
+      await supabase.functions.invoke("navi-actions", {
+        body: {
+          actions: [
+            { type: "spend_cali", params: { amount: 200, reason: "Streak freeze purchase" } },
+            { type: "award_streak_freeze", params: {} },
+          ],
+        },
+      });
+      await refetchProfile();
+      toast({ title: "Streak Freeze Purchased!", description: "One streak freeze has been added to your account." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "Could not purchase streak freeze.", variant: "destructive" });
+    } finally {
+      setPurchasingFreeze(false);
     }
   }
 
@@ -142,6 +176,46 @@ export default function UpgradePage() {
           <p className="text-xs font-mono text-muted-foreground">Upgrade cancelled. You remain on the FREE tier.</p>
         </div>
       )}
+
+      {/* WALLET */}
+      <HudCard title="WALLET" icon={<Coins size={14} />} className="mb-4">
+        <div className="flex flex-wrap gap-3 mb-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-400/40 bg-amber-400/10">
+            <Coins size={13} className="text-amber-400" />
+            <span className="font-display font-bold text-amber-400 text-sm">{caliBalance.toLocaleString()}</span>
+            <span className="text-[10px] font-mono text-amber-400/70">CALI</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-purple-400/40 bg-purple-400/10">
+            <BookOpen size={13} className="text-purple-400" />
+            <span className="font-display font-bold text-purple-400 text-sm">{codexBalance.toLocaleString()}</span>
+            <span className="text-[10px] font-mono text-purple-400/70">CODEX</span>
+          </div>
+        </div>
+        <p className="text-[10px] font-mono text-muted-foreground">
+          Earned by completing quests. Spend on quest packs, skin unlocks, and streak freezes.
+        </p>
+      </HudCard>
+
+      {/* Streak Freeze purchase */}
+      <div className="mb-6 p-4 rounded-lg border border-border bg-card flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Snowflake size={16} className="text-sky-400 shrink-0" />
+          <div>
+            <p className="text-xs font-display font-bold tracking-wider">BUY STREAK FREEZE · 200 CALI</p>
+            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">
+              You have <span className="text-sky-400 font-bold">{(profile as any).streak_freeze_count ?? 0}</span> freeze{((profile as any).streak_freeze_count ?? 0) !== 1 ? "s" : ""} remaining
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleBuyStreakFreeze}
+          disabled={caliBalance < 200 || purchasingFreeze}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-sky-400/10 border border-sky-400/30 text-sky-400 text-[10px] font-mono hover:bg-sky-400/20 transition-colors disabled:opacity-40 shrink-0"
+        >
+          {purchasingFreeze ? <Loader2 size={10} className="animate-spin" /> : <Snowflake size={10} />}
+          BUY FREEZE
+        </button>
+      </div>
 
       {/* Current tier */}
       <div className="flex items-center gap-3 mb-6 p-4 rounded border border-border bg-muted/20">
@@ -302,14 +376,14 @@ export default function UpgradePage() {
                       <button
                         onClick={() => handlePackPurchase(pack)}
                         disabled={!!purchasingPack}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 border border-primary/30 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-40"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-400/10 border border-amber-400/30 text-amber-400 text-[10px] font-mono hover:bg-amber-400/20 transition-colors disabled:opacity-40"
                       >
                         {purchasingPack === pack.id ? (
                           <Loader2 size={10} className="animate-spin" />
                         ) : (
                           <>
                             <Coins size={10} />
-                            FREE
+                            UNLOCK · {pack.cali_price} CALI
                           </>
                         )}
                       </button>
@@ -353,6 +427,45 @@ export default function UpgradePage() {
             );
           })
         )}
+      </div>
+
+      {/* Skin Shop */}
+      <div className="mt-8 mb-2">
+        <div className="flex items-center gap-2 mb-1">
+          <ShoppingBag size={14} className="text-secondary" />
+          <h2 className="font-display text-sm font-bold text-secondary tracking-widest">SKIN SHOP</h2>
+        </div>
+        <p className="text-xs font-mono text-muted-foreground mb-4">
+          Unlock NAVI skins with Cali Coins. Browse all skins on your NAVI page.
+          {tier === "free" && (
+            <span className="ml-1 text-amber-400/80">Core+ required to access all skins.</span>
+          )}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        {[
+          { rarity: "UNCOMMON", price: 500,   color: "text-neon-green border-neon-green/30 bg-neon-green/5",   count: 12 },
+          { rarity: "RARE",     price: 1500,  color: "text-primary border-primary/30 bg-primary/5",           count: 8  },
+          { rarity: "EPIC",     price: 4000,  color: "text-secondary border-secondary/30 bg-secondary/5",     count: 5  },
+          { rarity: "LEGENDARY",price: 10000, color: "text-amber-400 border-amber-400/30 bg-amber-400/5",     count: 3  },
+        ].map(({ rarity, price, color, count }) => (
+          <div key={rarity} className={`rounded-lg border p-3 flex flex-col gap-2 ${color}`}>
+            <span className={`text-[9px] font-mono font-bold tracking-widest ${color.split(" ")[0]}`}>{rarity}</span>
+            <div className="flex items-center gap-1">
+              <Coins size={11} className="text-amber-400" />
+              <span className="font-display font-bold text-xs text-amber-400">{price.toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-amber-400/70">CALI</span>
+            </div>
+            <p className="text-[10px] font-mono text-muted-foreground">{count} skins available</p>
+            <button
+              onClick={() => window.location.href = "/navi"}
+              className={`mt-auto text-[10px] font-mono font-bold tracking-wider hover:opacity-80 transition-opacity text-left ${color.split(" ")[0]}`}
+            >
+              BROWSE SKINS →
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

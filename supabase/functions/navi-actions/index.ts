@@ -54,6 +54,7 @@ async function awardXP(sb: ReturnType<typeof createClient>, userId: string, amou
 async function executeAction(sb: ReturnType<typeof createClient>, userId: string, action: NaviAction) {
   const params = action.params || {};
   console.log(`[navi-actions] Executing: ${action.type}`, JSON.stringify(params));
+  let result: unknown = undefined;
 
   switch (action.type) {
     case "create_quest": {
@@ -463,10 +464,33 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
       return;
     }
 
+    case "spend_cali": {
+      const { amount, reason } = params as { amount: number; reason?: string };
+      if (!amount || amount <= 0) throw new Error("Invalid amount");
+      const { data: pr } = await sb.from("profiles").select("cali_coins").eq("id", userId).single();
+      const current = Number((pr as any)?.cali_coins ?? 0);
+      if (current < amount) throw new Error("Insufficient Cali coins");
+      await sb.from("profiles").update({ cali_coins: current - amount }).eq("id", userId);
+      result = { spent: amount, remaining: current - amount, reason };
+      break;
+    }
+
+    case "spend_codex": {
+      const { amount, reason } = params as { amount: number; reason?: string };
+      if (!amount || amount <= 0) throw new Error("Invalid amount");
+      const { data: pr } = await sb.from("profiles").select("codex_points").eq("id", userId).single();
+      const current = Number((pr as any)?.codex_points ?? 0);
+      if (current < amount) throw new Error("Insufficient Codex points");
+      await sb.from("profiles").update({ codex_points: current - amount }).eq("id", userId);
+      result = { spent: amount, remaining: current - amount, reason };
+      break;
+    }
+
     default:
       console.warn(`[navi-actions] Unknown action type: ${action.type}`);
       return;
   }
+  return result;
 }
 
 serve(async (req) => {

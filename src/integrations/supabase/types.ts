@@ -870,7 +870,9 @@ export type Database = {
           operator_level: number
           operator_xp: number
           perception: number
+          personality_engagement_score: number
           quests_completed: number
+          streak_freeze_count: number
           subclass: string | null
           subscription_tier: string
           updated_at: string
@@ -907,7 +909,9 @@ export type Database = {
           operator_level?: number
           operator_xp?: number
           perception?: number
+          personality_engagement_score?: number
           quests_completed?: number
+          streak_freeze_count?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string
@@ -944,7 +948,9 @@ export type Database = {
           operator_level?: number
           operator_xp?: number
           perception?: number
+          personality_engagement_score?: number
           quests_completed?: number
+          streak_freeze_count?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string

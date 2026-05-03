@@ -315,7 +315,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
         const amount = Number(p.amount ?? 0);
         if (!amount || Number.isNaN(amount)) return fail(type, "Missing or invalid param: amount");
         const xpRes = await applyXpToProfile(userId, amount);
-        if (!xpRes.ok) return fail(type, "Failed to award XP", xpRes.error);
+        if (xpRes.ok !== true) return fail(type, "Failed to award XP", (xpRes as { ok: false; error: string }).error);
         const reason = p.reason || "Manual award";
         await logActivity(userId, "xp_gained", `+${amount} XP — ${reason}`, amount);
         const message = xpRes.levelAfter > xpRes.levelBefore
@@ -657,7 +657,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
         const dbField = DASHBOARD_DB_FIELDS[section];
         if (!dbField) return fail(type, `Section "${section}" is display-only and cannot be mutated directly.`);
         if (p.value === undefined) return fail(type, "Missing required param: value");
-        const { error } = await supabase.from("profiles").update({ [dbField]: p.value }).eq("id", userId);
+        const { error } = await supabase.from("profiles").update({ [dbField]: p.value } as any).eq("id", userId);
         if (error) return fail(type, "Failed to update dashboard section", error.message);
         return ok(type, `Updated ${section}.`, { affectedTables: ["profiles"] });
       }

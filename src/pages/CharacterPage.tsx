@@ -17,6 +17,7 @@ import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Chec
 import GuildPanel from "@/components/GuildPanel";
 import NaviMilestones from "@/components/NaviMilestones";
 import { useState, useCallback, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getNaviCharacter } from "@/components/navi-characters";
@@ -163,7 +164,9 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export default function CharacterPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("CHARACTER INFO");
+  const [showMbtiQuiz, setShowMbtiQuiz] = useState(false);
   const { profile, updateProfile, refetchProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
   const { user } = useAuth();
 
@@ -216,6 +219,9 @@ export default function CharacterPage() {
 
   const handleQuizComplete = (mbti: string, charClass: string) => {
     updateProfile({ mbti_type: mbti, character_class: charClass });
+    setShowMbtiQuiz(false);
+    refetchProfile();
+    navigate("/character");
   };
 
   const handleAddSkill = useCallback(async () => {
@@ -234,15 +240,6 @@ export default function CharacterPage() {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="animate-spin text-primary" size={24} />
-      </div>
-    );
-  }
-
-  if (!mbtiType && !profile.character_class) {
-    return (
-      <div>
-        <PageHeader title="CHARACTER" subtitle="// OPERATOR CALIBRATION REQUIRED" />
-        <MbtiQuiz onComplete={handleQuizComplete} />
       </div>
     );
   }
@@ -478,7 +475,7 @@ export default function CharacterPage() {
                   <p className="text-sm font-body">{mbtiType || "—"}</p>
                 </div>
                 {editMode && (
-                  <Button variant="outline" size="sm" className="text-[9px] font-mono h-6 px-2" onClick={() => updateProfile({ mbti_type: null, character_class: null })}>
+                  <Button variant="outline" size="sm" className="text-[9px] font-mono h-6 px-2" onClick={() => setShowMbtiQuiz(true)}>
                     RETAKE
                   </Button>
                 )}
@@ -967,6 +964,8 @@ export default function CharacterPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {showMbtiQuiz && <MbtiQuiz onComplete={handleQuizComplete} />}
     </div>
   );
 }

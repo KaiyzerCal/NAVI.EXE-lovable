@@ -24,8 +24,12 @@ export function extractMemoriesFromMessage(content: string): MemoryItem[] {
     { regex: /\b(want to|need to|planning to|goal is|trying to|working on|hoping to)\s+([^.!?]{10,100})/gi, category: 'goals', importance: 3 },
     { regex: /\b(I (?:like|love|prefer|enjoy|hate|dislike))\s+([^.!?]{5,80})/gi, category: 'preferences', importance: 2 },
     { regex: /\b(I am|I'm|I consider myself)\s+([^.!?]{5,80})/gi, category: 'identity', importance: 3 },
-    { regex: /\b(my (?:partner|spouse|friend|family|boss|colleague))\s+([^.!?]{10,100})/gi, category: 'relationships', importance: 2 },
+    { regex: /\b(my (?:partner|spouse|friend|family|boss|colleague|brother|sister|mom|dad|wife|husband|girlfriend|boyfriend|daughter|son|dog|cat))\s+([^.!?]{5,100})/gi, category: 'relationships', importance: 3 },
     { regex: /\b(struggling with|having trouble|difficult|hard time with|challenge is)\s+([^.!?]{10,100})/gi, category: 'struggles', importance: 3 },
+    { regex: /\b((?:my|the) (?:project|app|business|company|startup|job|work|school|class))\s+([^.!?]{5,100})/gi, category: 'projects', importance: 3 },
+    { regex: /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s+(?:is|was|said|told|asked|wants|called|texted|messaged)/gi, category: 'people', importance: 3 },
+    { regex: /\b(?:I live|I'm from|I moved to|I'm in|I'm going to|I visited)\s+([^.!?]{5,80})/gi, category: 'places', importance: 2 },
+    { regex: /\b(?:remember|don't forget|important|keep in mind)\s+([^.!?]{10,100})/gi, category: 'important_notes', importance: 4 },
   ];
 
   for (const p of patterns) {
@@ -34,7 +38,7 @@ export function extractMemoriesFromMessage(content: string): MemoryItem[] {
       const detail = match[0].trim();
       if (detail.length >= 15 && detail.length <= 200) {
         memories.push({ category: p.category, detail, importance: p.importance });
-        if (memories.length >= 3) return memories;
+        if (memories.length >= 5) return memories;
       }
     }
   }
@@ -84,8 +88,8 @@ export function buildMemoryContext(blocks: CompressedMemoryBlock[]): string {
     lines.push(`[${category}]`);
 
     // Thread summaries get more space but are truncated; snapshots are compact
-    const maxDetails = category === 'THREAD_SUMMARY' ? 3 : category === 'APP_SNAPSHOT' ? 3 : block.importance >= 3 ? 10 : 5;
-    const maxLen = category === 'THREAD_SUMMARY' ? 500 : 150;
+    const maxDetails = category === 'THREAD_SUMMARY' ? 3 : category === 'NAVI_INSIGHTS' ? 3 : category === 'APP_SNAPSHOT' ? 3 : block.importance >= 3 ? 10 : 5;
+    const maxLen = category === 'THREAD_SUMMARY' ? 800 : category === 'NAVI_INSIGHTS' ? 500 : 150;
 
     for (const detail of block.details.slice(-maxDetails)) {
       lines.push(`- ${detail.substring(0, maxLen)}`);

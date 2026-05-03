@@ -32,6 +32,9 @@ export interface ProfileData {
     xpMilestones: boolean;
     dailySummary: boolean;
   };
+  subscription_tier: string;
+  daily_message_count: number;
+  message_count_reset_date: string;
   last_evolution_tier: number;
 }
 
@@ -59,13 +62,16 @@ const defaults: ProfileData = {
   luck: 10,
   codex_points: 0,
   cali_coins: 0,
-  last_evolution_tier: 1,
   notification_settings: {
     questReminders: true,
     streakWarnings: true,
     xpMilestones: false,
     dailySummary: true,
   },
+  subscription_tier: "free",
+  daily_message_count: 0,
+  message_count_reset_date: new Date().toISOString().slice(0, 10),
+  last_evolution_tier: 1,
 };
 
 export function useProfile() {

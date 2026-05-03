@@ -89,75 +89,6 @@ export type Database = {
         }
         Relationships: []
       }
-      agent_tasks: {
-        Row: {
-          agent_type: string
-          completed_at: string | null
-          created_at: string
-          description: string
-          id: string
-          priority: number
-          result: Json
-          status: string
-          title: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          agent_type?: string
-          completed_at?: string | null
-          created_at?: string
-          description?: string
-          id?: string
-          priority?: number
-          result?: Json
-          status?: string
-          title: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          agent_type?: string
-          completed_at?: string | null
-          created_at?: string
-          description?: string
-          id?: string
-          priority?: number
-          result?: Json
-          status?: string
-          title?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      beta_feedback: {
-        Row: {
-          app_version: string | null
-          created_at: string
-          description: string
-          feedback_type: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          app_version?: string | null
-          created_at?: string
-          description: string
-          feedback_type?: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          app_version?: string | null
-          created_at?: string
-          description?: string
-          feedback_type?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       buffs: {
         Row: {
           created_at: string
@@ -259,39 +190,6 @@ export type Database = {
           },
         ]
       }
-      direct_messages: {
-        Row: {
-          content: string
-          created_at: string
-          deleted_by_recipient: boolean
-          deleted_by_sender: boolean
-          id: string
-          read_at: string | null
-          recipient_id: string
-          sender_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          deleted_by_recipient?: boolean
-          deleted_by_sender?: boolean
-          id?: string
-          read_at?: string | null
-          recipient_id: string
-          sender_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          deleted_by_recipient?: boolean
-          deleted_by_sender?: boolean
-          id?: string
-          read_at?: string | null
-          recipient_id?: string
-          sender_id?: string
-        }
-        Relationships: []
-      }
       equipment: {
         Row: {
           buff_id: string | null
@@ -342,41 +240,6 @@ export type Database = {
           },
         ]
       }
-      feed_replies: {
-        Row: {
-          content: string
-          created_at: string
-          display_name: string | null
-          id: string
-          operator_id: string
-          post_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
-          operator_id: string
-          post_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
-          operator_id?: string
-          post_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "feed_replies_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "operator_feed"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       guild_members: {
         Row: {
           guild_id: string
@@ -408,45 +271,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      guild_quests: {
-        Row: {
-          completed_at: string | null
-          completed_by: string | null
-          created_at: string
-          created_by: string
-          description: string | null
-          guild_id: string
-          id: string
-          status: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          completed_at?: string | null
-          completed_by?: string | null
-          created_at?: string
-          created_by: string
-          description?: string | null
-          guild_id: string
-          id?: string
-          status?: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          completed_at?: string | null
-          completed_by?: string | null
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          guild_id?: string
-          id?: string
-          status?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       guilds: {
         Row: {
@@ -559,33 +383,6 @@ export type Database = {
         }
         Relationships: []
       }
-      mini_game_scores: {
-        Row: {
-          created_at: string
-          game_id: string
-          id: string
-          metadata: Json
-          score: number
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          game_id: string
-          id?: string
-          metadata?: Json
-          score?: number
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          game_id?: string
-          id?: string
-          metadata?: Json
-          score?: number
-          user_id?: string
-        }
-        Relationships: []
-      }
       navi_core_memory: {
         Row: {
           content: string
@@ -613,132 +410,6 @@ export type Database = {
           memory_type?: string
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      navi_message_threads: {
-        Row: {
-          created_at: string
-          deleted_by_recipient: boolean
-          deleted_by_sender: boolean
-          id: string
-          last_message_at: string
-          receiver_unread: number
-          receiver_user_id: string
-          sender_unread: number
-          sender_user_id: string
-        }
-        Insert: {
-          created_at?: string
-          deleted_by_recipient?: boolean
-          deleted_by_sender?: boolean
-          id?: string
-          last_message_at?: string
-          receiver_unread?: number
-          receiver_user_id: string
-          sender_unread?: number
-          sender_user_id: string
-        }
-        Update: {
-          created_at?: string
-          deleted_by_recipient?: boolean
-          deleted_by_sender?: boolean
-          id?: string
-          last_message_at?: string
-          receiver_unread?: number
-          receiver_user_id?: string
-          sender_unread?: number
-          sender_user_id?: string
-        }
-        Relationships: []
-      }
-      navi_messages: {
-        Row: {
-          attachment_name: string | null
-          attachment_type: string | null
-          attachment_url: string | null
-          content: string
-          created_at: string
-          deleted_by_recipient: boolean
-          deleted_by_sender: boolean
-          id: string
-          sender_navi_name: string
-          sender_user_id: string
-          thread_id: string
-        }
-        Insert: {
-          attachment_name?: string | null
-          attachment_type?: string | null
-          attachment_url?: string | null
-          content: string
-          created_at?: string
-          deleted_by_recipient?: boolean
-          deleted_by_sender?: boolean
-          id?: string
-          sender_navi_name?: string
-          sender_user_id?: string
-          thread_id: string
-        }
-        Update: {
-          attachment_name?: string | null
-          attachment_type?: string | null
-          attachment_url?: string | null
-          content?: string
-          created_at?: string
-          deleted_by_recipient?: boolean
-          deleted_by_sender?: boolean
-          id?: string
-          sender_navi_name?: string
-          sender_user_id?: string
-          thread_id?: string
-        }
-        Relationships: []
-      }
-      operator_feed: {
-        Row: {
-          character_class: string | null
-          content: string
-          content_type: string
-          created_at: string
-          display_name: string | null
-          id: string
-          is_public: boolean
-          likes: Json
-          mbti_type: string | null
-          metadata: Json
-          navi_name: string | null
-          operator_id: string
-          operator_level: number | null
-        }
-        Insert: {
-          character_class?: string | null
-          content: string
-          content_type: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
-          is_public?: boolean
-          likes?: Json
-          mbti_type?: string | null
-          metadata?: Json
-          navi_name?: string | null
-          operator_id: string
-          operator_level?: number | null
-        }
-        Update: {
-          character_class?: string | null
-          content?: string
-          content_type?: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
-          is_public?: boolean
-          likes?: Json
-          mbti_type?: string | null
-          metadata?: Json
-          navi_name?: string | null
-          operator_id?: string
-          operator_level?: number | null
         }
         Relationships: []
       }
@@ -815,33 +486,8 @@ export type Database = {
           },
         ]
       }
-      post_reactions: {
-        Row: {
-          created_at: string
-          emoji: string
-          id: string
-          post_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          emoji?: string
-          id?: string
-          post_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          emoji?: string
-          id?: string
-          post_id?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
-          beta_tester: boolean
           bond_affection: number
           bond_loyalty: number
           bond_trust: number
@@ -864,13 +510,11 @@ export type Database = {
           navi_level: number
           navi_name: string
           navi_personality: string
-          navi_render_mode: string
           notification_settings: Json
           onboarding_done: boolean
           operator_level: number
           operator_xp: number
           perception: number
-          quests_completed: number
           subclass: string | null
           subscription_tier: string
           updated_at: string
@@ -878,7 +522,6 @@ export type Database = {
           xp_total: number
         }
         Insert: {
-          beta_tester?: boolean
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
@@ -901,13 +544,11 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
-          navi_render_mode?: string
           notification_settings?: Json
           onboarding_done?: boolean
           operator_level?: number
           operator_xp?: number
           perception?: number
-          quests_completed?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string
@@ -915,7 +556,6 @@ export type Database = {
           xp_total?: number
         }
         Update: {
-          beta_tester?: boolean
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
@@ -938,13 +578,11 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
-          navi_render_mode?: string
           notification_settings?: Json
           onboarding_done?: boolean
           operator_level?: number
           operator_xp?: number
           perception?: number
-          quests_completed?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string
@@ -1110,36 +748,6 @@ export type Database = {
         }
         Relationships: []
       }
-      social_posts: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          post_type: string
-          reaction_count: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          post_type?: string
-          reaction_count?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          post_type?: string
-          reaction_count?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       subscriptions: {
         Row: {
           cancel_at_period_end: boolean | null
@@ -1288,7 +896,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "owner" | "user" | "admin"
+      app_role: "owner" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1416,7 +1024,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["owner", "user", "admin"],
+      app_role: ["owner", "user"],
     },
   },
 } as const

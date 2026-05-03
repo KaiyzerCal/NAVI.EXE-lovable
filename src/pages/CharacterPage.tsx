@@ -244,6 +244,7 @@ export default function CharacterPage() {
     );
   }
 
+
   return (
     <div>
       {/* ── Hero Banner ───────────────────────────────────────────────────── */}
@@ -434,6 +435,7 @@ export default function CharacterPage() {
                 );
               })}
             </div>
+
           </HudCard>
 
           {/* Base Stats */}

@@ -6,9 +6,20 @@ import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, F
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
-import UploadZone, { MediaLightbox } from "@/components/UploadZone";
+import UploadZone, { MediaThumbnail, MediaLightbox } from "@/components/UploadZone";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+
+
+interface MediaFile {
+  id: string;
+  file_url: string;
+  file_type: string;
+  file_name: string;
+  file_size: number;
+  ai_description?: string | null;
+  created_at?: string;
+}
 
 const TAG_COLORS: Record<string, string> = {
   reflection: "bg-neon-cyan/10 text-neon-cyan",
@@ -26,12 +37,29 @@ interface FormState { title: string; content: string; tags: string; }
 
 // ─── Entry Form ────────────────────────────────────────────────────────────────
 function EntryFormCard({
-  title, initial, saving, onSave, onCancel,
+  title, initial, saving, entryId, onSave, onCancel,
 }: {
   title: string; initial: FormState; saving?: boolean;
+  entryId?: string;
   onSave: (f: FormState) => void; onCancel: () => void;
 }) {
   const [form, setForm] = useState<FormState>(initial);
+  const [attached, setAttached] = useState<MediaFile[]>([]);
+  const [lightbox, setLightbox] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    if (!entryId) return;
+    supabase
+      .from("media")
+      .select("*")
+      .eq("linked_entity_type", "journal")
+      .eq("linked_entity_id", entryId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setAttached(data as MediaFile[]);
+      });
+  }, [entryId]);
+
   return (
     <HudCard title={title} icon={<BookOpen size={14} />} glow>
       <div className="space-y-3">
@@ -57,6 +85,7 @@ function EntryFormCard({
           <label className="text-[10px] font-mono text-muted-foreground block mb-1">ATTACHMENTS (optional)</label>
           <UploadZone linkedEntityType="journal_entry" compact />
           <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Uploads are saved to your Atlas and visible to NAVI for analysis.</p>
+
         </div>
         <div className="flex gap-2 pt-1">
           <button onClick={() => onSave(form)} disabled={!form.title.trim() || saving}
@@ -70,6 +99,7 @@ function EntryFormCard({
           </button>
         </div>
       </div>
+      <MediaLightbox file={lightbox} onClose={() => setLightbox(null)} />
     </HudCard>
   );
 }
@@ -80,6 +110,21 @@ function EntryModal({
 }: {
   entry: JournalEntry; onClose: () => void; onEdit: () => void; onDelete: () => void;
 }) {
+  const [media, setMedia] = useState<MediaFile[]>([]);
+  const [lightbox, setLightbox] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("media")
+      .select("*")
+      .eq("linked_entity_type", "journal")
+      .eq("linked_entity_id", entry.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setMedia(data as MediaFile[]);
+      });
+  }, [entry.id]);
+
   const copyEntry = () => {
     navigator.clipboard.writeText(`${entry.title}\n${new Date(entry.created_at).toLocaleDateString()}\n\n${entry.content}`);
     toast({ title: "Copied", description: "Entry copied to clipboard." });
@@ -108,6 +153,16 @@ function EntryModal({
           ))}
         </div>
         <p className="text-sm font-body text-foreground/85 leading-relaxed mb-5 select-text whitespace-pre-wrap">{entry.content}</p>
+        {media.length > 0 && (
+          <div className="mb-5">
+            <p className="text-[10px] font-mono text-muted-foreground mb-2">ATTACHMENTS</p>
+            <div className="flex flex-wrap gap-2">
+              {media.map((f) => (
+                <MediaThumbnail key={f.id} file={f} onClick={() => setLightbox(f)} />
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <button onClick={copyEntry} className="py-2 rounded border border-border bg-muted text-muted-foreground text-xs font-mono flex items-center justify-center gap-1.5 hover:text-foreground transition-colors">
             <Copy size={12} /> COPY
@@ -120,6 +175,7 @@ function EntryModal({
           </button>
         </div>
       </motion.div>
+      <MediaLightbox file={lightbox} onClose={() => setLightbox(null)} />
     </div>
   );
 }
@@ -171,6 +227,7 @@ export default function JournalPage() {
     toast({ title: "File deleted" });
   };
 
+
   const handleCreate = useCallback(async (form: FormState) => {
     if (!form.title.trim()) return;
     setSaving(true);
@@ -215,10 +272,32 @@ export default function JournalPage() {
   return (
     <div>
       <PageHeader title="JOURNAL" subtitle="// VAULT ENTRIES">
-        <button onClick={() => { setShowNewForm(true); setEditingEntry(null); }}
-          className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors">
-          <Plus size={14} /> NEW ENTRY
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex border border-border rounded overflow-hidden">
+            <button
+              onClick={() => setView("entries")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-mono transition-colors ${
+                view === "entries" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BookOpen size={12} /> ENTRIES
+            </button>
+            <button
+              onClick={() => setView("gallery")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-mono border-l border-border transition-colors ${
+                view === "gallery" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Images size={12} /> GALLERY
+            </button>
+          </div>
+          {view === "entries" && (
+            <button onClick={() => { setShowNewForm(true); setEditingEntry(null); }}
+              className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors">
+              <Plus size={14} /> NEW ENTRY
+            </button>
+          )}
+        </div>
       </PageHeader>
 
       {/* View tabs */}
@@ -255,11 +334,12 @@ export default function JournalPage() {
         <>
       {/* New / Edit Form */}
       <AnimatePresence>
-        {(showNewForm || editingEntry) && (
+        {view === "entries" && (showNewForm || editingEntry) && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-5">
             <EntryFormCard
               title={editingEntry ? "EDIT ENTRY" : "NEW ENTRY"}
               saving={saving}
+              entryId={editingEntry?.id}
               initial={editingEntry
                 ? { title: editingEntry.title, content: editingEntry.content, tags: editingEntry.tags.join(", ") }
                 : { title: "", content: "", tags: "" }
@@ -316,11 +396,12 @@ export default function JournalPage() {
               </div>
             );
           })()}
+
         </div>
       )}
 
       {/* Empty state */}
-      {entries.length === 0 ? (
+      {view === "entries" && entries.length === 0 ? (
         <div className="text-center py-16">
           <BookOpen size={36} className="mx-auto mb-3 opacity-20" />
           <p className="text-xs font-mono text-muted-foreground mb-4">NO JOURNAL ENTRIES YET</p>
@@ -341,6 +422,7 @@ export default function JournalPage() {
           </div>
         );
         return (
+
         <div className="space-y-3">
           {filtered.map((entry, i) => (
             <motion.div
@@ -387,6 +469,7 @@ export default function JournalPage() {
       })()}
         </>
       )}
+
 
       {/* Detail Modal */}
       <AnimatePresence>

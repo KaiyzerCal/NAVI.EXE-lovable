@@ -12,6 +12,8 @@ import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { Quest, QuestType, CreateQuestInput } from "@/hooks/useQuests";
 import UploadZone from "@/components/UploadZone";
+import { usePaywall } from "@/hooks/usePaywall";
+import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
   Main:   { color: "text-accent",       bg: "bg-accent/10",       border: "border-accent/40",       icon: <Star size={10} />,     label: "MAIN" },
@@ -400,6 +402,7 @@ function QuestDetailModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function QuestsPage() {
   const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest, entries, skills } = useAppData();
+  const paywall = usePaywall();
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
@@ -409,6 +412,10 @@ export default function QuestsPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateCategory, setTemplateCategory] = useState<string>("Fitness");
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+
+  const activeCount = quests.filter((q) => !q.completed).length;
+  const canCreate = paywall.canCreateQuest(activeCount);
+  const atQuestLimit = !canCreate;
 
   const filtered = quests.filter((q) => {
     const statusMatch = filter === "active" ? !q.completed : filter === "completed" ? q.completed : true;
@@ -423,6 +430,14 @@ export default function QuestsPage() {
 
   const handleCreate = useCallback(async (form: QuestFormState) => {
     if (!form.name.trim()) return;
+    if (!paywall.canCreateQuest(activeCount)) {
+      toast({
+        title: "Quest limit reached",
+        description: `Free tier is capped at ${paywall.limits.MAX_ACTIVE_QUESTS} active quests. Upgrade to Core for unlimited.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     await createQuest({
       name: form.name,
@@ -434,7 +449,7 @@ export default function QuestsPage() {
     setSaving(false);
     setShowNewForm(false);
     toast({ title: "Quest created", description: "New quest added to your log." });
-  }, [createQuest]);
+  }, [createQuest, paywall, activeCount]);
 
   const handleEdit = useCallback(async (form: QuestFormState) => {
     if (!editingQuest || !form.name.trim()) return;
@@ -484,12 +499,36 @@ export default function QuestsPage() {
     <div>
       <PageHeader title="QUESTS" subtitle="// MISSION CONTROL">
         <button
-          onClick={() => { setShowNewForm(true); setEditingQuest(null); }}
-          className="flex items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-sm font-display hover:bg-primary/20 transition-colors"
+          onClick={() => {
+            if (atQuestLimit) {
+              toast({
+                title: "Quest limit reached",
+                description: `Free tier: ${paywall.limits.MAX_ACTIVE_QUESTS} active quests max. Upgrade to Core for unlimited.`,
+                variant: "destructive",
+              });
+              return;
+            }
+            setShowNewForm(true);
+            setEditingQuest(null);
+          }}
+          className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-display transition-colors ${
+            atQuestLimit
+              ? "bg-muted border border-border text-muted-foreground"
+              : "bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+          }`}
         >
           <Plus size={14} /> NEW QUEST
         </button>
       </PageHeader>
+
+      {atQuestLimit && (
+        <div className="mb-5">
+          <UnlockWithCoreCard
+            title="QUEST LIMIT REACHED"
+            description={`Free tier is capped at ${paywall.limits.MAX_ACTIVE_QUESTS} active quests. Upgrade to Core for unlimited quests.`}
+          />
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2 mb-5">
@@ -735,7 +774,12 @@ export default function QuestsPage() {
                           {quest.completed && <Check size={12} />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-body truncate mb-1 ${quest.completed ? "line-through text-muted-foreground" : ""}`}>{quest.name}</p>
+                          <p className={`text-sm font-body truncate ${quest.completed ? "line-through text-muted-foreground" : ""}`}>{quest.name}</p>
+                          {quest.completed && quest.updated_at && (
+                            <p className="text-[9px] font-mono text-neon-green/70">
+                              Completed {new Date(quest.updated_at).toLocaleDateString()}
+                            </p>
+                          )}
                           <div className="h-1 bg-muted rounded-full overflow-hidden">
                             <div className={`h-full rounded-full transition-all ${quest.completed ? "bg-neon-green" : "bg-neon-amber"}`} style={{ width: `${Math.min(100, (quest.progress / quest.total) * 100)}%` }} />
                           </div>

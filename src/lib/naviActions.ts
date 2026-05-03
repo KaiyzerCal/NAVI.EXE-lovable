@@ -494,13 +494,14 @@ export async function executeAction(userId: string, action: NaviAction): Promise
         }).select("id").maybeSingle();
         if (error) return fail(type, "Failed to create journal entry", error.message);
         const xpRes = await applyXpToProfile(userId, xpEarned);
+        const xpResOk = xpRes.ok;
         await logActivity(userId, "journal_created", `Journal entry: ${p.title}`, xpEarned);
         return ok(type, `Saved entry "${p.title}" (+${xpEarned} XP).`, {
           affectedTables: ["journal_entries", "profiles", "activity_log"],
           affectedIds: { entry_id: data?.id ?? null },
           xpAwarded: xpEarned,
-          levelBefore: xpRes.ok ? xpRes.levelBefore : undefined,
-          levelAfter: xpRes.ok ? xpRes.levelAfter : undefined,
+          levelBefore: xpResOk ? xpRes.levelBefore : undefined,
+          levelAfter: xpResOk ? xpRes.levelAfter : undefined,
         });
       }
       case "update_journal": {

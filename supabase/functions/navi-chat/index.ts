@@ -129,8 +129,58 @@ const NAVI_TOOLS = [
           description: { type: "string" },
           category: { type: "string" },
           level: { type: "integer" },
+          xp: { type: "integer" },
         },
         required: ["skill_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "progress_skill",
+      description: "Add XP and/or levels to an existing skill. Use when the Operator practices, trains, or improves a skill (e.g. 'I practiced guitar', 'I studied Spanish for an hour'). Provide skill_id when known; otherwise pass skill_name to fuzzy-match.",
+      parameters: {
+        type: "object",
+        properties: {
+          skill_id: { type: "string" },
+          skill_name: { type: "string" },
+          xp_amount: { type: "integer", description: "XP added to the skill (also added to operator profile XP)." },
+          levels: { type: "integer", description: "Number of levels to add directly. Defaults to 0." },
+          reason: { type: "string" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "level_up_skill",
+      description: "Increment a skill's level by 1. Requires skill_id.",
+      parameters: {
+        type: "object",
+        properties: {
+          skill_id: { type: "string" },
+        },
+        required: ["skill_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_or_update_skill",
+      description: "Create a skill if it doesn't exist (matched by name), otherwise update it. Use this when unsure whether the skill exists.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          category: { type: "string" },
+          level: { type: "integer" },
+          max_level: { type: "integer" },
+        },
+        required: ["name"],
       },
     },
   },

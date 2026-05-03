@@ -854,10 +854,12 @@ serve(async (req) => {
     const userId = context?.user_id as string | undefined;
 
     // ── Subscription enforcement ──────────────────────────────────────────────
+    // Uses the actual schema columns: profiles.daily_message_count and
+    // profiles.message_count_reset_date. Free tier is capped at FREE_LIMIT/day.
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
       try {
         const profileRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,daily_message_reset_at`,
+          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,message_count_reset_date`,
           { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
         );
         if (profileRes.ok) {
@@ -865,7 +867,7 @@ serve(async (req) => {
           const p = profiles?.[0];
           const tier = p?.subscription_tier ?? "free";
           const today = new Date().toISOString().slice(0, 10);
-          const resetDate = p?.daily_message_reset_at ?? today;
+          const resetDate = p?.message_count_reset_date ?? today;
           const dailyCount = resetDate < today ? 0 : Number(p?.daily_message_count ?? 0);
           const FREE_LIMIT = 50;
           if (tier === "free" && dailyCount >= FREE_LIMIT) {
@@ -881,39 +883,11 @@ serve(async (req) => {
                 apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
                 "Content-Type": "application/json", Prefer: "return=minimal",
               },
-              body: JSON.stringify({ daily_message_count: dailyCount + 1, daily_message_reset_at: today }),
+              body: JSON.stringify({ daily_message_count: dailyCount + 1, message_count_reset_date: today }),
             }).catch(() => {});
           }
         }
       } catch (e) { console.warn("Subscription check failed (non-blocking):", e); }
-    }
-
-    // ── Rate limiting (500 req/hour hard cap) ─────────────────────────────────
-    if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-      try {
-        const windowStart = new Date(Date.now() - 3600000).toISOString();
-        const rlRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/rate_limits?user_id=eq.${userId}&window_start=gt.${windowStart}&select=request_count`,
-          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-        );
-        if (rlRes.ok) {
-          const rlRows = await rlRes.json();
-          const count = (rlRows as any[]).reduce((s, r) => s + (r.request_count || 0), 0);
-          if (count >= 500) {
-            return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in a few minutes." }), {
-              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-        }
-        fetch(`${SUPABASE_URL}/rest/v1/rate_limits`, {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-            "Content-Type": "application/json", Prefer: "resolution=merge-duplicates",
-          },
-          body: JSON.stringify({ user_id: userId, window_start: new Date().toISOString(), request_count: 1 }),
-        }).catch(() => {});
-      } catch (e) { console.warn("Rate limit check failed (non-blocking):", e); }
     }
 
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");

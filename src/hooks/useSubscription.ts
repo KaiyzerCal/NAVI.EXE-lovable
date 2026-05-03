@@ -2,10 +2,12 @@ import { useAppData } from "@/contexts/AppDataContext";
 import { supabase } from "@/integrations/supabase/client";
 
 export function useSubscription() {
-  const { profile, updateProfile } = useAppData();
+  const { profile, updateProfile, isReady, refetchProfile } = useAppData() as any;
   const tier = (profile as any).subscription_tier ?? "free";
   const isPro = tier === "core" || tier === "power";
   const isFree = !isPro;
+  const isActive = isPro;
+  const loading = !isReady;
   const messageLimit = isFree ? 15 : Infinity;
   const questLimit = isFree ? 3 : Infinity;
 
@@ -41,5 +43,21 @@ export function useSubscription() {
     if (data?.url) window.location.href = data.url;
   }
 
-  return { tier, isPro, isFree, messageLimit, questLimit, checkMessageAllowed, incrementMessageCount, startCheckout };
+  async function refetch() {
+    if (typeof refetchProfile === "function") await refetchProfile();
+  }
+
+  return {
+    tier,
+    isPro,
+    isFree,
+    isActive,
+    loading,
+    refetch,
+    messageLimit,
+    questLimit,
+    checkMessageAllowed,
+    incrementMessageCount,
+    startCheckout,
+  };
 }

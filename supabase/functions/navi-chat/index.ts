@@ -361,6 +361,84 @@ const NAVI_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "apply_xp",
+      description: "Apply XP to the operator (alias of award_xp). Use when the user reports completing real-world progress that warrants XP.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { type: "integer", description: "Amount of XP to apply" },
+          reason: { type: "string", description: "Short reason for the XP gain" },
+        },
+        required: ["amount"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "progress_quest",
+      description: "Increment progress on an existing quest by quest_id or fuzzy quest_name.",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_id: { type: "string" },
+          quest_name: { type: "string" },
+          increment: { type: "integer", description: "How much to add to progress (default 1)" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "complete_quest_by_name",
+      description: "Complete a quest matched fuzzily by name when no exact id is known.",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_name: { type: "string" },
+        },
+        required: ["quest_name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_or_update_quest",
+      description: "Idempotently create a quest or update an existing one matched by name.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          type: { type: "string", description: "Daily | Weekly | Main | Side" },
+          xp_reward: { type: "integer" },
+          total: { type: "integer" },
+          progress: { type: "integer" },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_active_tab",
+      description: "Navigate the user to a section of the app (e.g. 'quests', 'skills', 'journal', 'dashboard', 'navi').",
+      parameters: {
+        type: "object",
+        properties: {
+          tab: { type: "string" },
+        },
+        required: ["tab"],
+      },
+    },
+  },
 ];
 
 // ── Extract actions via OpenAI function calling ───────────────────────────

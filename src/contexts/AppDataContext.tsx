@@ -78,6 +78,9 @@ interface AppDataContextType {
   setConversationId: (id: string | null) => void;
   chatDbLoaded: boolean;
   setChatDbLoaded: (v: boolean) => void;
+
+  // Unified refresh helper
+  refreshAppData: (sections?: string[]) => Promise<void>;
 }
 
 const AppDataContext = createContext<AppDataContextType | null>(null);
@@ -112,6 +115,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const isReady = !profileLoading;
 
+  const refreshAppData = async (sections?: string[]) => {
+    const wants = (s: string) => !sections || sections.length === 0 || sections.includes("all") || sections.includes(s);
+    const tasks: Promise<any>[] = [];
+    if (wants("profile") || wants("activity_log")) tasks.push(refetchProfile());
+    if (wants("quests")) tasks.push(refetchQuests());
+    if (wants("skills")) tasks.push(refetchSkills());
+    if (wants("journal")) tasks.push(refetchJournal());
+    if (wants("equipment")) tasks.push(refetchEquipment());
+    if (wants("buffs")) tasks.push(refetchEffects());
+    if (wants("achievements")) tasks.push(refetchAchievements());
+    await Promise.all(tasks);
+  };
+
   if (!isReady) {
     return null;
   }
@@ -127,6 +143,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       items, equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetchEquipment,
       effects, effectsLoading, addEffect, removeEffect, refetchEffects,
       chatMessages, setChatMessages, conversationId, setConversationId, chatDbLoaded, setChatDbLoaded,
+      refreshAppData,
     }}>
       {children}
     </AppDataContext.Provider>

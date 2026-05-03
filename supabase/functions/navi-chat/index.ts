@@ -484,31 +484,14 @@ async function embedText(text: string, apiKey: string): Promise<number[] | null>
   }
 }
 
+// Semantic memory retrieval is currently disabled — the `search_navi_memories`
+// RPC has not been provisioned. We rely on the `memory_context` block already
+// passed in from the client (compiled from `navi_core_memory`).
 async function searchNaViMemories(
-  userId: string,
-  embedding: number[]
+  _userId: string,
+  _embedding: number[]
 ): Promise<{ content: string; memory_type: string; importance: number; similarity: number }[]> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return [];
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_navi_memories`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      },
-      body: JSON.stringify({
-        p_user_id: userId,
-        query_embedding: embedding,
-        match_threshold: 0.70,
-        match_count: 10,
-      }),
-    });
-    if (!res.ok) return [];
-    return await res.json();
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 const LEVEL_TITLES: Record<number, string> = {

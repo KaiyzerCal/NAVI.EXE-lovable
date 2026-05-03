@@ -1,109 +1,69 @@
-// ============================================================
-// XP SYSTEM — Levels 1..100
-// Per-level XP:    50 * L * (L + 1) / 2
-// Cumulative XP:   25 * (L - 1) * L * (L + 1) / 3
-// ============================================================
+import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS, TIER_COLORS, classNameFromMbti, tierThreshold, nextTierThreshold } from "./classEvolution";
 
-import {
-  tierFromLevel,
-  tierNameFromLevel,
-  tierThreshold,
-  nextTierThreshold,
-  evolutionTitleFromMbtiAndLevel,
-  classNameFromMbti,
-  MBTI_CLASS_MAP,
-  TIER_COLORS,
-  TIER_NAMES,
-  type Tier,
-} from "./classEvolution";
+export type { EvolutionTier } from "./classEvolution";
+export { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel, TIER_NAMES, TIER_THRESHOLDS, TIER_COLORS, classNameFromMbti, tierThreshold, nextTierThreshold };
 
-const MIN_LEVEL = 1;
-const MAX_LEVEL = 100;
-
-const clamp = (n: number, lo: number, hi: number) =>
-  Math.max(lo, Math.min(hi, Math.floor(n)));
-
-/** XP required to advance FROM (level) TO (level + 1). */
+// XP required to advance from `level` to `level + 1`.
+// Formula: 50 * level * (level + 1) / 2
 export function xpRequiredForLevel(level: number): number {
-  const L = clamp(level, MIN_LEVEL, MAX_LEVEL);
-  return Math.floor((50 * L * (L + 1)) / 2);
+  if (level >= 100) return Infinity;
+  const l = Math.max(1, Math.min(100, level));
+  return Math.floor((50 * l * (l + 1)) / 2);
 }
 
-/** Total XP needed to REACH this level from zero. Returns 0 for level 1. */
+// Total XP accumulated to reach a given level from 0.
+// Closed form: sum_{k=1}^{level-1} 50*k*(k+1)/2 = 25*(level-1)*level*(level+1)/3
 export function totalXpForLevel(level: number): number {
-  const L = clamp(level, MIN_LEVEL, MAX_LEVEL);
-  if (L <= 1) return 0;
-  return Math.floor((25 * (L - 1) * L * (L + 1)) / 3);
+  if (level <= 1) return 0;
+  const n = Math.min(100, level) - 1;
+  return Math.floor((25 * n * (n + 1) * (n + 2)) / 3);
 }
 
-/**
- * Returns the highest level whose totalXpForLevel(level) <= totalXp.
- * Uses binary search. Clamped between 1 and 100.
- */
+// Derive the current level from accumulated XP. Binary search, O(log n).
 export function levelFromTotalXp(totalXp: number): number {
-  const xp = Math.max(0, Math.floor(totalXp || 0));
-  let lo = MIN_LEVEL;
-  let hi = MAX_LEVEL;
-  let best = MIN_LEVEL;
-  while (lo <= hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    if (totalXpForLevel(mid) <= xp) {
-      best = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
+  let lo = 1, hi = 100;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (totalXpForLevel(mid) <= totalXp) lo = mid;
+    else hi = mid - 1;
   }
-  return best;
+  return lo;
 }
 
-/** XP still needed to reach the next level. */
-export function xpToNextLevel(currentTotalXp: number): number {
-  const xp = Math.max(0, Math.floor(currentTotalXp || 0));
-  const lvl = levelFromTotalXp(xp);
-  if (lvl >= MAX_LEVEL) return 0;
-  return Math.max(0, totalXpForLevel(lvl + 1) - xp);
+// XP still needed to reach the next level from current accumulated XP.
+export function xpToNextLevel(currentXp: number): number {
+  const level = levelFromTotalXp(currentXp);
+  if (level >= 100) return 0;
+  return Math.max(0, totalXpForLevel(level + 1) - currentXp);
 }
 
-/** 0-100 percent progress through current level toward next. */
-export function progressPercent(currentTotalXp: number): number {
-  const xp = Math.max(0, Math.floor(currentTotalXp || 0));
-  const lvl = levelFromTotalXp(xp);
-  if (lvl >= MAX_LEVEL) return 100;
-  const base = totalXpForLevel(lvl);
-  const next = totalXpForLevel(lvl + 1);
-  const span = next - base;
-  if (span <= 0) return 0;
-  return Math.max(0, Math.min(100, ((xp - base) / span) * 100));
+// Progress percentage (0–100) through the current level.
+export function progressPercent(currentXp: number): number {
+  const level = levelFromTotalXp(currentXp);
+  if (level >= 100) return 100;
+  const start = totalXpForLevel(level);
+  const end = totalXpForLevel(level + 1);
+  if (end === start) return 100;
+  return Math.min(100, Math.floor(((currentXp - start) / (end - start)) * 100));
 }
 
-/** 0-100 percent progress through current TIER toward next tier threshold. */
-export function tierProgressPercent(currentTotalXp: number): number {
-  const xp = Math.max(0, Math.floor(currentTotalXp || 0));
-  const lvl = levelFromTotalXp(xp);
-  const t = tierFromLevel(lvl);
-  if (t === 5) return 100;
-  const tierStartLevel = tierThreshold(t);
-  const tierEndLevel = nextTierThreshold(lvl);
-  const tierStartXp = totalXpForLevel(tierStartLevel);
-  const tierEndXp = totalXpForLevel(tierEndLevel);
-  const span = tierEndXp - tierStartXp;
-  if (span <= 0) return 0;
-  return Math.max(0, Math.min(100, ((xp - tierStartXp) / span) * 100));
+// XP needed to reach the next tier threshold from current level.
+export function xpToNextTier(currentXp: number): number {
+  const level = levelFromTotalXp(currentXp);
+  const tier = tierFromLevel(level);
+  if (tier >= 5) return 0;
+  const nextTierMin = TIER_THRESHOLDS[(tier + 1) as 2 | 3 | 4 | 5].min;
+  return Math.max(0, totalXpForLevel(nextTierMin) - currentXp);
 }
 
-// ============================================================
-// Re-exports — consumers import everything from xpSystem.
-// ============================================================
-export {
-  tierFromLevel,
-  tierNameFromLevel,
-  tierThreshold,
-  nextTierThreshold,
-  evolutionTitleFromMbtiAndLevel,
-  classNameFromMbti,
-  MBTI_CLASS_MAP,
-  TIER_COLORS,
-  TIER_NAMES,
-};
-export type { Tier };
+// Progress percentage (0–100) through the current tier toward the next tier boundary.
+export function tierProgressPercent(currentXp: number): number {
+  const level = levelFromTotalXp(currentXp);
+  const tier = tierFromLevel(level);
+  const { min, max } = TIER_THRESHOLDS[tier];
+  if (tier >= 5) return 100;
+  const tierStart = totalXpForLevel(min);
+  const tierEnd = totalXpForLevel(max + 1);
+  if (tierEnd === tierStart) return 100;
+  return Math.min(100, Math.floor(((currentXp - tierStart) / (tierEnd - tierStart)) * 100));
+}

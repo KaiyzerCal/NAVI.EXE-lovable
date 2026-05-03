@@ -1,82 +1,45 @@
-import { useEffect, useState, useCallback } from "react";
+import { useAppData } from "@/contexts/AppDataContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { getStripeEnvironment } from "@/lib/stripe";
-
-export interface SubscriptionRow {
-  id: string;
-  user_id: string;
-  stripe_subscription_id: string;
-  stripe_customer_id: string;
-  product_id: string;
-  price_id: string;
-  status: string;
-  current_period_start: string | null;
-  current_period_end: string | null;
-  cancel_at_period_end: boolean;
-  environment: string;
-}
-
-function computeIsActive(sub: SubscriptionRow | null): boolean {
-  if (!sub) return false;
-  const periodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null;
-  const stillInPeriod = !periodEnd || periodEnd > new Date();
-  if (["active", "trialing", "past_due"].includes(sub.status) && stillInPeriod) return true;
-  if (sub.status === "canceled" && periodEnd && periodEnd > new Date()) return true;
-  return false;
-}
 
 export function useSubscription() {
-  const { user } = useAuth();
-  const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { profile, updateProfile } = useAppData();
+  const tier = (profile as any).subscription_tier ?? "free";
+  const isPro = tier === "core" || tier === "power";
+  const isFree = !isPro;
+  const messageLimit = isFree ? 15 : Infinity;
+  const questLimit = isFree ? 3 : Infinity;
 
-  const refetch = useCallback(async () => {
-    if (!user) {
-      setSubscription(null);
-      setLoading(false);
-      return;
+  async function checkMessageAllowed(): Promise<boolean> {
+    const today = new Date().toISOString().slice(0, 10);
+    const resetDate = (profile as any).message_count_reset_date;
+    const count = (profile as any).daily_message_count ?? 0;
+
+    if (resetDate !== today) {
+      await updateProfile({ daily_message_count: 0, message_count_reset_date: today } as any);
+      return true;
     }
-    const env = getStripeEnvironment();
-    const { data } = await supabase
-      .from("subscriptions" as any)
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("environment", env)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    setSubscription((data as unknown as SubscriptionRow | null) ?? null);
-    setLoading(false);
-  }, [user]);
 
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
+    return isFree ? count < messageLimit : true;
+  }
 
-  // Realtime: refetch on any subscriptions change for this user
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`subscriptions:${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "subscriptions",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => refetch(),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, refetch]);
+  async function incrementMessageCount() {
+    const today = new Date().toISOString().slice(0, 10);
+    const resetDate = (profile as any).message_count_reset_date;
+    const count = (profile as any).daily_message_count ?? 0;
+    const newCount = resetDate === today ? count + 1 : 1;
+    await updateProfile({ daily_message_count: newCount, message_count_reset_date: today } as any);
+  }
 
-  const isActive = computeIsActive(subscription);
-  const tier: "free" | "core" = isActive ? "core" : "free";
+  async function startCheckout() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("Not logged in");
 
-  return { subscription, isActive, tier, loading, refetch };
+    const { data, error } = await supabase.functions.invoke("create-checkout-session", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (error) throw error;
+    if (data?.url) window.location.href = data.url;
+  }
+
+  return { tier, isPro, isFree, messageLimit, questLimit, checkMessageAllowed, incrementMessageCount, startCheckout };
 }

@@ -21,6 +21,7 @@ const profileAllowedKeys = [
   "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception",
   "luck", "codex_points", "cali_coins", "operator_level", "operator_xp",
   "onboarding_done", "notification_settings", "user_navi_description", "last_active",
+  "streak_freeze_count",
 ] as const;
 
 function asStringArray(value: unknown): string[] {
@@ -92,7 +93,7 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
     case "complete_quest": {
       if (!params.quest_id) throw new Error("Missing quest_id");
       const { data: quest, error } = await sb.from("quests")
-        .select("xp_reward, name, total, linked_skill_id")
+        .select("xp_reward, name, total, type, linked_skill_id")
         .eq("id", String(params.quest_id)).eq("user_id", userId).single();
       if (error) throw error;
       if (!quest) throw new Error("Quest not found");
@@ -101,6 +102,31 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
         .eq("id", String(params.quest_id)).eq("user_id", userId);
       if (qErr) throw qErr;
       await awardXP(sb, userId, Number(quest.xp_reward || 0));
+
+      // Award Codex Points + Cali Coins by quest type (replaces former Forge economy)
+      const codexMap: Record<string, number> = { Daily: 10, Weekly: 30, Main: 50, Side: 20, Minor: 5, Epic: 100 };
+      const caliMap:  Record<string, number> = { Daily: 2,  Weekly: 8,  Main: 12, Side: 5,  Minor: 1, Epic: 25  };
+      const qType = String((quest as any).type || "Daily");
+      const codexReward = codexMap[qType] ?? 10;
+      const caliReward  = caliMap[qType] ?? 2;
+      const { data: prof } = await sb.from("profiles").select("codex_points, cali_coins").eq("id", userId).single();
+      if (prof) {
+        await sb.from("profiles").update({
+          codex_points: Number((prof as any).codex_points || 0) + codexReward,
+          cali_coins:   Number((prof as any).cali_coins   || 0) + caliReward,
+        }).eq("id", userId);
+      }
+
+      // Award Forge coins on quest completion
+      const forgeMap: Record<string, number> = { Daily: 20, Weekly: 60, Main: 100, Side: 40, Minor: 10, Epic: 200 };
+      const forgeReward = forgeMap[qType] ?? 20;
+      // Upsert forge_balances
+      const { data: fb } = await sb.from("forge_balances" as any).select("balance").eq("user_id", userId).maybeSingle();
+      const newBal = Number((fb as any)?.balance ?? 0) + forgeReward;
+      await sb.from("forge_balances" as any).upsert({ user_id: userId, balance: newBal, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      // Insert forge_transaction
+      await sb.from("forge_transactions" as any).insert({ user_id: userId, amount: forgeReward, reason: `Quest completed: ${quest.name}`, source: "quest" });
+
       if (quest.linked_skill_id) {
         const { data: skill } = await sb.from("skills")
           .select("id, name, level, max_level, xp")
@@ -118,6 +144,29 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
         }
       }
       await logActivity(sb, userId, "quest_completed", `Quest completed: ${quest.name}`, Number(quest.xp_reward || 0));
+
+      // Auto-post to operator feed (fire-and-forget)
+      sb.from("profiles")
+        .select("display_name, navi_name, character_class, mbti_type, operator_level")
+        .eq("id", userId)
+        .single()
+        .then(({ data: prof }) => {
+          if (!prof) return;
+          sb.from("operator_feed").insert({
+            operator_id: userId,
+            display_name: prof.display_name ?? "Operator",
+            navi_name: prof.navi_name ?? "NAVI",
+            character_class: prof.character_class ?? null,
+            mbti_type: prof.mbti_type ?? null,
+            operator_level: prof.operator_level ?? 1,
+            content_type: "QUEST_COMPLETE",
+            content: `${prof.display_name ?? "Operator"} completed the quest: ${quest.name}`,
+            metadata: { quest_name: quest.name, quest_type: quest.type, xp_earned: Number(quest.xp_reward || 0) },
+            likes: [],
+            is_public: true,
+          }).then(() => {});
+        });
+
       return;
     }
 
@@ -389,6 +438,28 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
         const { error } = await sb.from("buffs").delete().eq("user_id", userId).ilike("name", String(params.name));
         if (error) throw error;
       }
+      return;
+    }
+
+    case "use_streak_freeze": {
+      const { data: p, error: pe } = await sb.from("profiles")
+        .select("streak_freeze_count, current_streak")
+        .eq("id", userId).single();
+      if (pe || !p) throw new Error("Profile not found");
+      const freezes = Number((p as any).streak_freeze_count ?? 0);
+      if (freezes <= 0) throw new Error("No streak freezes available");
+      await sb.from("profiles").update({
+        streak_freeze_count: freezes - 1,
+      }).eq("id", userId);
+      await logActivity(sb, userId, "streak_freeze_used", "Streak freeze consumed — streak protected", 0);
+      return;
+    }
+
+    case "award_streak_freeze": {
+      const { data: p } = await sb.from("profiles").select("streak_freeze_count").eq("id", userId).single();
+      const current = Number((p as any)?.streak_freeze_count ?? 0);
+      await sb.from("profiles").update({ streak_freeze_count: current + 1 }).eq("id", userId);
+      await logActivity(sb, userId, "streak_freeze_earned", "Streak freeze earned (7-day milestone)", 0);
       return;
     }
 

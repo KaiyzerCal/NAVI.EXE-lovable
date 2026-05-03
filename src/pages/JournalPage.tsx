@@ -2,13 +2,14 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film } from "lucide-react";
+import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film, Image as ImageIcon, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
 import UploadZone, { MediaThumbnail, MediaLightbox } from "@/components/UploadZone";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+
 
 interface MediaFile {
   id: string;
@@ -81,26 +82,10 @@ function EntryFormCard({
             className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors" />
         </div>
         <div>
-          <label className="text-[10px] font-mono text-muted-foreground block mb-1">ATTACHMENTS</label>
-          {attached.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {attached.map((f) => (
-                <MediaThumbnail key={f.id} file={f} onClick={() => setLightbox(f)} />
-              ))}
-            </div>
-          )}
-          {entryId ? (
-            <UploadZone
-              compact
-              linkedEntityType="journal"
-              linkedEntityId={entryId}
-              onUploadComplete={(f) => setAttached((prev) => [f as MediaFile, ...prev])}
-            />
-          ) : (
-            <p className="text-[10px] font-mono text-muted-foreground italic">
-              Save the entry first to attach files.
-            </p>
-          )}
+          <label className="text-[10px] font-mono text-muted-foreground block mb-1">ATTACHMENTS (optional)</label>
+          <UploadZone linkedEntityType="journal_entry" compact />
+          <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Uploads are saved to your Atlas and visible to NAVI for analysis.</p>
+
         </div>
         <div className="flex gap-2 pt-1">
           <button onClick={() => onSave(form)} disabled={!form.title.trim() || saving}
@@ -204,28 +189,44 @@ export default function JournalPage() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [view, setView] = useState<"entries" | "gallery">("entries");
-  const [allMedia, setAllMedia] = useState<MediaFile[]>([]);
+  const [media, setMedia] = useState<any[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<"all" | "image" | "video" | "document">("all");
-  const [galleryLightbox, setGalleryLightbox] = useState<MediaFile | null>(null);
+  const [lightboxFile, setLightboxFile] = useState<any | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  const fetchMedia = useCallback(async () => {
+    if (!user) return;
+    setMediaLoading(true);
+    const { data } = await supabase
+      .from("media" as any)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    setMedia((data as any[]) || []);
+    setMediaLoading(false);
+  }, [user]);
 
   useEffect(() => {
-    if (view !== "gallery" || !user) return;
-    setMediaLoading(true);
-    supabase
-      .from("media")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setAllMedia(data as MediaFile[]);
-        setMediaLoading(false);
-      });
-  }, [view, user]);
+    if (view === "gallery") fetchMedia();
+  }, [view, fetchMedia]);
 
-  const filteredMedia = allMedia.filter((m) =>
-    mediaFilter === "all" ? true : m.file_type === mediaFilter
-  );
+  const deleteMedia = async (m: any) => {
+    if (!confirm(`Delete ${m.file_name}?`)) return;
+    try {
+      const marker = "/mavis-media/";
+      const idx = m.file_url.indexOf(marker);
+      if (idx >= 0) {
+        const path = decodeURIComponent(m.file_url.slice(idx + marker.length));
+        await supabase.storage.from("mavis-media").remove([path]);
+      }
+    } catch {}
+    await supabase.from("media" as any).delete().eq("id", m.id);
+    setMedia((prev) => prev.filter((x) => x.id !== m.id));
+    toast({ title: "File deleted" });
+  };
+
 
   const handleCreate = useCallback(async (form: FormState) => {
     if (!form.title.trim()) return;
@@ -299,6 +300,38 @@ export default function JournalPage() {
         </div>
       </PageHeader>
 
+      {/* View tabs */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setView("entries")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
+            view === "entries"
+              ? "bg-primary/10 border-primary/30 text-primary"
+              : "bg-muted border-border text-muted-foreground hover:text-foreground"
+          }`}>
+          <BookOpen size={12} /> ENTRIES
+        </button>
+        <button onClick={() => setView("gallery")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
+            view === "gallery"
+              ? "bg-primary/10 border-primary/30 text-primary"
+              : "bg-muted border-border text-muted-foreground hover:text-foreground"
+          }`}>
+          <Images size={12} /> GALLERY
+        </button>
+      </div>
+
+      {view === "gallery" ? (
+        <GallerySection
+          media={media}
+          loading={mediaLoading}
+          filter={mediaFilter}
+          setFilter={setMediaFilter}
+          onOpen={setLightboxFile}
+          onDelete={deleteMedia}
+          onUploaded={fetchMedia}
+        />
+      ) : (
+        <>
       {/* New / Edit Form */}
       <AnimatePresence>
         {view === "entries" && (showNewForm || editingEntry) && (
@@ -318,76 +351,52 @@ export default function JournalPage() {
         )}
       </AnimatePresence>
 
-      {/* Gallery view */}
-      {view === "gallery" && (
-        <div>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {(["all", "image", "video", "document"] as const).map((f) => (
+      {/* Search + Tag filters */}
+      {entries.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <Search size={13} className="text-muted-foreground" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search entries..."
+              className="w-full bg-card border border-border rounded-lg pl-9 pr-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/50 transition-colors placeholder:text-muted-foreground/60"
+            />
+            {searchQuery && (
               <button
-                key={f}
-                onClick={() => setMediaFilter(f)}
-                className={`px-3 py-1.5 text-[10px] font-mono rounded border transition-colors ${
-                  mediaFilter === f
-                    ? "bg-primary/10 border-primary/30 text-primary"
-                    : "bg-muted border-border text-muted-foreground hover:text-foreground"
-                }`}
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
               >
-                {f.toUpperCase()}
-                {f !== "all" && (
-                  <span className="ml-1.5 opacity-60">
-                    {allMedia.filter((m) => m.file_type === f).length}
-                  </span>
-                )}
+                <X size={13} />
               </button>
-            ))}
+            )}
           </div>
+          {/* Tag chips */}
+          {(() => {
+            const allTags = Array.from(new Set(entries.flatMap((e) => e.tags)));
+            if (allTags.length === 0) return null;
+            return (
+              <div className="flex gap-1.5 flex-wrap">
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded transition-colors ${
+                      selectedTag === tag
+                        ? tagColor(tag) + " ring-1 ring-current"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
 
-          {mediaLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="animate-spin text-primary" size={20} />
-            </div>
-          ) : filteredMedia.length === 0 ? (
-            <div className="text-center py-16">
-              <Images size={36} className="mx-auto mb-3 opacity-20" />
-              <p className="text-xs font-mono text-muted-foreground">NO MEDIA UPLOADED YET</p>
-              <p className="text-[10px] font-mono text-muted-foreground mt-2">
-                Attach files to journal entries to see them here.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {filteredMedia.map((file, i) => (
-                <motion.div
-                  key={file.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.02 }}
-                  className="group cursor-pointer"
-                  onClick={() => setGalleryLightbox(file)}
-                >
-                  <div className="relative aspect-square bg-muted border border-border rounded overflow-hidden group-hover:border-primary/40 transition-colors">
-                    {file.file_type === "image" ? (
-                      <img src={file.file_url} alt={file.file_name} className="w-full h-full object-cover" loading="lazy" />
-                    ) : file.file_type === "video" ? (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Film size={28} className="text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <FileText size={28} className="text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-[9px] font-mono text-muted-foreground truncate mt-1">{file.file_name}</p>
-                  <p className="text-[9px] font-mono text-muted-foreground/60">
-                    {new Date(file.created_at as any).toLocaleDateString()}
-                  </p>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          <MediaLightbox file={galleryLightbox} onClose={() => setGalleryLightbox(null)} />
         </div>
       )}
 
@@ -400,9 +409,22 @@ export default function JournalPage() {
             WRITE FIRST ENTRY
           </button>
         </div>
-      ) : view === "entries" ? (
+      ) : (() => {
+        const q = searchQuery.trim().toLowerCase();
+        const filtered = entries.filter((e) => {
+          const matchesSearch = !q || e.title.toLowerCase().includes(q) || e.content.toLowerCase().includes(q);
+          const matchesTag = !selectedTag || e.tags.includes(selectedTag);
+          return matchesSearch && matchesTag;
+        });
+        if (filtered.length === 0) return (
+          <div className="text-center py-12">
+            <p className="text-xs font-mono text-muted-foreground">NO ENTRIES MATCH FILTER</p>
+          </div>
+        );
+        return (
+
         <div className="space-y-3">
-          {entries.map((entry, i) => (
+          {filtered.map((entry, i) => (
             <motion.div
               key={entry.id}
               initial={{ opacity: 0, y: 8 }}
@@ -443,7 +465,11 @@ export default function JournalPage() {
             </motion.div>
           ))}
         </div>
-      ) : null}
+        );
+      })()}
+        </>
+      )}
+
 
       {/* Detail Modal */}
       <AnimatePresence>
@@ -456,6 +482,106 @@ export default function JournalPage() {
           />
         )}
       </AnimatePresence>
+
+      <MediaLightbox file={lightboxFile} onClose={() => setLightboxFile(null)} />
+    </div>
+  );
+}
+
+// ─── Gallery ───────────────────────────────────────────────────────────────────
+function GallerySection({
+  media, loading, filter, setFilter, onOpen, onDelete, onUploaded,
+}: {
+  media: any[];
+  loading: boolean;
+  filter: "all" | "image" | "video" | "document";
+  setFilter: (f: "all" | "image" | "video" | "document") => void;
+  onOpen: (m: any) => void;
+  onDelete: (m: any) => void;
+  onUploaded: () => void;
+}) {
+  const filtered = filter === "all" ? media : media.filter((m) => m.file_type === filter);
+  const FILTERS: { key: typeof filter; label: string }[] = [
+    { key: "all", label: "ALL" },
+    { key: "image", label: "IMAGES" },
+    { key: "video", label: "VIDEOS" },
+    { key: "document", label: "DOCS" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <HudCard title="UPLOAD" icon={<Plus size={14} />}>
+        <UploadZone linkedEntityType="gallery" onUploadComplete={onUploaded} compact />
+        <p className="text-[9px] font-mono text-muted-foreground/60 mt-2">
+          // All uploads are visible to NAVI for analysis and reference across the app.
+        </p>
+      </HudCard>
+
+      <div className="flex gap-1.5 flex-wrap">
+        {FILTERS.map((f) => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            className={`px-2.5 py-1 rounded text-[10px] font-mono border transition-colors ${
+              filter === f.key
+                ? "bg-primary/10 border-primary/30 text-primary"
+                : "bg-muted border-border text-muted-foreground hover:text-foreground"
+            }`}>
+            {f.label} <span className="opacity-50">({f.key === "all" ? media.length : media.filter((m) => m.file_type === f.key).length})</span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="animate-spin text-primary" size={20} />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16">
+          <Images size={36} className="mx-auto mb-3 opacity-20" />
+          <p className="text-xs font-mono text-muted-foreground">NO FILES UPLOADED YET</p>
+          <p className="text-[10px] font-mono text-muted-foreground/60 mt-1">Drop files above to start your archive</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {filtered.map((m) => (
+            <GalleryTile key={m.id} file={m} onOpen={() => onOpen(m)} onDelete={() => onDelete(m)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GalleryTile({ file, onOpen, onDelete }: { file: any; onOpen: () => void; onDelete: () => void }) {
+  const Icon = file.file_type === "video" ? Film : file.file_type === "document" ? FileText : ImageIcon;
+  return (
+    <div className="group relative bg-card border border-border rounded overflow-hidden hover:border-primary/30 transition-colors">
+      <button onClick={onOpen} className="block w-full aspect-square bg-muted relative">
+        {file.file_type === "image" ? (
+          <img src={file.file_url} alt={file.file_name} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+            <Icon size={32} />
+          </div>
+        )}
+        {file.ai_description && (
+          <div className="absolute inset-0 bg-background/85 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+            <p className="text-[9px] font-mono text-foreground text-center line-clamp-6">{file.ai_description}</p>
+          </div>
+        )}
+      </button>
+      <div className="px-2 py-1.5 flex items-center justify-between gap-1">
+        <p className="text-[9px] font-mono text-muted-foreground truncate flex-1" title={file.file_name}>
+          {file.file_name}
+        </p>
+        <button onClick={onDelete} className="text-muted-foreground hover:text-destructive transition-colors shrink-0" title="Delete">
+          <X size={10} />
+        </button>
+      </div>
+      {file.linked_entity_type && (
+        <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-background/80 text-[8px] font-mono text-primary border border-primary/20">
+          {file.linked_entity_type}
+        </div>
+      )}
     </div>
   );
 }

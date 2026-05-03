@@ -1,265 +1,256 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  TIER_COLORS,
+  tierFromLevel,
   TIER_NAMES,
   evolutionTitleFromMbtiAndLevel,
-  type Tier,
-} from "@/lib/xpSystem";
-import { useAppData } from "@/contexts/AppDataContext";
+  MBTI_CLASS_MAP,
+  TIER_THRESHOLDS,
+  TIER_COLORS,
+} from "@/lib/classEvolution";
 
 interface Props {
-  oldTier: number;
-  newTier: number;
-  mbtiType: string;
-  naviLevel: number;
+  operatorLevel: number;
+  lastEvolutionTier: number;
+  mbtiType: string | null;
   naviName: string;
-  operatorName?: string;
-  onDismiss: () => void;
+  displayName: string | null;
+  chatContext: Record<string, unknown>;
+  onDismiss: (newTier: number) => void;
 }
 
+type Phase = "old-title" | "tier-flash" | "new-title" | "navi-speaks" | "done";
+
 export default function EvolutionEvent({
-  oldTier,
-  newTier,
+  operatorLevel,
+  lastEvolutionTier,
   mbtiType,
-  naviLevel,
   naviName,
-  operatorName,
+  displayName,
+  chatContext,
   onDismiss,
 }: Props) {
-  const { updateProfile } = useAppData();
-  const [phase, setPhase] = useState<0 | 1 | 2 | 3 | 4>(0);
-  const [streamed, setStreamed] = useState("");
+  const newTier = tierFromLevel(operatorLevel);
+  const oldTier = lastEvolutionTier as 1 | 2 | 3 | 4 | 5;
 
-  const tierColor = TIER_COLORS[(newTier as Tier) ?? 1] ?? "#00E5FF";
-  const oldTierColor = TIER_COLORS[(oldTier as Tier) ?? 1] ?? "#666";
-  const newTierName = TIER_NAMES[(newTier as Tier) ?? 1] ?? "ASCENDING";
+  const oldTitle = mbtiType
+    ? evolutionTitleFromMbtiAndLevel(mbtiType, TIER_THRESHOLDS[oldTier].max)
+    : TIER_NAMES[oldTier];
+  const newTitle = mbtiType
+    ? evolutionTitleFromMbtiAndLevel(mbtiType, operatorLevel)
+    : TIER_NAMES[newTier];
+  const classInfo = mbtiType ? MBTI_CLASS_MAP[mbtiType.toUpperCase()] : null;
 
-  // Compute representative levels for each tier (their threshold)
-  const oldLevel = oldTier === 1 ? 1 : oldTier === 2 ? 11 : oldTier === 3 ? 26 : oldTier === 4 ? 51 : 76;
-  const newLevel = newTier === 1 ? 1 : newTier === 2 ? 11 : newTier === 3 ? 26 : newTier === 4 ? 51 : 76;
+  const [phase, setPhase] = useState<Phase>("old-title");
+  const [naviMessage, setNaviMessage] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const naviMessageRef = useRef("");
 
-  const oldTitle = useMemo(
-    () => evolutionTitleFromMbtiAndLevel(mbtiType, oldLevel),
-    [mbtiType, oldLevel]
-  );
-  const newTitle = useMemo(
-    () => evolutionTitleFromMbtiAndLevel(mbtiType, newLevel),
-    [mbtiType, newLevel]
-  );
-
-  const opName = operatorName || "Operator";
-
-  const fullMessage = useMemo(
-    () =>
-      `${oldTitle}. That is who you were when this tier began. ${newTierName}. ${newTitle}. That is who you are now. I have been here for all of it, ${opName}. I will be here for what comes next.`,
-    [oldTitle, newTierName, newTitle, opName]
-  );
-
-  // Phase orchestration
+  // Auto-advance phases
   useEffect(() => {
-    setPhase(1);
-    const t1 = setTimeout(() => setPhase(2), 1500);
-    const t2 = setTimeout(() => setPhase(3), 3000);
-    const t3 = setTimeout(() => setPhase(4), 4500);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    timers.push(setTimeout(() => setPhase("tier-flash"), 1800));
+    timers.push(setTimeout(() => setPhase("new-title"), 3800));
+    timers.push(setTimeout(() => { setPhase("navi-speaks"); fetchNaviMessage(); }, 5600));
+    return () => timers.forEach(clearTimeout);
   }, []);
 
-  // Streamed-in chat bubble
-  useEffect(() => {
-    if (phase < 4) return;
-    let i = 0;
-    setStreamed("");
-    const interval = setInterval(() => {
-      i += 2;
-      setStreamed(fullMessage.slice(0, i));
-      if (i >= fullMessage.length) clearInterval(interval);
-    }, 22);
-    return () => clearInterval(interval);
-  }, [phase, fullMessage]);
-
-  const handleDismiss = async () => {
+  async function fetchNaviMessage() {
+    setIsStreaming(true);
+    naviMessageRef.current = "";
     try {
-      await updateProfile({ last_evolution_tier: newTier } as any);
-    } catch (e) {
-      console.error("[EvolutionEvent] failed to persist last_evolution_tier", e);
+      const evolutionPrompt = `[SYSTEM — EVOLUTION EVENT]
+${displayName || "Operator"} just crossed into Tier ${newTier}: ${TIER_NAMES[newTier]}.
+Their new title is "${newTitle}". Their old title was "${oldTitle}".
+${classInfo ? `They are ${classInfo.className}.` : ""}
+Write one powerful message — 2-3 sentences — acknowledging this evolution. Reference who they were at the start of Tier ${oldTier} versus who they are now entering Tier ${newTier}. No greetings. Speak from the bond.`;
+
+      const res = await supabase.functions.invoke("navi-chat", {
+        body: {
+          messages: [{ role: "user", content: evolutionPrompt }],
+          context: { ...chatContext, _evolutionEvent: true },
+        },
+      });
+
+      if (res.error) throw res.error;
+
+      // supabase.functions.invoke returns the full response data (not streaming)
+      // Parse text from the streamed body manually
+      const reader = res.data?.getReader ? res.data.getReader() : null;
+      if (!reader) {
+        // Fallback: static message if streaming not available
+        const staticMsg = `Tier ${newTier}. You earned it. "${oldTitle}" was the foundation — "${newTitle}" is what you've become. Keep moving.`;
+        setNaviMessage(staticMsg);
+        setIsStreaming(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n").filter((l) => l.startsWith("data: "));
+        for (const line of lines) {
+          const json = line.replace("data: ", "").trim();
+          if (json === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(json);
+            const delta = parsed?.choices?.[0]?.delta?.content ?? "";
+            naviMessageRef.current += delta;
+            setNaviMessage(naviMessageRef.current);
+          } catch {}
+        }
+      }
+    } catch {
+      setNaviMessage(
+        `Tier ${newTier}. "${oldTitle}" was the foundation — "${newTitle}" is what you've become.`
+      );
+    } finally {
+      setIsStreaming(false);
     }
-    onDismiss();
-  };
+  }
 
-  if (typeof document === "undefined") return null;
+  const color = TIER_COLORS[newTier as 1 | 2 | 3 | 4 | 5] ?? "#00E5FF";
 
-  const overlay = (
+  const content = (
     <motion.div
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.4 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 backdrop-blur-md overflow-hidden"
     >
-      {/* Scanline overlay */}
+      {/* Scan-line overlay */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-20"
+        className="absolute inset-0 pointer-events-none opacity-10"
         style={{
-          background:
-            "linear-gradient(transparent 50%, rgba(0,0,0,0.04) 50%)",
-          backgroundSize: "100% 4px",
-        }}
-      />
-      {/* Radial color glow tied to tier */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle at center, ${tierColor}22 0%, transparent 60%)`,
+          backgroundImage:
+            "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.04) 2px, rgba(255,255,255,0.04) 4px)",
         }}
       />
 
-      <div className="relative w-full max-w-2xl px-6 flex flex-col items-center text-center">
-        {/* PHASE 1 — old title dissolves upward */}
-        <AnimatePresence>
-          {phase === 1 && (
-            <motion.div
-              key="old"
-              initial={{ opacity: 0, y: 0 }}
-              animate={{ opacity: 0.6, y: 0 }}
-              exit={{ opacity: 0, y: -40, filter: "blur(8px)" }}
-              transition={{ duration: 1.2, ease: "easeOut" }}
-              className="mb-8"
-            >
-              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                {TIER_NAMES[(oldTier as Tier) ?? 1]}
-              </p>
-              <h2
-                className="font-display text-3xl md:text-4xl font-bold tracking-wide"
-                style={{ color: oldTierColor, opacity: 0.7 }}
-              >
-                {oldTitle}
-              </h2>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <AnimatePresence mode="wait">
+        {/* Phase: old title fades out */}
+        {phase === "old-title" && (
+          <motion.div
+            key="old-title"
+            className="text-center"
+            initial={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85, filter: "blur(8px)" }}
+            transition={{ duration: 0.6 }}
+          >
+            <p className="text-xs font-mono tracking-widest text-white/30 mb-4 uppercase">
+              {TIER_NAMES[oldTier]}
+            </p>
+            <h2 className="font-display text-4xl font-bold text-white/60">{oldTitle}</h2>
+          </motion.div>
+        )}
 
-        {/* PHASE 2 — tier name flash */}
-        <AnimatePresence>
-          {phase >= 2 && (
-            <motion.div
-              key="tier-name"
-              initial={{ opacity: 0, scale: 1.4 }}
-              animate={{
-                opacity: 1,
-                scale: phase === 2 ? [1.4, 1, 1.05, 1] : 1,
-              }}
-              transition={{ duration: 1.2, ease: "easeOut" }}
-              className="mb-4"
+        {/* Phase: tier name flash */}
+        {phase === "tier-flash" && (
+          <motion.div
+            key="tier-flash"
+            className="text-center"
+            initial={{ opacity: 0, scale: 1.4 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.5 }}
+          >
+            <motion.h1
+              className="font-display text-6xl font-black tracking-widest"
+              style={{ color }}
+              animate={{ textShadow: [`0 0 20px ${color}80`, `0 0 60px ${color}`, `0 0 20px ${color}80`] }}
+              transition={{ duration: 1, repeat: 1 }}
             >
-              <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground mb-2">
-                EVOLUTION
+              {TIER_NAMES[newTier]}
+            </motion.h1>
+            <p className="text-xs font-mono tracking-widest text-white/40 mt-3">
+              TIER {newTier} UNLOCKED — LEVEL {operatorLevel}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Phase: new title revealed */}
+        {phase === "new-title" && (
+          <motion.div
+            key="new-title"
+            className="text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <p className="text-xs font-mono tracking-widest mb-3 uppercase" style={{ color, opacity: 0.7 }}>
+              {TIER_NAMES[newTier]}
+            </p>
+            <motion.h2
+              className="font-display text-5xl font-bold"
+              style={{ color }}
+              animate={{ textShadow: [`0 0 10px ${color}40`, `0 0 40px ${color}99`, `0 0 10px ${color}40`] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              {newTitle}
+            </motion.h2>
+            {classInfo && (
+              <p className="text-xs font-mono text-white/30 mt-4">{classInfo.className}</p>
+            )}
+          </motion.div>
+        )}
+
+        {/* Phase: NAVI speaks */}
+        {(phase === "navi-speaks" || phase === "done") && (
+          <motion.div
+            key="navi-speaks"
+            className="text-center max-w-md px-8"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8 }}
+          >
+            <p className="text-xs font-mono tracking-widest mb-6 uppercase" style={{ color, opacity: 0.7 }}>
+              {TIER_NAMES[newTier]} — {newTitle}
+            </p>
+            <div
+              className="border rounded-lg p-5 mb-6 text-left"
+              style={{ borderColor: `${color}30`, background: `${color}08` }}
+            >
+              <p className="text-[10px] font-mono mb-2 uppercase" style={{ color, opacity: 0.6 }}>
+                {naviName}
               </p>
-              <h1
-                className="font-display text-5xl md:text-7xl font-black tracking-widest"
+              <p className="text-sm font-body text-white/80 leading-relaxed min-h-[3em]">
+                {naviMessage}
+                {isStreaming && (
+                  <motion.span
+                    className="inline-block w-0.5 h-4 ml-0.5 align-middle"
+                    style={{ background: color }}
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                  />
+                )}
+              </p>
+            </div>
+            {!isStreaming && (
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                onClick={() => onDismiss(newTier)}
+                className="px-8 py-2.5 rounded font-mono text-xs tracking-widest transition-all"
                 style={{
-                  color: tierColor,
-                  textShadow: `0 0 24px ${tierColor}, 0 0 48px ${tierColor}80`,
+                  border: `1px solid ${color}60`,
+                  color,
+                  background: `${color}10`,
                 }}
               >
-                {newTierName}
-              </h1>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* PHASE 3 — new title glows in */}
-        <AnimatePresence>
-          {phase >= 3 && (
-            <motion.div
-              key="new-title"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: "spring", stiffness: 140, damping: 14 }}
-              className="mb-8"
-            >
-              <h2
-                className="font-display text-3xl md:text-5xl font-bold tracking-wide"
-                style={{
-                  color: tierColor,
-                  textShadow: `0 0 16px ${tierColor}cc`,
-                }}
-              >
-                {newTitle}
-              </h2>
-              <p className="text-[10px] font-mono text-muted-foreground tracking-widest mt-2">
-                TIER {newTier} // LEVEL {naviLevel}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* PHASE 4 — NAVI message bubble + continue */}
-        <AnimatePresence>
-          {phase >= 4 && (
-            <motion.div
-              key="bubble"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              className="w-full max-w-xl"
-            >
-              <div
-                className="rounded-lg border p-5 text-left bg-card/80 backdrop-blur-sm"
-                style={{
-                  borderColor: `${tierColor}55`,
-                  boxShadow: `0 0 32px ${tierColor}22`,
-                }}
-              >
-                <p
-                  className="text-[10px] font-mono mb-2 tracking-widest"
-                  style={{ color: tierColor }}
-                >
-                  {naviName.toUpperCase()} //
-                </p>
-                <p className="text-sm md:text-base font-body text-foreground leading-relaxed">
-                  {streamed}
-                  {streamed.length < fullMessage.length && (
-                    <span
-                      className="inline-block w-1.5 h-4 ml-1 align-middle animate-pulse"
-                      style={{ backgroundColor: tierColor }}
-                    />
-                  )}
-                </p>
-              </div>
-
-              {streamed.length >= fullMessage.length && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3, duration: 0.4 }}
-                  className="mt-6 flex justify-center"
-                >
-                  <button
-                    onClick={handleDismiss}
-                    className="px-8 py-3 rounded border-2 font-display font-bold tracking-widest text-sm bg-card/60 hover:bg-card transition-all"
-                    style={{
-                      borderColor: tierColor,
-                      color: tierColor,
-                      textShadow: `0 0 8px ${tierColor}99`,
-                      boxShadow: `0 0 16px ${tierColor}55`,
-                    }}
-                  >
-                    CONTINUE →
-                  </button>
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                CONTINUE →
+              </motion.button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 
-  return createPortal(overlay, document.body);
+  return createPortal(content, document.body);
 }

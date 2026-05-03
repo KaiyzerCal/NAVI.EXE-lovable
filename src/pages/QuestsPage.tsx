@@ -5,11 +5,13 @@ import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Swords, Plus, Check, X, Star, Zap, Target, BookOpen,
-  Layers, Pencil, Copy, RotateCcw, Eye, Loader2,
+  Layers, Pencil, Copy, RotateCcw, Eye, Loader2, ChevronDown, ChevronUp,
+  Briefcase, Heart, Brain, Users, Coins, Globe,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { Quest, QuestType, CreateQuestInput } from "@/hooks/useQuests";
+import UploadZone from "@/components/UploadZone";
 import { usePaywall } from "@/hooks/usePaywall";
 import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
@@ -23,6 +25,184 @@ const TYPE_CONFIG: Record<QuestType, { color: string; bg: string; border: string
 };
 const TYPE_ORDER: QuestType[] = ["Main", "Side", "Weekly", "Daily", "Minor", "Epic"];
 
+// ─── Domain (ATLAS-style) configuration ──────────────────────────────────────
+type DomainKey = "CAREER" | "HEALTH" | "MIND" | "SOCIAL" | "FINANCE";
+interface Domain {
+  key: DomainKey;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+  border: string;
+  glowBorder: string;
+  glow: string;
+  activityBg: string;
+  badgeBg: string;
+  bar: "cyan" | "green" | "purple" | "amber";
+  keywords: string[];
+}
+const DOMAINS: Domain[] = [
+  { key: "CAREER",  label: "CAREER",  icon: <Briefcase size={18} />, color: "text-blue-400",   border: "border-blue-500/30",   glowBorder: "border-blue-500",   glow: "shadow-blue-500/40",   activityBg: "bg-blue-500",   badgeBg: "bg-blue-400/10 border-blue-500/30",   bar: "cyan",   keywords: ["work", "career", "job", "business", "project", "client", "income", "revenue", "sales", "code", "build", "launch"] },
+  { key: "HEALTH",  label: "HEALTH",  icon: <Heart size={18} />,     color: "text-green-400",  border: "border-green-500/30",  glowBorder: "border-green-500",  glow: "shadow-green-500/40",  activityBg: "bg-green-500",  badgeBg: "bg-green-400/10 border-green-500/30",  bar: "green",  keywords: ["fitness", "health", "gym", "workout", "run", "diet", "sleep", "wellness", "exercise", "training"] },
+  { key: "MIND",    label: "MIND",    icon: <Brain size={18} />,     color: "text-purple-400", border: "border-purple-500/30", glowBorder: "border-purple-500", glow: "shadow-purple-500/40", activityBg: "bg-purple-500", badgeBg: "bg-purple-400/10 border-purple-500/30", bar: "purple", keywords: ["study", "learn", "read", "book", "course", "skill", "knowledge", "meditat", "mindset", "focus", "journal"] },
+  { key: "SOCIAL",  label: "SOCIAL",  icon: <Users size={18} />,     color: "text-yellow-400", border: "border-yellow-500/30", glowBorder: "border-yellow-500", glow: "shadow-yellow-500/40", activityBg: "bg-yellow-500", badgeBg: "bg-yellow-400/10 border-yellow-500/30", bar: "amber",  keywords: ["friend", "family", "relationship", "party", "social", "network", "community", "team", "event"] },
+  { key: "FINANCE", label: "FINANCE", icon: <Coins size={18} />,     color: "text-orange-400", border: "border-orange-500/30", glowBorder: "border-amber-400",  glow: "shadow-amber-400/40",  activityBg: "bg-amber-500",  badgeBg: "bg-orange-400/10 border-orange-500/30", bar: "amber",  keywords: ["finance", "money", "budget", "invest", "save", "debt", "expense", "crypto", "stock"] },
+];
+
+function getEvolutionLevel(score: number): 0 | 1 | 2 | 3 {
+  if (score < 2) return 0;
+  if (score < 5) return 1;
+  if (score < 10) return 2;
+  return 3;
+}
+const EVOLUTION_LABELS = ["DORMANT", "AWAKENING", "ACTIVE", "EVOLVED"] as const;
+function textInDomain(text: string, kws: string[]) {
+  const t = text.toLowerCase();
+  return kws.some((k) => t.includes(k));
+}
+function questInDomain(q: Quest, kws: string[]) {
+  return textInDomain(`${q.name} ${q.description ?? ""}`, kws);
+}
+function DomainRoomCard({
+  domain, quests, entryCount, skillCount, onPick,
+}: {
+  domain: Domain; quests: Quest[]; entryCount: number; skillCount: number; onPick: (q: Quest) => void;
+}) {
+  const dq = quests.filter((q) => questInDomain(q, domain.keywords));
+  const active = dq.filter((q) => !q.completed);
+  const done = dq.filter((q) => q.completed);
+  const total = dq.length;
+  const preview = active.slice(0, 3);
+
+  const activityScore = dq.length + entryCount * 0.5 + skillCount * 0.3;
+  const level = getEvolutionLevel(activityScore);
+  const isDim = level === 0;
+  const isPulsing = level === 3;
+
+  const borderClass = level === 0 ? "border-border" : level === 1 ? domain.border : domain.glowBorder;
+  const shadowClass = level >= 2 ? `shadow-lg ${domain.glow}` : "";
+
+  return (
+    <motion.div
+      variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+      transition={{ duration: 0.4 }}
+      className={`relative bg-card border ${borderClass} ${shadowClass} rounded p-4 flex flex-col gap-3 transition-all duration-500`}
+    >
+      {isPulsing && (
+        <motion.div
+          className={`absolute inset-0 rounded border ${domain.glowBorder} pointer-events-none`}
+          animate={{ opacity: [0.6, 0.15, 0.6] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        />
+      )}
+
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-9 h-9 rounded flex items-center justify-center shrink-0 transition-colors duration-500 ${isDim ? "bg-muted/30 text-muted-foreground" : `border ${domain.glowBorder} ${domain.color}`}`}>
+            {domain.icon}
+          </div>
+          <div>
+            <h3 className={`font-display text-sm font-bold tracking-widest ${isDim ? "text-muted-foreground" : domain.color}`}>{domain.label}</h3>
+            <span className={`font-mono text-[10px] tracking-widest opacity-70 ${isDim ? "text-muted-foreground/50" : domain.color}`}>
+              {EVOLUTION_LABELS[level]}
+            </span>
+          </div>
+        </div>
+        <div className={`text-[10px] font-mono font-bold px-2 py-1 rounded border ${isDim ? "bg-muted/10 text-muted-foreground border-border" : `${domain.badgeBg} ${domain.color}`}`}>
+          LVL {level}
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {[
+          { label: "QUESTS", value: dq.length },
+          { label: "ENTRIES", value: entryCount },
+          { label: "SKILLS", value: skillCount },
+        ].map(({ label, value }) => (
+          <div key={label} className="flex flex-col items-center gap-0.5 bg-muted/10 rounded py-2 px-1">
+            <span className={`font-display font-bold text-lg leading-none ${isDim ? "text-muted-foreground" : domain.color}`}>{value}</span>
+            <span className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Activity score bar */}
+      <div className="space-y-1">
+        <div className="flex justify-between items-center">
+          <span className="font-mono text-[10px] text-muted-foreground tracking-widest">ACTIVITY</span>
+          <span className={`font-mono text-[10px] font-bold ${isDim ? "text-muted-foreground" : domain.color}`}>{activityScore.toFixed(1)}</span>
+        </div>
+        <div className="h-1 bg-muted/20 rounded-full overflow-hidden">
+          <motion.div
+            className={`h-full rounded-full ${isDim ? "bg-muted/40" : domain.activityBg}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min((activityScore / 10) * 100, 100)}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          />
+        </div>
+      </div>
+
+      {/* Quest progress */}
+      <div>
+        <ProgressBar value={done.length} max={Math.max(total, 1)} variant={domain.bar} showValue={false} size="sm" />
+        <p className="text-[10px] font-mono text-muted-foreground mt-1">{done.length}/{total} quests done</p>
+      </div>
+
+      {/* Active quest previews */}
+      <div className="space-y-1">
+        {preview.length === 0 ? (
+          <p className="text-xs font-mono text-muted-foreground italic">No active quests in this domain.</p>
+        ) : (
+          preview.map((q) => (
+            <button key={q.id} onClick={() => onPick(q)} className="w-full text-left flex items-start gap-2 hover:bg-muted/40 rounded px-1 py-0.5 transition-colors">
+              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${isDim ? "bg-muted-foreground/50" : domain.activityBg}`} />
+              <p className="text-xs font-body text-foreground/80 leading-tight truncate">{q.name}</p>
+            </button>
+          ))
+        )}
+        {active.length > 3 && (
+          <p className="text-[10px] font-mono text-muted-foreground pl-3.5">+{active.length - 3} more</p>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Quest Templates ──────────────────────────────────────────────────────────
+interface QuestTemplate {
+  name: string;
+  description: string;
+  type: QuestType;
+  xp_reward: number;
+  total: number;
+  category: string;
+}
+
+const QUEST_TEMPLATES: QuestTemplate[] = [
+  { category: "Fitness", name: "Morning Run", description: "Run 5km before 9am", type: "Daily", xp_reward: 50, total: 1 },
+  { category: "Fitness", name: "Strength Circuit", description: "Complete 3 sets of push-ups, pull-ups, and squats", type: "Daily", xp_reward: 60, total: 3 },
+  { category: "Fitness", name: "30-Day Fitness Challenge", description: "Complete a daily workout for 30 consecutive days", type: "Epic", xp_reward: 100, total: 30 },
+  { category: "Fitness", name: "Hydration Protocol", description: "Drink 2L of water today", type: "Minor", xp_reward: 20, total: 1 },
+  { category: "Fitness", name: "Weekly Long Run", description: "Complete a 10km+ run this week", type: "Weekly", xp_reward: 80, total: 1 },
+  { category: "Business", name: "Deep Work Block", description: "Complete 2 hours of focused, distraction-free work", type: "Daily", xp_reward: 60, total: 1 },
+  { category: "Business", name: "Revenue Goal", description: "Hit monthly revenue target", type: "Main", xp_reward: 100, total: 1 },
+  { category: "Business", name: "Content Creation", description: "Create and publish 1 piece of content", type: "Side", xp_reward: 70, total: 1 },
+  { category: "Business", name: "Weekly Review", description: "Review goals, wins, and blockers for the week", type: "Weekly", xp_reward: 50, total: 1 },
+  { category: "Business", name: "Client Outreach", description: "Send 5 outreach messages to potential clients", type: "Minor", xp_reward: 40, total: 5 },
+  { category: "Learning", name: "Daily Reading", description: "Read 20+ pages of a non-fiction book", type: "Daily", xp_reward: 40, total: 1 },
+  { category: "Learning", name: "Learn a New Skill", description: "Complete an online course or tutorial", type: "Side", xp_reward: 80, total: 1 },
+  { category: "Learning", name: "Language Practice", description: "Practice a language for 15+ minutes", type: "Minor", xp_reward: 30, total: 1 },
+  { category: "Learning", name: "Finish a Book", description: "Read and finish an entire book", type: "Epic", xp_reward: 90, total: 1 },
+  { category: "Relationships", name: "Check In", description: "Reach out and genuinely connect with a friend or family member", type: "Minor", xp_reward: 30, total: 1 },
+  { category: "Relationships", name: "Quality Time", description: "Spend intentional time with someone you care about", type: "Side", xp_reward: 60, total: 1 },
+  { category: "Relationships", name: "30-Day Connection Challenge", description: "Make a meaningful connection with someone new each week", type: "Epic", xp_reward: 80, total: 4 },
+  { category: "Creativity", name: "Daily Creative Output", description: "Create something — art, writing, music, or design", type: "Daily", xp_reward: 50, total: 1 },
+  { category: "Creativity", name: "Side Project Sprint", description: "Work on a personal creative project for 1+ hour", type: "Weekly", xp_reward: 70, total: 1 },
+  { category: "Creativity", name: "Ship Something", description: "Launch or publish a creative project publicly", type: "Main", xp_reward: 100, total: 1 },
+];
+
+const TEMPLATE_CATEGORIES = ["Fitness", "Business", "Learning", "Relationships", "Creativity"];
 interface QuestFormState {
   name: string;
   description: string;
@@ -113,6 +293,11 @@ function QuestFormCard({
             min={1}
             className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors"
           />
+        </div>
+        <div>
+          <label className="text-[10px] font-mono text-muted-foreground block mb-1">ATTACHMENTS (optional)</label>
+          <UploadZone linkedEntityType="quest" compact />
+          <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Files attached here become reference material NAVI can read.</p>
         </div>
         <div className="flex gap-2 pt-1">
           <button
@@ -216,14 +401,17 @@ function QuestDetailModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function QuestsPage() {
-  const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest } = useAppData();
+  const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest, entries, skills } = useAppData();
   const paywall = usePaywall();
-  const [filter, setFilter] = useState<"all" | "active" | "completed">("active");
+  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
   const [viewingQuest, setViewingQuest] = useState<Quest | null>(null);
   const [editingQuest, setEditingQuest] = useState<Quest | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateCategory, setTemplateCategory] = useState<string>("Fitness");
+  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
 
   const activeCount = quests.filter((q) => !q.completed).length;
   const canCreate = paywall.canCreateQuest(activeCount);
@@ -303,6 +491,10 @@ export default function QuestsPage() {
     );
   }
 
+  const classifiedIds = new Set<string>();
+  DOMAINS.forEach((d) => quests.forEach((q) => { if (questInDomain(q, d.keywords)) classifiedIds.add(q.id); }));
+  const unclassified = quests.filter((q) => !classifiedIds.has(q.id) && !q.completed);
+
   return (
     <div>
       <PageHeader title="QUESTS" subtitle="// MISSION CONTROL">
@@ -350,6 +542,143 @@ export default function QuestsPage() {
             <p className="text-[9px] font-mono text-muted-foreground">{s.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Templates */}
+      <div className="mb-4 border border-border rounded-lg overflow-hidden">
+        <button
+          onClick={() => setShowTemplates((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/20 transition-colors"
+        >
+          <span className="text-xs font-mono text-muted-foreground">// QUEST TEMPLATES</span>
+          {showTemplates ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+        </button>
+        <AnimatePresence>
+          {showTemplates && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="border-t border-border px-4 pt-3 pb-4">
+                <div className="flex gap-1.5 flex-wrap mb-3">
+                  {TEMPLATE_CATEGORIES.map((cat) => (
+                    <button key={cat} onClick={() => setTemplateCategory(cat)}
+                      className={`px-3 py-1 rounded text-[10px] font-mono transition-colors ${templateCategory === cat ? "bg-primary/10 text-primary border border-primary/30" : "text-muted-foreground border border-border hover:border-primary/20"}`}>
+                      {cat.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {QUEST_TEMPLATES.filter((t) => t.category === templateCategory).map((tpl) => {
+                    const cfg = TYPE_CONFIG[tpl.type];
+                    const isOpen = expandedTemplate === tpl.name;
+                    return (
+                      <div key={tpl.name} className="rounded border border-border bg-card/50 hover:border-primary/20 transition-colors overflow-hidden">
+                        <button
+                          onClick={() => setExpandedTemplate(isOpen ? null : tpl.name)}
+                          className="w-full flex items-center gap-3 p-3 text-left"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${cfg.bg} ${cfg.color} ${cfg.border}`}>{cfg.icon} {cfg.label}</span>
+                              <span className="text-xs font-body font-bold text-foreground truncate">{tpl.name}</span>
+                            </div>
+                            <p className="text-[10px] font-mono text-muted-foreground truncate">{tpl.description}</p>
+                          </div>
+                          <p className="text-[10px] font-mono text-green-400 shrink-0">+{tpl.xp_reward} XP</p>
+                          {isOpen ? <ChevronUp size={14} className="text-muted-foreground shrink-0" /> : <ChevronDown size={14} className="text-muted-foreground shrink-0" />}
+                        </button>
+                        <AnimatePresence>
+                          {isOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden border-t border-border"
+                            >
+                              <div className="p-3 space-y-2 bg-muted/10">
+                                <div>
+                                  <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-1">DESCRIPTION</p>
+                                  <p className="text-xs font-body text-foreground/90 whitespace-pre-wrap">{tpl.description}</p>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div>
+                                    <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">TYPE</p>
+                                    <p className={`text-xs font-mono ${cfg.color}`}>{cfg.label}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">STEPS</p>
+                                    <p className="text-xs font-mono text-foreground">{tpl.total}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">XP</p>
+                                    <p className="text-xs font-mono text-green-400">+{tpl.xp_reward}</p>
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-0.5">CATEGORY</p>
+                                  <p className="text-xs font-mono text-foreground">{tpl.category}</p>
+                                </div>
+                                <button
+                                  onClick={async (e) => { e.stopPropagation(); setSaving(true); await createQuest({ name: tpl.name, description: tpl.description, type: tpl.type, total: tpl.total, xp_reward: tpl.xp_reward } as CreateQuestInput); setSaving(false); toast({ title: "Quest created", description: `"${tpl.name}" added to your log.` }); }}
+                                  disabled={saving}
+                                  className="w-full px-2.5 py-2 rounded border border-primary/30 bg-primary/10 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-50"
+                                >
+                                  USE THIS TEMPLATE
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ATLAS — Domain Rooms */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Globe size={14} className="text-primary" />
+          <h2 className="font-display text-xs font-bold tracking-widest text-primary">// OPERATOR WORLD · DOMAIN ROOMS</h2>
+        </div>
+        <motion.div
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
+        >
+          {DOMAINS.map((d) => {
+            const entryCount = entries.filter((e) => textInDomain(`${e.title} ${e.content}`, d.keywords)).length;
+            const skillCount = skills.filter((s) => textInDomain(`${s.name} ${s.description} ${s.category}`, d.keywords)).length;
+            return (
+              <DomainRoomCard key={d.key} domain={d} quests={quests} entryCount={entryCount} skillCount={skillCount} onPick={setViewingQuest} />
+            );
+          })}
+        </motion.div>
+        {unclassified.length > 0 && (
+          <div className="mt-3">
+            <HudCard title="UNCLASSIFIED" icon={<Swords size={14} />}>
+              <p className="text-[10px] font-mono text-muted-foreground mb-2">
+                {unclassified.length} quest{unclassified.length !== 1 ? "s" : ""} without a domain match
+              </p>
+              <div className="space-y-1">
+                {unclassified.map((q) => (
+                  <button key={q.id} onClick={() => setViewingQuest(q)} className="w-full text-left flex items-start gap-2 hover:bg-muted/40 rounded px-1 py-0.5 transition-colors">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
+                    <p className="text-xs font-body text-foreground/80 truncate">{q.name}</p>
+                  </button>
+                ))}
+              </div>
+            </HudCard>
+          </div>
+        )}
       </div>
 
       {/* New / Edit Form */}

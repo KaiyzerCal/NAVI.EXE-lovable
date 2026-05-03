@@ -1,21 +1,21 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw, Paperclip } from "lucide-react";
 import VoiceInput from "@/components/VoiceInput";
+import UploadZone from "@/components/UploadZone";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { parseActions, executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
+import { executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
-import { usePaywall } from "@/hooks/usePaywall";
-import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
+const CHAT_URL        = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
 const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
+const EMBED_URL       = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-embed-memories`;
 
 const CLIENT_FALLBACK_ACTION_TYPES = new Set([
   "create_journal",
@@ -42,14 +42,11 @@ const CLIENT_FALLBACK_ACTION_TYPES = new Set([
 ]);
 
 function isJournalIntent(message: string): boolean {
-  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)\s/i.test(message);
+  return /(journal|vault|log|entry|note|record|diary)/i.test(message) && /(create|write|save|log|record|add|make|new)/i.test(message);
 }
 
 function isQuestIntent(message: string): boolean {
-  // Require explicit action words — casual mentions of goals/tasks should NOT trigger quest creation
-  const hasActionWord = /(create|make|add|new|start|set up|give me|track)\s/i.test(message);
-  const hasQuestWord = /(quest|mission)/i.test(message);
-  return hasActionWord && hasQuestWord;
+  return /(quest|task|mission|objective|goal|challenge|todo|to-do)/i.test(message) && /(create|make|add|new|start|set up|give me)/i.test(message);
 }
 
 function isSkillIntent(message: string): boolean {
@@ -229,7 +226,7 @@ async function streamChat({
   signal: AbortSignal;
   accessToken: string;
   onDelta: (text: string) => void;
-  onDone: () => void;
+  onDone: (actions: NaviAction[]) => void;
 }) {
   const resp = await fetch(CHAT_URL, {
     method: "POST",
@@ -243,71 +240,16 @@ async function streamChat({
   });
 
   if (!resp.ok) {
-    if (resp.status === 429) {
-      // Retry once after a short delay
-      await new Promise((r) => setTimeout(r, 3000));
-      const retry = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ messages, context }),
-        signal,
-      });
-      if (!retry.ok) {
-        const err = await retry.json().catch(() => ({ error: "Rate limited" }));
-        throw new Error(err.error || "Rate limit exceeded. Please wait a moment.");
-      }
-      // Use retry response going forward
-      const retryBody = retry.body;
-      if (!retryBody) throw new Error("No response body");
-      const retryReader = retryBody.getReader();
-      const retryDecoder = new TextDecoder();
-      let retryBuffer = "";
-      while (true) {
-        const { done, value } = await retryReader.read();
-        if (done) break;
-        retryBuffer += retryDecoder.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = retryBuffer.indexOf("\n")) !== -1) {
-          let line = retryBuffer.slice(0, idx);
-          retryBuffer = retryBuffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const json = line.slice(6).trim();
-          if (json === "[DONE]") { onDone(); return; }
-          try {
-            const parsed = JSON.parse(json);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) onDelta(content);
-          } catch { /* partial chunk */ }
-        }
-      }
-      onDone();
-      return;
-    }
     const err = await resp.json().catch(() => ({ error: "Request failed" }));
     throw new Error(err.error || `Request failed (${resp.status})`);
   }
 
   if (!resp.body) throw new Error("No response body");
 
-  // If the function returns plain JSON (non-streaming), emit the whole reply.
-  const contentType = resp.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    const data = await resp.json();
-    if (data?.error) throw new Error(data.error);
-    const text = data?.reply ?? data?.choices?.[0]?.message?.content ?? "";
-    if (text) onDelta(text);
-    onDone();
-    return;
-  }
-
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let extractedActions: NaviAction[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -321,9 +263,14 @@ async function streamChat({
       if (line.endsWith("\r")) line = line.slice(0, -1);
       if (!line.startsWith("data: ")) continue;
       const json = line.slice(6).trim();
-      if (json === "[DONE]") { onDone(); return; }
+      if (json === "[DONE]") { onDone(extractedActions); return; }
       try {
         const parsed = JSON.parse(json);
+        // Handle navi_actions event injected by the edge function
+        if (parsed.navi_actions && Array.isArray(parsed.navi_actions)) {
+          extractedActions = parsed.navi_actions;
+          continue;
+        }
         const content = parsed.choices?.[0]?.delta?.content;
         if (content) onDelta(content);
       } catch {
@@ -332,7 +279,7 @@ async function streamChat({
       }
     }
   }
-  onDone();
+  onDone(extractedActions);
 }
 
 const INITIAL_MESSAGE: DisplayMessage = {
@@ -344,7 +291,6 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user, session } = useAuth();
-  const paywall = usePaywall();
   const {
     profile, updateProfile, refetchProfile,
     quests, questStats, refetchQuests,
@@ -367,10 +313,51 @@ export default function MavisChat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── TTS state ──────────────────────────────────────────────────────────────
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("mavis.voiceEnabled") === "1";
+  });
   const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
+  const ttsQueueRef = useRef<string[]>([]);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  // Persist voice on/off preference
+  useEffect(() => {
+    try {
+      localStorage.setItem("mavis.voiceEnabled", voiceEnabled ? "1" : "0");
+    } catch {}
+  }, [voiceEnabled]);
+
+  // Pick the best available voice (prefer high-quality neural / natural English voices)
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const pickVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+      const score = (v: SpeechSynthesisVoice) => {
+        const n = v.name.toLowerCase();
+        let s = 0;
+        if (/en[-_]/i.test(v.lang) || /^en$/i.test(v.lang)) s += 10;
+        if (/natural|neural|online|premium|enhanced/.test(n)) s += 8;
+        if (/google/.test(n)) s += 6;
+        if (/microsoft/.test(n) && /(aria|jenny|libby|sonia|natasha|clara)/.test(n)) s += 7;
+        if (/(samantha|karen|victoria|serena|allison|ava|zoe|joanna)/.test(n)) s += 5;
+        if (/female/.test(n)) s += 2;
+        if (v.localService) s += 1;
+        return s;
+      };
+      const sorted = [...voices].sort((a, b) => score(b) - score(a));
+      preferredVoiceRef.current = sorted[0] || null;
+    };
+    pickVoice();
+    window.speechSynthesis.onvoiceschanged = pickVoice;
+    return () => {
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
 
   const stopSpeaking = useCallback(() => {
+    ttsQueueRef.current = [];
     window.speechSynthesis.cancel();
     setCurrentlySpokenId(null);
   }, []);
@@ -378,21 +365,110 @@ export default function MavisChat() {
   const speakMessage = useCallback((msgId: string, content: string) => {
     if (currentlySpokenId === msgId) { stopSpeaking(); return; }
     stopSpeaking();
-    const cleaned = content.replace(/[#*_`~>|[\](){}]/g, "").slice(0, 1000);
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(v => /female|samantha|karen|victoria/i.test(v.name));
-    if (preferred) utterance.voice = preferred;
-    utterance.onend = () => setCurrentlySpokenId(null);
-    utterance.onerror = () => setCurrentlySpokenId(null);
+    // Strip Markdown / code / links / emojis so the voice reads natural prose.
+    const cleaned = content
+      .replace(/```[\s\S]*?```/g, " ")              // fenced code blocks
+      .replace(/`[^`]*`/g, " ")                      // inline code
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")         // images
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")      // links → label
+      .replace(/^\s{0,3}#{1,6}\s+/gm, "")           // headings
+      .replace(/^\s*[-*+]\s+/gm, "")                 // list bullets
+      .replace(/^\s*>\s?/gm, "")                     // blockquotes
+      .replace(/[*_~`>|]/g, "")                      // residual markdown chars
+      .replace(/:::ACTION[\s\S]*?:::/gi, " ")       // navi action tags
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ") // emoji
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return;
+
+    // Split into sentence-sized chunks. Group short sentences together up to
+    // ~240 chars for smoother prosody, and split overly long ones on punctuation.
+    const MAX = 240;
+    const sentences = cleaned.match(/[^.!?\n]+[.!?]+|[^.!?\n]+$/g) || [cleaned];
+    const chunks: string[] = [];
+    let buf = "";
+    const flush = () => { if (buf.trim()) chunks.push(buf.trim()); buf = ""; };
+    for (const s of sentences) {
+      const trimmed = s.trim();
+      if (!trimmed) continue;
+      if (trimmed.length > MAX) {
+        flush();
+        const parts = trimmed.match(/[^,;:]+[,;:]?|.+/g) || [trimmed];
+        let sub = "";
+        for (const p of parts) {
+          if ((sub + " " + p).trim().length > MAX) {
+            if (sub.trim()) chunks.push(sub.trim());
+            sub = p;
+          } else {
+            sub = (sub + " " + p).trim();
+          }
+        }
+        if (sub.trim()) chunks.push(sub.trim());
+        continue;
+      }
+      if ((buf + " " + trimmed).trim().length > MAX) {
+        flush();
+        buf = trimmed;
+      } else {
+        buf = (buf + " " + trimmed).trim();
+      }
+    }
+    flush();
+    if (chunks.length === 0) return;
+
+    const preferred = preferredVoiceRef.current;
+
+    ttsQueueRef.current = chunks;
     setCurrentlySpokenId(msgId);
-    window.speechSynthesis.speak(utterance);
+
+    const speakNext = () => {
+      const next = ttsQueueRef.current.shift();
+      if (!next) {
+        setCurrentlySpokenId(null);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(next);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.05;
+      utterance.volume = 1.0;
+      if (preferred?.lang) utterance.lang = preferred.lang;
+      if (preferred) utterance.voice = preferred;
+      utterance.onend = () => speakNext();
+      utterance.onerror = (e: any) => {
+        // Ignore benign 'interrupted'/'canceled' errors so the queue keeps moving.
+        if (e?.error && e.error !== "interrupted" && e.error !== "canceled") {
+          console.warn("TTS error:", e.error);
+        }
+        speakNext();
+      };
+      window.speechSynthesis.speak(utterance);
+    };
+    speakNext();
   }, [currentlySpokenId, stopSpeaking]);
+
+  // Stop any in-flight speech when the chat unmounts.
+  useEffect(() => {
+    return () => {
+      try { window.speechSynthesis.cancel(); } catch {}
+    };
+  }, []);
 
   // Auto-speak new assistant messages when voice is enabled
   const lastMessageRef = useRef<string | null>(null);
+
+  // Chrome pauses speechSynthesis after ~15s. Periodically pause/resume
+  // to keep the queue running through long messages.
+  useEffect(() => {
+    if (!currentlySpokenId) return;
+    const id = window.setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, [currentlySpokenId]);
+
   useEffect(() => {
     if (!voiceEnabled) return;
     const lastMsg = messages[messages.length - 1];
@@ -450,6 +526,96 @@ export default function MavisChat() {
     })();
   }, [user]);
 
+  // ── Load recent message threads for NAVI context ───────────────────────────
+  const [messageThreadContext, setMessageThreadContext] = useState<any[]>([]);
+  // ── Load recent media uploads for NAVI context ─────────────────────────────
+  const [mediaContext, setMediaContext] = useState<any[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+
+  const refreshMediaContext = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("media")
+      .select("file_name, file_type, file_url, ai_description, linked_entity_type, linked_entity_id, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    if (data) {
+      setMediaContext(
+        data.map((m: any) => ({
+          file_name: m.file_name,
+          type: m.file_type,
+          url: m.file_url,
+          ai_description: m.ai_description ?? null,
+          linked_to: m.linked_entity_type
+            ? `${m.linked_entity_type}${m.linked_entity_id ? ":" + m.linked_entity_id : ""}`
+            : null,
+          uploaded_at: m.created_at,
+        }))
+      );
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshMediaContext();
+  }, [refreshMediaContext]);
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data: threads } = await supabase
+        .from("navi_message_threads")
+        .select("id, sender_user_id, receiver_user_id, deleted_by_sender, deleted_by_recipient, last_message_at")
+        .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
+        .order("last_message_at", { ascending: false })
+        .limit(15);
+      if (!threads || threads.length === 0) return;
+
+      // Exclude threads the operator has deleted on their side
+      const visibleThreads = threads.filter((t: any) => {
+        if (t.sender_user_id === user.id) return !t.deleted_by_sender;
+        return !t.deleted_by_recipient;
+      });
+      if (visibleThreads.length === 0) return;
+
+      const otherIds = visibleThreads.map((t: any) =>
+        t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
+      ).filter(Boolean);
+
+      const { data: otherProfiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, navi_name")
+        .in("id", otherIds);
+
+      const profileMap: Record<string, any> = {};
+      for (const p of otherProfiles || []) profileMap[p.id] = p;
+
+      const contexts = await Promise.all(
+        visibleThreads.map(async (t: any) => {
+          const otherId = t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id;
+          const other = profileMap[otherId] || {};
+          const { data: msgs } = await supabase
+            .from("navi_messages")
+            .select("content, sender_user_id, created_at, attachment_name, attachment_type, attachment_url")
+            .eq("thread_id", t.id)
+            .order("created_at", { ascending: false })
+            .limit(25);
+          return {
+            with: other.display_name || other.navi_name || "Unknown",
+            messages: (msgs || []).reverse().map((m: any) => ({
+              from: m.sender_user_id === user.id ? "me" : (other.display_name || "them"),
+              text: (m.content || "").slice(0, 1200),
+              at: m.created_at,
+              attachment: m.attachment_name
+                ? `${m.attachment_name}${m.attachment_type ? ` (${m.attachment_type})` : ""}`
+                : undefined,
+            })),
+          };
+        })
+      );
+      setMessageThreadContext(contexts.filter((c) => c.messages.length > 0));
+    })();
+  }, [user]);
+
   // ── Auto-scroll & scroll button ───────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
@@ -481,7 +647,7 @@ export default function MavisChat() {
     setIsLoading(false);
   }, []);
 
-  // ── Clear thread (auto-triggers OmniSync) ───────────────────────────────
+  // ── Clear thread ──────────────────────────────────────────────────────────
   const clearThread = useCallback(async () => {
     if (!user || !conversationId) {
       setMessages([INITIAL_MESSAGE]);
@@ -489,117 +655,37 @@ export default function MavisChat() {
       return;
     }
 
-    setIsSyncing(true);
-    try {
-      // ─── Full OmniSync before clearing ───
-      const realMessages = messages.filter(m => m.id !== "initial" && m.id !== "streaming");
-      const userMsgs = realMessages.filter(m => m.role === "user");
-      const assistantMsgs = realMessages.filter(m => m.role === "assistant");
+    // Extract memories from last 50 user messages before clearing
+    const userMsgs = messages.filter(m => m.role === "user").slice(-50);
+    const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
 
-      // 1. Extract pattern-based memories from ALL user messages
-      const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
-
-      // 2. Build detailed thread summary — capture full conversation pairs
-      const threadParts: string[] = [];
-      for (let i = 0; i < userMsgs.length; i++) {
-        const uMsg = userMsgs[i];
-        threadParts.push(`U: ${uMsg.content.substring(0, 200)}`);
-        const uIdx = realMessages.indexOf(uMsg);
-        const reply = realMessages.slice(uIdx + 1).find(m => m.role === "assistant");
-        if (reply) {
-          // Keep more detail — actions taken, key info shared
-          threadParts.push(`N: ${reply.content.substring(0, 300)}`);
-        }
-      }
-      const condensedThread = threadParts.join("\n").substring(0, 5000);
-
-      // 3. Also save raw assistant insights — things NAVI told the user
-      const naviInsights = assistantMsgs
-        .filter(m => m.content.length > 80)
-        .slice(-15)
-        .map(m => m.content.substring(0, 250))
-        .join(" | ")
-        .substring(0, 2000);
-
-      // 4. Build app state snapshot
-      const stateSnapshot = [
-        `Level: ${profile.navi_level} | XP: ${profile.xp_total} | Streak: ${profile.current_streak}d`,
-        `Bond: A${profile.bond_affection}/T${profile.bond_trust}/L${profile.bond_loyalty}`,
-        `Class: ${profile.character_class || "None"} | MBTI: ${profile.mbti_type || "None"} | Subclass: ${profile.subclass || "None"}`,
-        `Active Quests: ${quests.filter(q => !q.completed).map(q => q.name).join(", ") || "None"}`,
-        `Completed Quests: ${quests.filter(q => q.completed).length}`,
-        `Skills: ${skills.map(s => `${s.name} L${s.level}`).join(", ") || "None"}`,
-        `Recent Journal: ${entries.slice(0, 5).map(j => j.title).join(", ") || "None"}`,
-        `Equipment: ${equipment.filter(e => e.equipped).map(e => e.name).join(", ") || "None"}`,
-      ].join(" | ");
-
-      // 5. Save all memory rows
-      const memoryRows: Array<{ user_id: string; memory_type: string; content: string; importance: number }> = [];
-
-      for (const item of allMemories) {
-        memoryRows.push({ user_id: user.id, memory_type: item.category, content: item.detail, importance: item.importance });
-      }
-
-      if (condensedThread.length > 50) {
-        memoryRows.push({ user_id: user.id, memory_type: "thread_summary", content: condensedThread, importance: 4 });
-      }
-
-      if (naviInsights.length > 50) {
-        memoryRows.push({ user_id: user.id, memory_type: "navi_insights", content: naviInsights, importance: 3 });
-      }
-
-      memoryRows.push({
+    if (allMemories.length > 0) {
+      const memoryRows = allMemories.map(item => ({
         user_id: user.id,
-        memory_type: "app_snapshot",
-        content: `[${new Date().toISOString().split("T")[0]}] ${stateSnapshot}`,
-        importance: 2,
-      });
-
-      if (memoryRows.length > 0) {
-        const { error: insErr } = await supabase
-          .from("navi_core_memory")
-          .insert(memoryRows as any);
-        if (insErr) {
-          console.error("[CLEAR_THREAD] memory insert failed:", insErr);
-          toast({
-            title: "Memory save failed",
-            description: `OmniSync could not write to long-term memory: ${insErr.message}. Thread NOT cleared.`,
-            variant: "destructive",
-          });
-          return; // Do NOT clear the thread when memory save fails
-        }
-      }
-
-      // 6. Refresh memory context for next conversation
-      const { data } = await supabase
-        .from("navi_core_memory")
-        .select("memory_type, content, importance")
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false })
-        .limit(50);
-      if (data && data.length > 0) {
-        const blocks = compressMemories(data as any);
-        setMemoryContext(buildMemoryContext(blocks));
-      }
-
-      // 7. Delete chat messages from DB (keep conversation shell)
-      await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
-
-      // 8. Clear UI
-      setMessages([INITIAL_MESSAGE]);
-      toast({ title: "⚡ Thread Cleared + OmniSync", description: `Saved ${memoryRows.length} memories. NAVI will remember everything.` });
-    } catch (err) {
-      console.error("[CLEAR_THREAD] OmniSync error:", err);
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      toast({
-        title: "OmniSync failed",
-        description: `Memory not saved: ${msg}. Thread preserved — try again.`,
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
+        memory_type: item.category,
+        content: item.detail,
+        importance: item.importance,
+      }));
+      await supabase.from("navi_core_memory").insert(memoryRows as any);
+      // Embed the newly saved memories in the background
+      fetch(EMBED_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      }).catch(() => {});
     }
-  }, [user, conversationId, messages, profile, quests, skills, entries, equipment]);
+
+    // Delete chat messages from DB (keep conversation shell)
+    await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
+
+    // Clear UI
+    setMessages([INITIAL_MESSAGE]);
+    toast({ title: "Thread cleared", description: "Memories saved to long-term storage." });
+  }, [user, conversationId, messages]);
 
   // ── OmniSync — snapshot app state + condense full thread into memory ───────
   const [isSyncing, setIsSyncing] = useState(false);
@@ -673,18 +759,18 @@ export default function MavisChat() {
       });
 
       if (memoryRows.length > 0) {
-        const { error: insErr } = await supabase
-          .from("navi_core_memory")
-          .insert(memoryRows as any);
-        if (insErr) {
-          console.error("[OMNISYNC] memory insert failed:", insErr);
-          toast({
-            title: "OmniSync failed",
-            description: `Could not save to long-term memory: ${insErr.message}`,
-            variant: "destructive",
-          });
-          return;
-        }
+        await supabase.from("navi_core_memory").insert(memoryRows as any);
+        // Fire-and-forget: generate embeddings for newly saved memories
+        // so the next navi-chat call can find them via semantic search
+        fetch(EMBED_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({ user_id: user.id }),
+        }).catch(() => {});
       }
 
       // Refresh memory context
@@ -702,12 +788,7 @@ export default function MavisChat() {
       toast({ title: "⚡ OmniSync Complete", description: `Saved ${memoryRows.length} memory entries. NAVI's long-term memory updated.` });
     } catch (err) {
       console.error("[OMNISYNC] Error:", err);
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      toast({
-        title: "OmniSync failed",
-        description: msg,
-        variant: "destructive",
-      });
+      toast({ title: "Sync Failed", description: "Could not complete OmniSync.", variant: "destructive" });
     } finally {
       setIsSyncing(false);
     }
@@ -722,24 +803,6 @@ export default function MavisChat() {
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || !user || !session?.access_token || !conversationId) return;
-
-    // Paywall: free tier daily AI message cap (owners/Core users bypass).
-    if (!paywall.hasFullAccess) {
-      const { data: newCount, error: rpcErr } = await supabase.rpc("consume_message_credit");
-      if (rpcErr) {
-        console.error("[MavisChat] consume_message_credit failed:", rpcErr);
-        toast({ title: "Error", description: "Could not verify message credits.", variant: "destructive" });
-        return;
-      }
-      if ((newCount as number) > paywall.limits.DAILY_AI_MESSAGES) {
-        toast({
-          title: "Daily limit reached",
-          description: `Free tier: ${paywall.limits.DAILY_AI_MESSAGES} messages/day. Upgrade to Core for unlimited.`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
 
     const userContent = input.trim();
     setInput("");
@@ -770,11 +833,9 @@ export default function MavisChat() {
     setMessages(updatedMessages);
 
     let assistantContent = "";
-    const allHistory = updatedMessages
+    const chatHistory = updatedMessages
       .filter((m) => m.id !== "initial")
       .map((m) => ({ role: m.role, content: m.content }));
-    // Keep last 20 messages to avoid token overload / rate limits
-    const chatHistory = allHistory.length > 20 ? allHistory.slice(-20) : allHistory;
 
     try {
       await streamChat({
@@ -782,6 +843,7 @@ export default function MavisChat() {
         signal: controller.signal,
         accessToken: session.access_token,
         context: {
+          user_id: user.id,
           navi_name: profile.navi_name,
           display_name: profile.display_name,
           navi_level: profile.navi_level,
@@ -827,30 +889,33 @@ export default function MavisChat() {
             source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,
           })),
           memory_context: memoryContext || undefined,
+          message_threads: messageThreadContext.length > 0 ? messageThreadContext : undefined,
+          media: mediaContext.length > 0 ? mediaContext : undefined,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+          client_now_iso: new Date().toISOString(),
         },
         onDelta: (chunk) => {
           assistantContent += chunk;
-          // Strip action tags from display
-          const { cleanText } = parseActions(assistantContent);
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant" && last.id === "streaming") {
-              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: cleanText } : m));
+              return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantContent } : m));
             }
-            return [...prev, { id: "streaming", role: "assistant", content: cleanText, timestamp: new Date() }];
+            return [...prev, { id: "streaming", role: "assistant", content: assistantContent, timestamp: new Date() }];
           });
         },
-        onDone: async () => {
+        onDone: async (functionCallingActions) => {
           if (controller.signal.aborted) return;
 
-          const { cleanText, actions: parsedActions } = parseActions(assistantContent);
-          const actions = parsedActions.length > 0 ? parsedActions : inferFallbackActions(userContent, cleanText, { quests, entries, skills });
+          const cleanText = assistantContent;
+          // Use function-calling actions; fall back to heuristics only if none extracted
+          const actions = functionCallingActions.length > 0
+            ? functionCallingActions
+            : inferFallbackActions(userContent, cleanText, { quests, entries, skills });
 
-          console.log("[NAVI] Raw response length:", assistantContent.length);
-          console.log("[NAVI] Raw response preview:", assistantContent.slice(0, 500));
-          console.log("[NAVI] Contains :::ACTION:", assistantContent.includes(":::ACTION"));
-          console.log("[NAVI] Parsed actions count:", parsedActions.length);
-          console.log("[NAVI] Fallback actions used:", parsedActions.length === 0 && actions.length > 0);
+          console.log("[NAVI] Response length:", assistantContent.length);
+          console.log("[NAVI] Function-calling actions:", functionCallingActions.length);
+          console.log("[NAVI] Fallback used:", functionCallingActions.length === 0 && actions.length > 0);
           console.log("[NAVI] Actions:", JSON.stringify(actions, null, 2));
 
           if (actions.length > 0) {
@@ -933,24 +998,18 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile, paywall]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,
   // emoji picker, CJK input) which was causing the "sends before I'm done" bug.
-  const composingRef = useRef(false);
-  const handleCompositionStart = useCallback(() => { composingRef.current = true; }, []);
-  const handleCompositionEnd = useCallback(() => {
-    // Small delay to let the compositionend event settle before allowing Enter
-    setTimeout(() => { composingRef.current = false; }, 100);
-  }, []);
-
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !composingRef.current) {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         sendMessage();
       }
+      // Shift+Enter or isComposing → fall through, textarea inserts character naturally
     },
     [sendMessage]
   );
@@ -966,7 +1025,7 @@ export default function MavisChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title="NAVI.EXE" subtitle="// NEURAL LINK ACTIVE">
+      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
@@ -1084,52 +1143,28 @@ export default function MavisChat() {
         )}
       </AnimatePresence>
 
-      {/* Free-tier daily message limit banner */}
-      {!paywall.hasFullAccess &&
-        profile.daily_message_count >= paywall.limits.DAILY_AI_MESSAGES && (
-          <div className="mb-2">
-            <UnlockWithCoreCard
-              title="DAILY MESSAGE LIMIT REACHED"
-              description={`Free tier: ${paywall.limits.DAILY_AI_MESSAGES} AI messages/day. Resets at midnight. Upgrade to Core for unlimited.`}
-            />
-          </div>
-        )}
-
-      {/* Free-tier live "messages left today" indicator */}
-      {!paywall.hasFullAccess &&
-        profile.daily_message_count < paywall.limits.DAILY_AI_MESSAGES && (() => {
-          const used = profile.daily_message_count ?? 0;
-          const total = paywall.limits.DAILY_AI_MESSAGES;
-          const left = Math.max(0, total - used);
-          const pct = Math.min(100, (used / total) * 100);
-          const low = left <= 3;
-          return (
-            <div className="mb-2 px-3 py-2 rounded-md border border-primary/20 bg-card/60 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider mb-1">
-                  <span className={low ? "text-destructive" : "text-muted-foreground"}>
-                    {left} message{left === 1 ? "" : "s"} left today
-                  </span>
-                  <span className="text-muted-foreground/60">{used}/{total}</span>
-                </div>
-                <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-500 ${low ? "bg-destructive" : "bg-primary"}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-              <a
-                href="/upgrade"
-                className="text-[10px] font-mono uppercase tracking-wider text-primary hover:underline shrink-0"
-              >
-                Upgrade
-              </a>
-            </div>
-          );
-        })()}
-
       {/* Input box */}
+      {/* Inline attachment uploader — toggled by paperclip button */}
+      <AnimatePresence>
+        {showUpload && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden mb-2"
+          >
+            <div className="border border-primary/20 rounded-lg p-2 bg-card">
+              <UploadZone
+                compact
+                linkedEntityType="chat"
+                onUploadComplete={() => { refreshMediaContext(); }}
+              />
+              <p className="text-[9px] font-mono text-muted-foreground/60 mt-1">// Attached files become reference material NAVI can read in this chat.</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="border border-primary/20 rounded-lg bg-card flex items-end gap-2 p-3 border-glow">
         {/* Glowing NAVI orb */}
         <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
@@ -1162,19 +1197,28 @@ export default function MavisChat() {
             transition={isLoading ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : {}}
           />
         </div>
-        {/* Voice input */}
-        <VoiceInput
-          onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
-          disabled={isLoading}
-        />
+        {/* Stacked: attach (top) + voice (bottom) to give the textarea more room */}
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            onClick={() => setShowUpload((v) => !v)}
+            className={`w-8 h-8 rounded border flex items-center justify-center transition-colors ${
+              showUpload ? "bg-primary/15 border-primary/40 text-primary" : "bg-muted/40 border-border text-muted-foreground hover:text-primary hover:border-primary/30"
+            }`}
+            title="Attach files"
+          >
+            <Paperclip size={12} />
+          </button>
+          <VoiceInput
+            onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
+            disabled={isLoading}
+          />
+        </div>
         {/* Textarea — clearly visible, grows with content */}
         <textarea
           ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          onCompositionStart={handleCompositionStart}
-          onCompositionEnd={handleCompositionEnd}
           placeholder="Message NAVI... (Enter to send, Shift+Enter for new line)"
           disabled={isLoading}
           rows={1}

@@ -1,28 +1,133 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
-import MbtiQuiz, { MBTI_CLASS_MAP, SUB_CLASSES } from "@/components/MbtiQuiz";
-import { motion } from "framer-motion";
-import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, CheckCircle2, Sparkles } from "lucide-react";
+import MbtiQuiz, { SUB_CLASSES } from "@/components/MbtiQuiz";
+import { MBTI_CLASS_MAP } from "@/lib/classEvolution";
+import {
+  tierFromLevel,
+  TIER_NAMES,
+  TIER_THRESHOLDS,
+  TIER_COLORS,
+  evolutionTitleFromMbtiAndLevel,
+  totalXpForLevel,
+  tierProgressPercent,
+} from "@/lib/xpSystem";
+import { motion, AnimatePresence } from "framer-motion";
+import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, ChevronRight, Layers, Wand2, Cpu, Loader2 as LoaderIcon } from "lucide-react";
 import GuildPanel from "@/components/GuildPanel";
-import { useState, useCallback } from "react";
+import NaviMilestones from "@/components/NaviMilestones";
+import { useState, useCallback, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppData } from "@/contexts/AppDataContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { getNaviCharacter } from "@/components/navi-characters";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  SKIN_DEFINITIONS,
+  SKIN_CATEGORIES,
+  RARITY_COLORS as SKIN_RARITY_COLORS,
+  RARITY_GLOW,
+  isSkinUnlocked,
+  type SkinCategory,
+  type SkinRarity,
+  type UnlockState,
+} from "@/lib/skinUnlockSystem";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import {
-  TIER_COLORS,
-  TIER_NAMES,
-  tierFromLevel,
-  tierThreshold,
-  tierProgressPercent,
-  nextTierThreshold,
-  evolutionTitleFromMbtiAndLevel,
-  classNameFromMbti,
-  MBTI_CLASS_MAP as EVO_MAP,
-  type Tier,
-} from "@/lib/xpSystem";
+import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
 
-const tabs = ["CHARACTER INFO", "SKILLS", "EQUIPMENT", "EFFECTS"] as const;
+// Skills, Inventory, and Effects are placed up front so they're impossible to miss.
+const tabs = ["CHARACTER INFO", "SKILLS", "INVENTORY", "EFFECTS", "NAVI / SKINS"] as const;
+
+// ── Skin collection metadata (mirrors SkinsPage) ──────────────────────────
+const SKIN_CATEGORY_LABELS: Record<SkinCategory, string> = {
+  CLASS: "CLASS", ELEMENTAL: "ELEMENTAL", NATURE: "NATURE", TECH: "TECH",
+  MYTHIC: "MYTHIC", COSMIC: "COSMIC", SPECIAL: "SPECIAL",
+};
+const RARITY_ORDER: SkinRarity[] = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
+const RARITY_AI_COLOR: Record<SkinRarity, string> = {
+  COMMON: "silver and white",
+  UNCOMMON: "green and emerald",
+  RARE: "blue and cyan",
+  EPIC: "purple and violet",
+  LEGENDARY: "orange and gold fire",
+};
+type ViewMode = "SVG" | "AI";
+
+function SkinCard({
+  skinId, isUnlocked, isEquipped, onEquip, viewMode,
+}: {
+  skinId: string; isUnlocked: boolean; isEquipped: boolean;
+  onEquip: () => void; viewMode: ViewMode;
+}) {
+  const def = SKIN_DEFINITIONS.find((s) => s.id === skinId)!;
+  const NaviComponent = getNaviCharacter(skinId);
+  const rarityColor = SKIN_RARITY_COLORS[def.rarity];
+  const glow = RARITY_GLOW[def.rarity];
+  const [imgError, setImgError] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const storageUrl = `${supabaseUrl}/storage/v1/object/public/navi-skins/${def.name.toLowerCase()}.png`;
+
+  async function generateAiSkin(e: React.MouseEvent) {
+    e.stopPropagation();
+    setGenerating(true);
+    await supabase.functions.invoke("navi-generate-skin", {
+      body: { skinName: def.name, skinColor: RARITY_AI_COLOR[def.rarity] },
+    });
+    setImgError(false);
+    setGenerating(false);
+  }
+
+  const showAi = viewMode === "AI" && isUnlocked;
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className={`relative rounded-lg border p-3 flex flex-col items-center gap-2 cursor-pointer transition-all group
+        ${isEquipped ? "border-primary/70 bg-primary/10"
+          : isUnlocked ? "border-border hover:border-primary/40 bg-card hover:bg-muted/10"
+          : "border-border/40 bg-muted/5 opacity-50"}`}
+      style={isEquipped ? { boxShadow: "0 0 12px rgba(56,189,248,0.2)" } : undefined}
+      onClick={isUnlocked ? onEquip : undefined}
+    >
+      <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full"
+        style={{ backgroundColor: rarityColor, boxShadow: glow }} />
+      {isEquipped && (
+        <div className="absolute top-1.5 right-1.5 bg-primary text-black text-[8px] font-mono px-1.5 py-0.5 rounded-full">ON</div>
+      )}
+      <div className="w-14 h-14 relative flex items-center justify-center">
+        {showAi && !imgError ? (
+          <img src={storageUrl} alt={def.name} className="w-14 h-14 object-contain rounded" onError={() => setImgError(true)} />
+        ) : showAi && imgError ? (
+          <button onClick={generateAiSkin} disabled={generating}
+            className="w-14 h-14 rounded border border-dashed border-primary/30 flex flex-col items-center justify-center gap-1 text-primary/50 hover:text-primary hover:border-primary/60 transition-colors">
+            {generating
+              ? <LoaderIcon size={12} className="animate-spin" />
+              : <><Wand2 size={11} /><span className="text-[7px] font-mono">GEN AI</span></>}
+          </button>
+        ) : isUnlocked && NaviComponent ? (
+          <Suspense fallback={<div className="w-14 h-14 rounded-full bg-muted/30 animate-pulse" />}>
+            <NaviComponent size={56} animated={false} />
+          </Suspense>
+        ) : (
+          <div className="w-14 h-14 rounded-full bg-muted/20 border border-border flex items-center justify-center">
+            <Lock size={16} className="text-muted-foreground/40" />
+          </div>
+        )}
+      </div>
+      <p className={`text-[10px] font-mono text-center ${isEquipped ? "text-primary" : isUnlocked ? "text-foreground" : "text-muted-foreground"}`}>
+        {def.name.toUpperCase()}
+      </p>
+      <p className="text-[8px] font-mono" style={{ color: rarityColor }}>{def.rarity}</p>
+      {!isUnlocked && (
+        <p className="text-[8px] font-mono text-muted-foreground/60 text-center leading-tight">{def.unlockCondition}</p>
+      )}
+    </motion.div>
+  );
+}
 
 // XP per level (same formula as Dashboard/Stats)
 const xpForLevel = (lv: number) => lv * 500;
@@ -59,8 +164,20 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export default function CharacterPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>("CHARACTER INFO");
+  const [showMbtiQuiz, setShowMbtiQuiz] = useState(false);
   const { profile, updateProfile, refetchProfile, profileLoading, quests, questStats, entries, skills, skillsLoading, addSkill, updateSkill, deleteSkill, items, equipmentLoading: equipLoading, addItem, equipItem, deleteItem, effects, effectsLoading, addEffect, removeEffect } = useAppData();
+  const { user } = useAuth();
+
+  // ── Skin collection state ────────────────────────────────────────────────
+  const [skinCategory, setSkinCategory] = useState<SkinCategory | "ALL">("ALL");
+  const [skinRarityFilter, setSkinRarityFilter] = useState<SkinRarity | "ALL">("ALL");
+  const [showLockedSkins, setShowLockedSkins] = useState(true);
+  const [skinViewMode, setSkinViewMode] = useNaviRenderMode();
+
+  const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
+  const isAdmin = !!user && (ADMIN_USER_IDS.includes(user.id) || !!user.email?.endsWith("@vantara.exe"));
 
   const [editMode, setEditMode] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");
@@ -72,6 +189,11 @@ export default function CharacterPage() {
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [editingSkillLevel, setEditingSkillLevel] = useState(1);
 
+  // Detail modals for clickable Skills / Inventory / Effects rows
+  const [detailSkill, setDetailSkill] = useState<typeof skills[number] | null>(null);
+  const [detailItem, setDetailItem] = useState<typeof items[number] | null>(null);
+  const [detailEffect, setDetailEffect] = useState<typeof effects[number] | null>(null);
+
   const characterClass = profile.character_class || "Unknown";
   const mbtiType = profile.mbti_type || null;
   const classInfo = mbtiType ? MBTI_CLASS_MAP[mbtiType] : null;
@@ -79,6 +201,11 @@ export default function CharacterPage() {
   const operatorXp = (profile as any).operator_xp ?? profile.xp_total ?? 0;
   const xpToNext = xpForLevel(operatorLevel + 1);
 
+  // Evolution tier data
+  const currentTier = tierFromLevel(operatorLevel);
+  const tierPercent = tierProgressPercent(operatorXp);
+  const { max: tierMax } = TIER_THRESHOLDS[currentTier];
+  const nextTierXp = currentTier < 5 ? totalXpForLevel(TIER_THRESHOLDS[(currentTier + 1) as 2|3|4|5].min) : null;
   const baseStats = computeBaseStats(
     questStats.completed,
     entries.length,
@@ -92,6 +219,9 @@ export default function CharacterPage() {
 
   const handleQuizComplete = (mbti: string, charClass: string) => {
     updateProfile({ mbti_type: mbti, character_class: charClass });
+    setShowMbtiQuiz(false);
+    refetchProfile();
+    navigate("/character");
   };
 
   const handleAddSkill = useCallback(async () => {
@@ -114,25 +244,6 @@ export default function CharacterPage() {
     );
   }
 
-  if (!mbtiType && !profile.character_class) {
-    return (
-      <div>
-        <PageHeader title="CHARACTER" subtitle="// OPERATOR CALIBRATION REQUIRED" />
-        <MbtiQuiz onComplete={handleQuizComplete} />
-      </div>
-    );
-  }
-
-  // ── Evolution Path data ──────────────────────────────────────
-  const currentTier = tierFromLevel(operatorLevel);
-  const currentTierColor = TIER_COLORS[currentTier];
-  const currentTierName = TIER_NAMES[currentTier];
-  const currentEvoTitle = mbtiType
-    ? evolutionTitleFromMbtiAndLevel(mbtiType, operatorLevel)
-    : "Operator";
-  const tierPct = tierProgressPercent(operatorXp);
-  const nextThresholdLevel = nextTierThreshold(operatorLevel);
-  const evoEntry = mbtiType ? EVO_MAP[mbtiType] : null;
 
   return (
     <div>
@@ -216,189 +327,115 @@ export default function CharacterPage() {
       {/* ── CHARACTER INFO ───────────────────────────────────────────────── */}
       {activeTab === "CHARACTER INFO" && (
         <div className="space-y-4">
-          {/* ── Evolution Path ──────────────────────────────────────── */}
-          <HudCard title="EVOLUTION PATH" icon={<Sparkles size={14} />} glow>
-            {!mbtiType ? (
-              <div className="text-center py-4">
-                <p className="text-xs font-mono text-muted-foreground mb-3">
-                  Operator calibration required to unlock the Evolution Path.
-                </p>
-                <Button
-                  variant="outline"
-                  className="text-[10px] font-mono tracking-widest border-primary text-primary hover:bg-primary/10"
-                  onClick={() => updateProfile({ mbti_type: null, character_class: null })}
+
+          {/* ── Evolution Path ─────────────────────────────────────────────── */}
+          <HudCard title="EVOLUTION PATH" icon={<Star size={14} />} glow>
+            {/* Current title + tier */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-[10px] font-mono text-muted-foreground mb-1">CURRENT TITLE</p>
+                <motion.p
+                  className="font-display text-xl font-bold"
+                  style={{ color: TIER_COLORS[currentTier] }}
+                  animate={{ textShadow: [`0 0 8px ${TIER_COLORS[currentTier]}40`, `0 0 18px ${TIER_COLORS[currentTier]}80`, `0 0 8px ${TIER_COLORS[currentTier]}40`] }}
+                  transition={{ duration: 3, repeat: Infinity }}
                 >
-                  TAKE THE MBTI QUIZ
-                </Button>
+                  {mbtiType ? evolutionTitleFromMbtiAndLevel(mbtiType, operatorLevel) : TIER_NAMES[currentTier]}
+                </motion.p>
+                {classInfo && <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{classInfo.className}</p>}
               </div>
-            ) : (
-              <>
-                {/* Header row */}
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className="text-[10px] font-mono uppercase tracking-[0.3em] mb-1"
-                      style={{
-                        color: currentTierColor,
-                        textShadow: `0 0 8px ${currentTierColor}99`,
-                      }}
-                    >
-                      {currentTierName}
-                    </p>
-                    <h3
-                      className="font-display text-xl md:text-2xl font-bold"
-                      style={{
-                        color: currentTierColor,
-                        textShadow: `0 0 12px ${currentTierColor}66`,
-                      }}
-                    >
-                      {currentEvoTitle}
-                    </h3>
-                    <p className="text-[10px] font-mono text-muted-foreground mt-1">
-                      {classNameFromMbti(mbtiType)} // {mbtiType}
-                    </p>
-                  </div>
-                  <span
-                    className="text-[10px] font-mono px-2 py-1 rounded border shrink-0"
-                    style={{
-                      borderColor: currentTierColor,
-                      color: currentTierColor,
-                      backgroundColor: `${currentTierColor}10`,
-                    }}
-                  >
-                    T{currentTier}
+              <div className="text-right">
+                <span
+                  className="text-xs font-mono px-2 py-1 rounded font-bold"
+                  style={{ color: TIER_COLORS[currentTier], background: `${TIER_COLORS[currentTier]}18`, border: `1px solid ${TIER_COLORS[currentTier]}40` }}
+                >
+                  TIER {currentTier} — {TIER_NAMES[currentTier]}
+                </span>
+                <p className="text-[9px] font-mono text-muted-foreground mt-1">OPERATOR LV{operatorLevel}</p>
+              </div>
+            </div>
+
+            {/* Tier XP progress */}
+            {currentTier < 5 && (
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[9px] font-mono text-muted-foreground">
+                    TIER PROGRESS → {TIER_NAMES[(currentTier + 1) as 2|3|4|5]}
+                  </span>
+                  <span className="text-[9px] font-mono" style={{ color: TIER_COLORS[currentTier] }}>
+                    {tierPercent}%
                   </span>
                 </div>
-
-                {/* Progress to next tier */}
-                {currentTier < 5 ? (
-                  <div className="mb-5">
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        TIER PROGRESS
-                      </span>
-                      <span className="text-[10px] font-mono" style={{ color: currentTierColor }}>
-                        LV {operatorLevel} → LV {nextThresholdLevel}
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-muted rounded overflow-hidden border border-border">
-                      <motion.div
-                        className="h-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${tierPct}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        style={{
-                          backgroundColor: currentTierColor,
-                          boxShadow: `0 0 12px ${currentTierColor}`,
-                        }}
-                      />
-                    </div>
-                    <p className="text-[9px] font-mono text-muted-foreground mt-1 text-right">
-                      {Math.round(tierPct)}% TO {TIER_NAMES[(currentTier + 1) as Tier]}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mb-5 text-center">
-                    <p
-                      className="text-[10px] font-mono tracking-widest"
-                      style={{ color: currentTierColor }}
-                    >
-                      ▲ MAXIMUM EVOLUTION REACHED ▲
-                    </p>
-                  </div>
-                )}
-
-                {/* 5-tier vertical list */}
-                <div className="space-y-2 pt-3 border-t border-border">
-                  {evoEntry?.tiers.map((title, i) => {
-                    const tier = (i + 1) as Tier;
-                    const color = TIER_COLORS[tier];
-                    const minLv = tierThreshold(tier);
-                    const isUnlocked = tier < currentTier;
-                    const isCurrent = tier === currentTier;
-                    const isFuture = tier > currentTier;
-
-                    return (
-                      <motion.div
-                        key={tier}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.06 }}
-                        className="flex items-center gap-3 px-3 py-2 rounded border transition-all"
-                        style={{
-                          borderColor: isCurrent
-                            ? color
-                            : isUnlocked
-                            ? "hsl(var(--border))"
-                            : "hsl(var(--border) / 0.4)",
-                          backgroundColor: isCurrent
-                            ? `${color}15`
-                            : isUnlocked
-                            ? "hsl(var(--card) / 0.4)"
-                            : "transparent",
-                          boxShadow: isCurrent ? `0 0 16px ${color}55` : undefined,
-                          animation: isCurrent ? "pulse 2.4s ease-in-out infinite" : undefined,
-                        }}
-                      >
-                        <span
-                          className="font-display text-xs font-bold w-7 shrink-0"
-                          style={{
-                            color,
-                            opacity: isFuture ? 0.4 : 1,
-                          }}
-                        >
-                          T{tier}
-                        </span>
-                        <span
-                          className="text-[9px] font-mono tracking-widest w-24 shrink-0"
-                          style={{
-                            color,
-                            opacity: isFuture ? 0.4 : isCurrent ? 1 : 0.7,
-                          }}
-                        >
-                          {TIER_NAMES[tier]}
-                        </span>
-                        <span
-                          className={`text-sm font-body flex-1 ${
-                            isCurrent
-                              ? "font-bold"
-                              : isFuture
-                              ? "text-muted-foreground/50"
-                              : "text-muted-foreground"
-                          }`}
-                          style={{
-                            color: isCurrent ? color : undefined,
-                            textShadow: isCurrent ? `0 0 8px ${color}66` : undefined,
-                          }}
-                        >
-                          {title}
-                        </span>
-                        <span className="shrink-0">
-                          {isUnlocked ? (
-                            <CheckCircle2 size={14} style={{ color }} />
-                          ) : isCurrent ? (
-                            <span
-                              className="text-[9px] font-mono px-1.5 py-0.5 rounded"
-                              style={{
-                                color,
-                                backgroundColor: `${color}20`,
-                                border: `1px solid ${color}`,
-                              }}
-                            >
-                              CURRENT
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50">
-                              <Lock size={10} /> LV{minLv}
-                            </span>
-                          )}
-                        </span>
-                      </motion.div>
-                    );
-                  })}
+                <div className="h-1.5 bg-muted rounded overflow-hidden">
+                  <motion.div
+                    className="h-full rounded"
+                    style={{ background: TIER_COLORS[currentTier], width: `${tierPercent}%` }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${tierPercent}%` }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                  />
                 </div>
-              </>
+                <p className="text-[9px] font-mono text-muted-foreground mt-0.5">
+                  Reach LV{tierMax + 1} to unlock Tier {currentTier + 1}
+                </p>
+              </div>
             )}
+
+            {/* 5-tier vertical progression */}
+            <div className="space-y-2">
+              {([1, 2, 3, 4, 5] as const).map((tier) => {
+                const isUnlocked = currentTier >= tier;
+                const isCurrent = currentTier === tier;
+                const title = mbtiType
+                  ? (MBTI_CLASS_MAP[mbtiType]?.tiers[tier - 1] ?? TIER_NAMES[tier])
+                  : TIER_NAMES[tier];
+                const { min, max } = TIER_THRESHOLDS[tier];
+                const tColor = TIER_COLORS[tier];
+
+                return (
+                  <motion.div
+                    key={tier}
+                    className={`flex items-center gap-3 rounded px-3 py-2.5 border transition-all ${
+                      isCurrent ? "border-opacity-60" : "border-border"
+                    }`}
+                    style={isCurrent ? {
+                      borderColor: tColor,
+                      background: `${tColor}0a`,
+                      boxShadow: `0 0 12px ${tColor}20`,
+                    } : {}}
+                  >
+                    <div
+                      className="w-7 h-7 rounded flex items-center justify-center shrink-0 text-xs font-display font-bold"
+                      style={isUnlocked
+                        ? { background: `${tColor}20`, color: tColor, border: `1px solid ${tColor}40` }
+                        : { background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }}
+                    >
+                      {isUnlocked ? tier : <Lock size={11} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className={`text-xs font-body font-semibold truncate ${isUnlocked ? "" : "text-muted-foreground"}`}
+                          style={isUnlocked ? { color: isCurrent ? tColor : "hsl(var(--foreground))" } : {}}>
+                          {title}
+                        </p>
+                        {isCurrent && (
+                          <span className="text-[8px] font-mono px-1 py-0.5 rounded shrink-0"
+                            style={{ background: `${tColor}20`, color: tColor }}>ACTIVE</span>
+                        )}
+                      </div>
+                      <p className="text-[9px] font-mono text-muted-foreground">
+                        {TIER_NAMES[tier]} · LV{min}–{max}
+                      </p>
+                    </div>
+                    {isUnlocked && !isCurrent && <ChevronRight size={12} className="text-muted-foreground shrink-0" />}
+                    {!isUnlocked && (
+                      <span className="text-[9px] font-mono text-muted-foreground shrink-0">LV{min}+</span>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+
           </HudCard>
 
           {/* Base Stats */}
@@ -440,7 +477,7 @@ export default function CharacterPage() {
                   <p className="text-sm font-body">{mbtiType || "—"}</p>
                 </div>
                 {editMode && (
-                  <Button variant="outline" size="sm" className="text-[9px] font-mono h-6 px-2" onClick={() => updateProfile({ mbti_type: null, character_class: null })}>
+                  <Button variant="outline" size="sm" className="text-[9px] font-mono h-6 px-2" onClick={() => setShowMbtiQuiz(true)}>
                     RETAKE
                   </Button>
                 )}
@@ -477,6 +514,193 @@ export default function CharacterPage() {
         </div>
       )}
 
+      {/* ── NAVI / SKINS ─────────────────────────────────────────────────── */}
+      {activeTab === "NAVI / SKINS" && (
+        <div className="space-y-6">
+          <NaviMilestones naviLevel={profile.navi_level} />
+
+          {(() => {
+            const unlockState: UnlockState = isAdmin
+              ? {
+                  operatorLevel: 999, naviLevel: 999, currentStreak: 999, questsCompleted: 999,
+                  unlockedAchievements: new Set(
+                    SKIN_DEFINITIONS.map((s) => s.achievementId).filter(Boolean) as string[]
+                  ),
+                  isPremium: true,
+                  isAdmin: true,
+                }
+              : {
+                  operatorLevel: (profile as any).operator_level ?? 1,
+                  naviLevel: profile.navi_level ?? 1,
+                  currentStreak: profile.current_streak ?? 0,
+                  questsCompleted: (profile as any).quests_completed ?? questStats.completed ?? 0,
+                  unlockedAchievements: new Set<string>(),
+                  isPremium: (profile as any).subscription_tier === "core" || (profile as any).subscription_tier === "power",
+                };
+
+            const visibleSkins = SKIN_DEFINITIONS.filter((skin) => {
+              if (skinCategory !== "ALL" && skin.category !== skinCategory) return false;
+              if (skinRarityFilter !== "ALL" && skin.rarity !== skinRarityFilter) return false;
+              if (!showLockedSkins && !isSkinUnlocked(skin, unlockState)) return false;
+              return true;
+            }).sort((a, b) => {
+              const rd = RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity);
+              if (rd !== 0) return rd;
+              return a.name.localeCompare(b.name);
+            });
+
+            const totalUnlocked = SKIN_DEFINITIONS.filter((s) => isSkinUnlocked(s, unlockState)).length;
+            const equipSkin = (skinId: string) => updateProfile({ equipped_skin: skinId } as any);
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const EquippedNavi = getNaviCharacter(profile.equipped_skin);
+
+            return (
+              <div>
+                <div className="flex items-end justify-between mb-3">
+                  <div>
+                    <h3 className="font-display text-sm tracking-widest text-primary">SKIN COLLECTION</h3>
+                    <p className="text-[10px] font-mono text-muted-foreground">// {totalUnlocked} / {SKIN_DEFINITIONS.length} UNLOCKED{isAdmin && " · ADMIN"}</p>
+                  </div>
+                  {/* Style toggle — top-right for visibility */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono text-muted-foreground hidden sm:inline">VIEW</span>
+                    <div className="flex rounded border border-primary/40 overflow-hidden">
+                      <button onClick={() => setSkinViewMode("SVG")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
+                          ${skinViewMode === "SVG" ? "bg-primary/15 text-primary border-r border-primary/30" : "text-muted-foreground hover:text-foreground border-r border-border"}`}>
+                        <Cpu size={9} /> SPRITE
+                      </button>
+                      <button onClick={() => setSkinViewMode("AI")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
+                          ${skinViewMode === "AI" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                        <Wand2 size={9} /> AI GEN
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="mb-5">
+                  <div className="flex justify-between text-[10px] font-mono text-muted-foreground mb-1">
+                    <span>COLLECTION PROGRESS</span>
+                    <span>{Math.round((totalUnlocked / SKIN_DEFINITIONS.length) * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-primary rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(totalUnlocked / SKIN_DEFINITIONS.length) * 100}%` }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <div className="flex gap-1 flex-wrap">
+                    {(["ALL", ...SKIN_CATEGORIES] as const).map((cat) => (
+                      <button key={cat} onClick={() => setSkinCategory(cat as any)}
+                        className={`px-2.5 py-1 text-[10px] font-mono rounded border transition-colors
+                          ${skinCategory === cat ? "border-primary/60 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/30"}`}>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1 ml-auto items-center flex-wrap justify-end">
+                    {(["ALL", ...RARITY_ORDER] as const).map((r) => (
+                      <button key={r} onClick={() => setSkinRarityFilter(r as any)}
+                        className={`px-2 py-1 text-[9px] font-mono rounded border transition-colors
+                          ${skinRarityFilter === r ? "border-primary/60 bg-primary/10" : "border-border"}`}
+                        style={r !== "ALL" ? { color: SKIN_RARITY_COLORS[r as SkinRarity] } : undefined}>
+                        {r}
+                      </button>
+                    ))}
+                    <button onClick={() => setShowLockedSkins(!showLockedSkins)}
+                      className={`ml-1 flex items-center gap-1 px-2 py-1 text-[9px] font-mono rounded border transition-colors
+                        ${!showLockedSkins ? "border-primary/50 bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
+                      {showLockedSkins ? <Layers size={9} /> : <Lock size={9} />}
+                      {showLockedSkins ? "HIDE LOCKED" : "SHOW ALL"}
+                    </button>
+                  </div>
+                </div>
+
+                {skinViewMode === "AI" && (
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-3">// tap GEN AI on unlocked skins without an image yet</p>
+                )}
+
+                {/* Currently equipped */}
+                <div className="mb-4 p-3 rounded border border-primary/30 bg-primary/5 flex items-center gap-3">
+                  <div className="w-10 h-10 shrink-0">
+                    {skinViewMode === "AI" ? (
+                      <img
+                        src={`${supabaseUrl}/storage/v1/object/public/navi-skins/${(profile.equipped_skin ?? "").toLowerCase()}.png`}
+                        alt={profile.equipped_skin ?? ""}
+                        className="w-10 h-10 object-contain rounded"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : EquippedNavi ? (
+                      <Suspense fallback={<div className="w-10 h-10 rounded-full bg-muted/30 animate-pulse" />}>
+                        <EquippedNavi size={40} animated />
+                      </Suspense>
+                    ) : null}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-mono text-muted-foreground">EQUIPPED</p>
+                    <p className="text-sm font-display font-bold text-primary">{profile.equipped_skin}</p>
+                  </div>
+                </div>
+
+                {/* Grid */}
+                <AnimatePresence>
+                  {skinCategory === "ALL" ? (
+                    SKIN_CATEGORIES.map((cat) => {
+                      const catSkins = visibleSkins.filter((s) => s.category === cat);
+                      if (catSkins.length === 0) return null;
+                      return (
+                        <div key={cat} className="mb-6">
+                          <p className="text-[10px] font-mono text-muted-foreground tracking-widest mb-3">// {SKIN_CATEGORY_LABELS[cat]}</p>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                            {catSkins.map((skin) => (
+                              <SkinCard
+                                key={skin.id}
+                                skinId={skin.id}
+                                isUnlocked={isSkinUnlocked(skin, unlockState)}
+                                isEquipped={profile.equipped_skin === skin.id}
+                                onEquip={() => equipSkin(skin.id)}
+                                viewMode={skinViewMode}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                      {visibleSkins.map((skin) => (
+                        <SkinCard
+                          key={skin.id}
+                          skinId={skin.id}
+                          isUnlocked={isSkinUnlocked(skin, unlockState)}
+                          isEquipped={profile.equipped_skin === skin.id}
+                          onEquip={() => equipSkin(skin.id)}
+                          viewMode={skinViewMode}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </AnimatePresence>
+
+                {visibleSkins.length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="font-mono text-muted-foreground text-sm">No skins match your filters.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* ── SKILLS ───────────────────────────────────────────────────────── */}
       {activeTab === "SKILLS" && (
         <div className="space-y-4">
@@ -488,7 +712,11 @@ export default function CharacterPage() {
             ) : (
               <div className="space-y-3">
                 {skills.map((skill) => (
-                  <div key={skill.id} className="group">
+                  <div
+                    key={skill.id}
+                    className="group cursor-pointer rounded p-2 -mx-2 hover:bg-muted/30 transition-colors"
+                    onClick={() => setDetailSkill(skill)}
+                  >
                     <div className="flex justify-between items-center mb-0.5">
                       <span className="text-sm font-body">{skill.name}</span>
                       <div className="flex items-center gap-2">
@@ -496,7 +724,7 @@ export default function CharacterPage() {
                         {editMode && (
                           <>
                             {editingSkillId === skill.id ? (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="number"
                                   value={editingSkillLevel}
@@ -509,8 +737,8 @@ export default function CharacterPage() {
                               </div>
                             ) : (
                               <>
-                                <button onClick={() => { setEditingSkillId(skill.id); setEditingSkillLevel(skill.level); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"><Pencil size={11} /></button>
-                                <button onClick={() => deleteSkill(skill.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"><Trash2 size={11} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setEditingSkillId(skill.id); setEditingSkillLevel(skill.level); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"><Pencil size={11} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); deleteSkill(skill.id); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"><Trash2 size={11} /></button>
                               </>
                             )}
                           </>
@@ -537,8 +765,8 @@ export default function CharacterPage() {
         </div>
       )}
 
-      {/* ── EQUIPMENT ────────────────────────────────────────────────────── */}
-      {activeTab === "EQUIPMENT" && (
+      {/* ── INVENTORY (Equipment) ───────────────────────────────────────── */}
+      {activeTab === "INVENTORY" && (
         <div className="space-y-4">
           <HudCard title="INVENTORY & EQUIPMENT" icon={<Star size={14} />} glow>
             {equipLoading ? (
@@ -548,7 +776,11 @@ export default function CharacterPage() {
             ) : (
               <div className="space-y-2">
                 {items.map((item) => (
-                  <div key={item.id} className={`flex items-center justify-between py-2 border-b border-border last:border-0 group ${item.equipped ? "opacity-100" : "opacity-70"}`}>
+                  <div
+                    key={item.id}
+                    onClick={() => setDetailItem(item)}
+                    className={`flex items-center justify-between py-2 px-2 -mx-2 rounded cursor-pointer hover:bg-muted/30 border-b border-border last:border-0 group ${item.equipped ? "opacity-100" : "opacity-70"}`}
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] font-mono text-muted-foreground uppercase">{item.slot}</p>
@@ -561,8 +793,8 @@ export default function CharacterPage() {
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${RARITY_COLORS[item.rarity]}`}>{item.rarity}</span>
                       {editMode && (
                         <>
-                          {!item.equipped && <button onClick={() => equipItem(item.id)} className="text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 text-[10px] font-mono">EQUIP</button>}
-                          <button onClick={() => deleteItem(item.id)} className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
+                          {!item.equipped && <button onClick={(e) => { e.stopPropagation(); equipItem(item.id); }} className="text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 text-[10px] font-mono">EQUIP</button>}
+                          <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
                         </>
                       )}
                     </div>
@@ -602,7 +834,11 @@ export default function CharacterPage() {
           ) : (
             <div className="space-y-2">
               {effects.map((effect) => (
-                <div key={effect.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 group">
+                <div
+                  key={effect.id}
+                  onClick={() => setDetailEffect(effect)}
+                  className="flex items-center justify-between py-2 px-2 -mx-2 rounded cursor-pointer hover:bg-muted/30 border-b border-border last:border-0 group"
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-body">{effect.name}</p>
@@ -614,7 +850,7 @@ export default function CharacterPage() {
                     {effect.expires_at && <p className="text-[9px] font-mono text-neon-amber">Expires: {new Date(effect.expires_at).toLocaleDateString()}</p>}
                   </div>
                   {editMode && (
-                    <button onClick={() => removeEffect(effect.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); removeEffect(effect.id); }} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
                       <Trash2 size={12} />
                     </button>
                   )}
@@ -624,6 +860,114 @@ export default function CharacterPage() {
           )}
         </HudCard>
       )}
+
+      {/* ── Detail modals (Skill / Item / Effect) ───────────────────────── */}
+      <AnimatePresence>
+        {detailSkill && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailSkill(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground">{detailSkill.category || "GENERAL"}</p>
+                  <h3 className="font-display text-lg font-bold text-foreground">{detailSkill.name}</h3>
+                </div>
+                <button onClick={() => setDetailSkill(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-4 whitespace-pre-wrap">
+                {detailSkill.description || "No description."}
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">LEVEL</p><p className="font-display text-sm text-primary">{detailSkill.level}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">MAX</p><p className="font-display text-sm text-foreground">{(detailSkill as any).max_level ?? 100}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">XP</p><p className="font-display text-sm text-neon-green">{detailSkill.xp ?? 0}</p></div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {detailItem && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailItem(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase">{detailItem.slot}</p>
+                  <h3 className="font-display text-lg font-bold text-foreground">{detailItem.name}</h3>
+                </div>
+                <button onClick={() => setDetailItem(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${RARITY_COLORS[detailItem.rarity]}`}>{detailItem.rarity}</span>
+                {detailItem.equipped && <span className="text-[9px] font-mono text-neon-green bg-neon-green/10 px-1.5 py-0.5 rounded">EQUIPPED</span>}
+              </div>
+              {(detailItem as any).description && (
+                <p className="text-xs font-body text-muted-foreground mb-3 whitespace-pre-wrap">{(detailItem as any).description}</p>
+              )}
+              {detailItem.effect && <p className="text-xs font-mono text-neon-green mb-3">Effect: {detailItem.effect}</p>}
+              {(detailItem as any).stat_bonuses && Object.keys((detailItem as any).stat_bonuses).length > 0 && (
+                <div className="bg-muted/40 rounded p-2 mb-3">
+                  <p className="text-[9px] font-mono text-muted-foreground mb-1">STAT BONUSES</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries((detailItem as any).stat_bonuses).map(([k, v]) => (
+                      <span key={k} className="text-[10px] font-mono text-neon-green bg-neon-green/10 px-1.5 py-0.5 rounded">+{String(v)} {k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!detailItem.equipped && (
+                <Button size="sm" className="w-full text-[10px] font-mono" onClick={async () => { await equipItem(detailItem.id); setDetailItem(null); }}>
+                  EQUIP
+                </Button>
+              )}
+            </motion.div>
+          </div>
+        )}
+        {detailEffect && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDetailEffect(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-card border border-primary/30 rounded-lg p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${detailEffect.effect_type === "buff" ? "bg-neon-green/10 text-neon-green" : detailEffect.effect_type === "debuff" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+                    {detailEffect.effect_type.toUpperCase()}
+                  </span>
+                  <h3 className="font-display text-lg font-bold text-foreground mt-1">{detailEffect.name}</h3>
+                </div>
+                <button onClick={() => setDetailEffect(null)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-3 whitespace-pre-wrap">{detailEffect.description || "No description."}</p>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">STAT</p><p className="font-display text-sm">{(detailEffect as any).stat_affected || "—"}</p></div>
+                <div className="bg-muted/40 rounded p-2"><p className="text-[9px] font-mono text-muted-foreground">MODIFIER</p><p className="font-display text-sm text-neon-green">{((detailEffect as any).modifier_value ?? 0) > 0 ? "+" : ""}{(detailEffect as any).modifier_value ?? 0}</p></div>
+              </div>
+              {detailEffect.expires_at && <p className="text-[10px] font-mono text-neon-amber mt-2">Expires: {new Date(detailEffect.expires_at).toLocaleString()}</p>}
+              {(detailEffect as any).source && <p className="text-[9px] font-mono text-muted-foreground mt-1">Source: {(detailEffect as any).source}</p>}
+              {editMode && (
+                <Button variant="destructive" size="sm" className="w-full mt-3 text-[10px] font-mono" onClick={async () => { await removeEffect(detailEffect.id); setDetailEffect(null); }}>
+                  REMOVE EFFECT
+                </Button>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {showMbtiQuiz && <MbtiQuiz onComplete={handleQuizComplete} />}
     </div>
   );
 }

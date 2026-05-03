@@ -1,21 +1,31 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, MessageSquare, User, Swords, BookOpen, 
-  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users, Zap
+import {
+  LayoutDashboard, MessageSquare, User, Swords, BookOpen,
+  BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
+  Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Search, Bell,
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useNotificationCount } from "@/pages/NotificationsPage";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/navi", icon: Compass, label: "Navi" },
-  { to: "/mavis", icon: MessageSquare, label: "Navi.EXE" },
+  { to: "/navi", icon: Compass, label: "Navi / Skins" },
+  { to: "/mavis", icon: MessageSquare, label: "Navi AI" },
   { to: "/character", icon: User, label: "Character" },
   { to: "/quests", icon: Swords, label: "Quests" },
   { to: "/party", icon: Users, label: "Party" },
   { to: "/journal", icon: BookOpen, label: "Journal" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
+  { to: "/games", icon: Gamepad2, label: "Games" },
+  { to: "/guild", icon: Shield, label: "Guild" },
+  { to: "/social", icon: Radio, label: "Feed" },
+  { to: "/inbox", icon: Inbox, label: "Inbox" },
+  { to: "/search", icon: Search, label: "Search" },
+  { to: "/notifications", icon: Bell, label: "Notifications" },
+  { to: "/agents", icon: Bot, label: "Agents" },
   { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -24,6 +34,8 @@ export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
+  const { totalUnread } = useUnreadMessages();
+  const notifCount = useNotificationCount();
 
   return (
     <motion.aside
@@ -57,6 +69,13 @@ export default function AppSidebar() {
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {navItems.map(({ to, icon: Icon, label }) => {
           const isActive = location.pathname === to;
+          const isInbox = to === "/inbox";
+          const isNotifications = to === "/notifications";
+          const badge = isInbox && totalUnread > 0
+            ? totalUnread
+            : isNotifications && notifCount > 0
+            ? notifCount
+            : 0;
           return (
             <NavLink
               key={to}
@@ -67,19 +86,31 @@ export default function AppSidebar() {
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border border-transparent"
               }`}
             >
-              <Icon size={18} className={`shrink-0 ${isActive ? "text-primary" : ""}`} />
+              <div className="relative shrink-0">
+                <Icon size={18} className={isActive ? "text-primary" : ""} />
+                {badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </div>
               <AnimatePresence>
                 {!collapsed && (
                   <motion.span
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="whitespace-nowrap font-body"
+                    className="whitespace-nowrap font-body flex-1"
                   >
                     {label}
                   </motion.span>
                 )}
               </AnimatePresence>
+              {!collapsed && badge > 0 && (
+                <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-1 leading-none shrink-0">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
             </NavLink>
           );
         })}

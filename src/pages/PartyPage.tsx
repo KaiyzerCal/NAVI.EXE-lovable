@@ -3,12 +3,17 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useParty } from "@/hooks/useParty";
 import { useAppData } from "@/contexts/AppDataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle } from "lucide-react";
+import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle, Link2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 
 export default function PartyPage() {
   const { party, members, openParties, loading, myRole, createParty, joinParty, leaveParty, disbandParty, kickMember, completePartyQuest } = useParty();
   const { quests } = useAppData();
+  const { user } = useAuth();
   const activeQuests = quests.filter(q => !q.completed);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -16,6 +21,28 @@ export default function PartyPage() {
   const [questId, setQuestId] = useState<string | null>(null);
   const [maxMembers, setMaxMembers] = useState(4);
   const [actionLoading, setActionLoading] = useState(false);
+  const [linkingQuest, setLinkingQuest] = useState(false);
+  const [selectedQuestId, setSelectedQuestId] = useState<string>("");
+  const [profileSheetUserId, setProfileSheetUserId] = useState<string | null>(null);
+  const [profileSheetMemberId, setProfileSheetMemberId] = useState<string | null>(null);
+
+  const linkPartyQuest = async (newQuestId: string | null) => {
+    if (!party) return;
+    setActionLoading(true);
+    const { error } = await supabase
+      .from("parties")
+      .update({ quest_id: newQuestId } as any)
+      .eq("id", party.id);
+    setActionLoading(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: newQuestId ? "Quest linked to party" : "Quest unlinked" });
+      setLinkingQuest(false);
+      setSelectedQuestId("");
+      // realtime parties watcher in useParty will refresh
+    }
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -98,20 +125,64 @@ export default function PartyPage() {
 
             <p className="text-[10px] font-mono text-accent">XP POOL: {party.xp_pool}</p>
 
+            {/* Quest linker — leader only */}
+            {myRole === "leader" && (
+              <div className="border border-border rounded p-2 bg-muted/10">
+                {!linkingQuest ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-mono text-muted-foreground">
+                      {party.quest_id ? "Change the quest your party is hunting." : "No quest linked. Pick one to take on together."}
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => { setLinkingQuest(true); setSelectedQuestId(party.quest_id ?? ""); }} className="text-[10px] font-mono shrink-0">
+                      <Link2 size={10} className="mr-1" /> {party.quest_id ? "CHANGE QUEST" : "PICK QUEST"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-mono text-muted-foreground">SELECT A QUEST FROM YOUR ACTIVE LIST</p>
+                    <select value={selectedQuestId} onChange={(e) => setSelectedQuestId(e.target.value)}
+                      className="w-full bg-muted border border-border rounded px-2 py-1.5 text-xs font-body text-foreground outline-none focus:border-primary/40">
+                      <option value="">— No linked quest —</option>
+                      {activeQuests.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
+                    </select>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => linkPartyQuest(selectedQuestId || null)} disabled={actionLoading} className="text-[10px] font-mono">
+                        {actionLoading ? <Loader2 className="animate-spin" size={12} /> : "SAVE"}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setLinkingQuest(false)} className="text-[10px] font-mono">CANCEL</Button>
+                    </div>
+                    {activeQuests.length === 0 && (
+                      <p className="text-[10px] font-mono text-muted-foreground/70">You have no active quests yet — create one in the Quests tab.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Members */}
             <div className="space-y-1.5">
               <p className="text-[10px] font-mono text-muted-foreground">MEMBERS ({members.length}/{party.max_members})</p>
               {members.map(m => (
-                <div key={m.id} className="flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    {m.role === "leader" && <Crown size={10} className="text-accent" />}
-                    <div>
-                      <p className="text-xs font-body">{m.display_name || "Unknown"}</p>
-                      <p className="text-[10px] font-mono text-muted-foreground">{m.navi_name} · LV{m.operator_level}</p>
+                <div key={m.id} className="flex items-center justify-between bg-muted/30 border border-border rounded px-3 py-2 hover:border-primary/30 transition-colors">
+                  <button
+                    onClick={() => { if (m.user_id !== user?.id) { setProfileSheetUserId(m.user_id); setProfileSheetMemberId(m.id); } }}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left active:opacity-70 transition-opacity"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <span className="text-[10px] font-display font-bold text-primary">
+                        {(m.display_name ?? "?")[0].toUpperCase()}
+                      </span>
                     </div>
-                  </div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {m.role === "leader" && <Crown size={10} className="text-accent shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="text-xs font-body truncate">{m.display_name || "Unknown"}</p>
+                        <p className="text-[10px] font-mono text-muted-foreground">{m.navi_name} · LV{m.operator_level}</p>
+                      </div>
+                    </div>
+                  </button>
                   {myRole === "leader" && m.role !== "leader" && (
-                    <button onClick={() => kickMember(m.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                    <button onClick={() => kickMember(m.id)} className="text-muted-foreground hover:text-destructive transition-colors ml-2 shrink-0">
                       <Trash2 size={11} />
                     </button>
                   )}
@@ -167,6 +238,21 @@ export default function PartyPage() {
             </div>
           )}
         </HudCard>
+      )}
+
+      {/* Operator profile sheet — opens when tapping a party member */}
+      {profileSheetUserId && (
+        <OperatorProfileSheet
+          operatorId={profileSheetUserId}
+          isOpen
+          onClose={() => { setProfileSheetUserId(null); setProfileSheetMemberId(null); }}
+          isPartyLeader={myRole === "leader"}
+          onRemoveFromParty={
+            myRole === "leader" && profileSheetMemberId
+              ? () => kickMember(profileSheetMemberId)
+              : undefined
+          }
+        />
       )}
     </div>
   );

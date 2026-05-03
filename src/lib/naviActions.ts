@@ -6,10 +6,26 @@ export interface NaviAction {
 }
 
 export function parseActions(text: string): { cleanText: string; actions: NaviAction[] } {
+  // ── New format: ```actions ... ``` block ─────────────────────────────────
+  const actionsBlockRegex = /```actions\s*([\s\S]*?)```/i;
+  const blockMatch = actionsBlockRegex.exec(text);
+  if (blockMatch) {
+    const jsonStr = blockMatch[1].trim();
+    const cleanText = text.slice(0, blockMatch.index) + text.slice(blockMatch.index + blockMatch[0].length);
+    try {
+      const parsed = JSON.parse(jsonStr) as { actions: NaviAction[] };
+      const actions: NaviAction[] = Array.isArray(parsed.actions) ? parsed.actions : [];
+      return { cleanText: cleanText.trim(), actions };
+    } catch (e) {
+      console.error("Failed to parse actions block JSON:", jsonStr, e);
+      return { cleanText: cleanText.trim(), actions: [] };
+    }
+  }
+
+  // ── Legacy fallback: :::ACTION{...}::: format ───────────────────────────
   const actions: NaviAction[] = [];
   let cleanText = text;
   const marker = ":::ACTION";
-  const endMarker = ":::";
 
   let safety = 0;
   while (safety++ < 50) {

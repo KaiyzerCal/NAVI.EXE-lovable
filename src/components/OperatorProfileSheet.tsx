@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, MessageSquare, UserMinus, Loader2, UserPlus, UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { tierFromLevel, TIER_NAMES, TIER_COLORS } from "@/lib/classEvolution";
+import { tierFromLevel, TIER_NAMES, TIER_COLORS, type EvolutionTier } from "@/lib/classEvolution";
 import { useAuth } from "@/contexts/AuthContext";
 import DirectMessageModal from "./DirectMessageModal";
 
@@ -112,7 +112,7 @@ export default function OperatorProfileSheet({
     setTogglingFollow(false);
   }, [user, profile, isFollowing, togglingFollow]);
 
-  const tier = (profile?.last_evolution_tier ?? tierFromLevel(profile?.operator_level ?? 1)) as 1 | 2 | 3 | 4 | 5;
+  const tier = (profile?.last_evolution_tier ?? tierFromLevel(profile?.operator_level ?? 1)) as EvolutionTier;
   const tierColor = TIER_COLORS[tier] ?? TIER_COLORS[1];
   const tierName = TIER_NAMES[tier];
   const bondAvg = profile
@@ -228,16 +228,16 @@ export default function OperatorProfileSheet({
                     {/* Evolution tier dots */}
                     <div className="text-center">
                       <p className="text-[9px] font-mono text-muted-foreground mb-2 tracking-widest">EVOLUTION PATH</p>
-                      <div className="flex justify-center gap-2.5">
-                        {([1, 2, 3, 4, 5] as const).map((t) => (
+                      <div className="flex justify-center gap-1 flex-wrap">
+                        {(Array.from({ length: 20 }, (_, i) => (i + 1) as EvolutionTier)).map((t) => (
                           <div
                             key={t}
-                            className="w-3 h-3 rounded-full border transition-all"
+                            className="w-2 h-2 rounded-full border transition-all"
                             style={{
                               backgroundColor: t <= tier ? TIER_COLORS[t] : "transparent",
                               borderColor: TIER_COLORS[t],
-                              opacity: t <= tier ? 1 : 0.3,
-                              boxShadow: t <= tier ? `0 0 6px ${TIER_COLORS[t]}` : "none",
+                              opacity: t <= tier ? 1 : 0.25,
+                              boxShadow: t <= tier ? `0 0 4px ${TIER_COLORS[t]}` : "none",
                             }}
                           />
                         ))}

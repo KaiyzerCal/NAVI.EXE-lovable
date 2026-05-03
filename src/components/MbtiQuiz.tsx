@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import HudCard from "@/components/HudCard";
 import { Brain, ChevronLeft } from "lucide-react";
-import { MBTI_CLASS_MAP, TIER_NAMES, TIER_COLORS } from "@/lib/classEvolution";
+import { MBTI_CLASS_MAP, TIER_NAMES, TIER_COLORS, TIER_THRESHOLDS, type EvolutionTier } from "@/lib/classEvolution";
 
 export { MBTI_CLASS_MAP } from "@/lib/classEvolution";
 
@@ -173,13 +173,13 @@ export default function MbtiQuiz({ onComplete }: Props) {
 
           <div className="mb-6">
             <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-3">
-              Evolution Path — 5 Tiers
+              Evolution Path — 20 Tiers
             </p>
             <div className="space-y-2">
               {classInfo?.tiers.map((title, i) => {
-                const tier = (i + 1) as 1 | 2 | 3 | 4 | 5;
+                const tier = (i + 1) as EvolutionTier;
                 const color = TIER_COLORS[tier];
-                const thresholds: Record<number, string> = { 1: "Lv 1–10", 2: "Lv 11–25", 3: "Lv 26–50", 4: "Lv 51–75", 5: "Lv 76–100" };
+                const { min, max } = TIER_THRESHOLDS[tier];
                 return (
                   <div
                     key={tier}
@@ -194,7 +194,7 @@ export default function MbtiQuiz({ onComplete }: Props) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold truncate" style={{ color }}>{title}</p>
-                      <p className="text-[9px] font-mono text-muted-foreground">{TIER_NAMES[tier]} · {thresholds[tier]}</p>
+                      <p className="text-[9px] font-mono text-muted-foreground">{TIER_NAMES[tier]} · Lv {min}–{max}</p>
                     </div>
                   </div>
                 );

@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import MbtiQuiz, { SUB_CLASSES } from "@/components/MbtiQuiz";
-import { MBTI_CLASS_MAP } from "@/lib/classEvolution";
+import { MBTI_CLASS_MAP, type EvolutionTier } from "@/lib/classEvolution";
 import {
   tierFromLevel,
   TIER_NAMES,
@@ -11,6 +11,7 @@ import {
   evolutionTitleFromMbtiAndLevel,
   totalXpForLevel,
   tierProgressPercent,
+  xpRequiredForLevel,
 } from "@/lib/xpSystem";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, ChevronRight, Layers, Wand2, Cpu, Loader2 as LoaderIcon } from "lucide-react";
@@ -129,9 +130,6 @@ function SkinCard({
   );
 }
 
-// XP per level (same formula as Dashboard/Stats)
-const xpForLevel = (lv: number) => lv * 500;
-
 // Compute base stats from real app data
 function computeBaseStats(
   questsCompleted: number,
@@ -199,13 +197,13 @@ export default function CharacterPage() {
   const classInfo = mbtiType ? MBTI_CLASS_MAP[mbtiType] : null;
   const operatorLevel = (profile as any).operator_level ?? 1;
   const operatorXp = (profile as any).operator_xp ?? profile.xp_total ?? 0;
-  const xpToNext = xpForLevel(operatorLevel + 1);
+  const xpToNext = xpRequiredForLevel(operatorLevel);
 
   // Evolution tier data
   const currentTier = tierFromLevel(operatorLevel);
   const tierPercent = tierProgressPercent(operatorXp);
   const { max: tierMax } = TIER_THRESHOLDS[currentTier];
-  const nextTierXp = currentTier < 5 ? totalXpForLevel(TIER_THRESHOLDS[(currentTier + 1) as 2|3|4|5].min) : null;
+  const nextTierXp = currentTier < 20 ? totalXpForLevel(TIER_THRESHOLDS[(currentTier + 1) as EvolutionTier].min) : null;
   const baseStats = computeBaseStats(
     questStats.completed,
     entries.length,
@@ -285,7 +283,7 @@ export default function CharacterPage() {
               <span><Coins size={10} className="inline mr-0.5 text-accent" />{((profile as any).codex_points ?? 0).toLocaleString()} CP</span>
               <span><Coins size={10} className="inline mr-0.5 text-secondary" />{((profile as any).cali_coins ?? 0).toLocaleString()} CC</span>
             </p>
-            <ProgressBar value={operatorXp % xpForLevel(1) || operatorXp} max={xpToNext} variant="cyan" showValue={false} size="sm" />
+            <ProgressBar value={operatorXp} max={xpToNext} variant="cyan" showValue={false} size="sm" />
             <p className="text-[9px] font-mono text-muted-foreground mt-0.5">
               {operatorXp.toLocaleString()} / {xpToNext.toLocaleString()} XP TO LEVEL {operatorLevel + 1}
             </p>
@@ -356,11 +354,11 @@ export default function CharacterPage() {
             </div>
 
             {/* Tier XP progress */}
-            {currentTier < 5 && (
+            {currentTier < 20 && (
               <div className="mb-5">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[9px] font-mono text-muted-foreground">
-                    TIER PROGRESS → {TIER_NAMES[(currentTier + 1) as 2|3|4|5]}
+                    TIER PROGRESS → {TIER_NAMES[(currentTier + 1) as EvolutionTier]}
                   </span>
                   <span className="text-[9px] font-mono" style={{ color: TIER_COLORS[currentTier] }}>
                     {tierPercent}%
@@ -381,9 +379,9 @@ export default function CharacterPage() {
               </div>
             )}
 
-            {/* 5-tier vertical progression */}
+            {/* 20-tier vertical progression */}
             <div className="space-y-2">
-              {([1, 2, 3, 4, 5] as const).map((tier) => {
+              {(Array.from({ length: 20 }, (_, i) => (i + 1) as EvolutionTier)).map((tier) => {
                 const isUnlocked = currentTier >= tier;
                 const isCurrent = currentTier === tier;
                 const title = mbtiType

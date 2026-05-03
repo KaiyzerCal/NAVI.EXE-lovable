@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2, Snowflake, Shield } from "lucide-react";
+import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2, Snowflake, Shield, X, Coins, Cpu } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useNavigate } from "react-router-dom";
 import { Suspense, useState } from "react";
@@ -24,6 +24,9 @@ export default function Dashboard() {
   const { user, session } = useAuth();
   const { toast } = useToast();
   const [usingFreeze, setUsingFreeze] = useState(false);
+  const [briefingDismissed, setBriefingDismissed] = useState(
+    () => sessionStorage.getItem("navi_briefing_dismissed") === "true"
+  );
 
   const handleUseFreeze = async () => {
     setUsingFreeze(true);
@@ -54,6 +57,14 @@ export default function Dashboard() {
   const operatorLevel = profile.operator_level ?? 1;
 
   const activeQuests = quests.filter((q) => !q.completed).slice(0, 4);
+
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? "MORNING" : hour < 18 ? "AFTERNOON" : "EVENING";
+
+  const dismissBriefing = () => {
+    sessionStorage.setItem("navi_briefing_dismissed", "true");
+    setBriefingDismissed(true);
+  };
 
   // Build recent activity from real data — latest journal entries + recently completed quests
   const recentActivity = [
@@ -87,6 +98,78 @@ export default function Dashboard() {
 
   return (
     <div>
+      {/* Currency HUD */}
+      <motion.div
+        {...fadeIn}
+        className="mb-4 cursor-pointer"
+        onClick={() => navigate("/upgrade")}
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-400/30 bg-amber-400/5 text-amber-400 text-xs font-mono">
+            <Coins size={13} />
+            <span>{(profile.cali_coins ?? 0).toLocaleString()} CALI</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-purple-500/30 bg-purple-400/5 text-purple-400 text-xs font-mono">
+            <Cpu size={13} />
+            <span>{(profile.codex_points ?? 0).toLocaleString()} CODEX</span>
+          </div>
+        </div>
+        <p className="text-[10px] font-mono text-muted-foreground mt-1.5">EARN BY COMPLETING QUESTS</p>
+      </motion.div>
+
+      {/* Daily Briefing */}
+      {!briefingDismissed && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="relative mb-5 rounded-lg border border-primary/30 bg-primary/5 p-4"
+        >
+          <button
+            onClick={dismissBriefing}
+            className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Dismiss briefing"
+          >
+            <X size={14} />
+          </button>
+          <div className="flex items-start gap-3 pr-6">
+            <MessageSquare size={16} className="text-primary mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-mono text-primary font-bold mb-2">
+                GOOD {timeOfDay}, {(profile.display_name || "OPERATOR").toUpperCase()}.
+              </p>
+              <ul className="space-y-1">
+                {profile.current_streak > 0 && (
+                  <li className="text-xs font-mono text-muted-foreground">
+                    🔥 {profile.current_streak}-day streak active. Keep it going.
+                  </li>
+                )}
+                {stats.active > 0 ? (
+                  <li className="text-xs font-mono text-muted-foreground">
+                    ⚔ {stats.active} active quest{stats.active !== 1 ? "s" : ""}. Ready to advance.
+                  </li>
+                ) : (
+                  <li className="text-xs font-mono text-muted-foreground">
+                    No active quests. Tell NAVI what you want to achieve.
+                  </li>
+                )}
+                {entries.length === 0 && (
+                  <li className="text-xs font-mono text-muted-foreground">
+                    No journal entries yet. Start logging your progress.
+                  </li>
+                )}
+              </ul>
+              <button
+                onClick={() => navigate("/mavis")}
+                className="mt-3 px-3 py-1 rounded border border-primary/40 bg-primary/10 text-primary text-[11px] font-mono hover:bg-primary/20 transition-colors"
+              >
+                TALK TO NAVI
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Hero: Navi Partner */}
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
@@ -121,13 +204,39 @@ export default function Dashboard() {
           <p className="text-xs font-mono text-muted-foreground mb-1">
             LVL {profile.navi_level} // {profile.equipped_skin} // BOND {bondAvg}%
           </p>
-          <div className="flex items-center gap-2 text-xs font-mono">
+          <div className="flex items-center gap-2 text-xs font-mono mb-4">
             <Heart size={10} className="text-neon-purple" />
-            <span className="text-muted-foreground">Bond</span>
-            <span className="text-primary">{bondAvg}%</span>
-            <span className="text-muted-foreground mx-1">·</span>
             <span className="text-muted-foreground">Streak</span>
             <span className="text-neon-amber">{profile.current_streak}d</span>
+            {profile.navi_personality && (
+              <>
+                <span className="text-muted-foreground mx-1">·</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted/20 text-muted-foreground border border-muted/30">
+                  {profile.navi_personality.toUpperCase()}
+                </span>
+              </>
+            )}
+          </div>
+          {/* Bond breakdown bars */}
+          <div className="w-full max-w-xs space-y-2">
+            {[
+              { label: "AFFECTION", value: profile.bond_affection, color: "bg-neon-purple", textColor: "text-neon-purple" },
+              { label: "TRUST",     value: profile.bond_trust,     color: "bg-cyan-400",    textColor: "text-cyan-400" },
+              { label: "LOYALTY",   value: profile.bond_loyalty,   color: "bg-neon-green",  textColor: "text-neon-green" },
+            ].map(({ label, value, color, textColor }) => (
+              <div key={label}>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] font-mono text-muted-foreground">{label}</span>
+                  <span className={`text-[10px] font-mono ${textColor}`}>{value ?? 0}%</span>
+                </div>
+                <div className="h-0.5 rounded-full bg-muted/20 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${color}`}
+                    style={{ width: `${Math.min(value ?? 0, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </motion.div>

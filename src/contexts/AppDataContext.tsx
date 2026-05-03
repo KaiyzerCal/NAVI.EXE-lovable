@@ -71,6 +71,9 @@ interface AppDataContextType {
   removeEffect: (id: string) => Promise<void>;
   refetchEffects: () => Promise<void>;
 
+  // Refresh app data after action execution
+  refreshAppData: (sections?: string[]) => Promise<void>;
+
   // Chat state (persists across tab switches)
   chatMessages: DisplayMessage[];
   setChatMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>;
@@ -112,6 +115,32 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const isReady = !profileLoading;
 
+  // Map section names and Supabase table names to refetch calls
+  async function refreshAppData(sections?: string[]): Promise<void> {
+    const all = !sections || sections.length === 0 || sections.includes("all");
+    const wants = (name: string) => all || sections!.includes(name);
+
+    const table = (t: string) =>
+      t === "profiles" || t === "profile" ? wants("profile") :
+      t === "quests" ? wants("quests") :
+      t === "skills" ? wants("skills") :
+      t === "journal_entries" || t === "journal" ? wants("journal") :
+      t === "equipment" ? wants("equipment") :
+      t === "buffs" || t === "effects" ? wants("buffs") :
+      t === "achievements" ? wants("achievements") :
+      false;
+
+    const calls: Promise<void>[] = [];
+    if (wants("profile") || table("profiles")) calls.push(refetchProfile());
+    if (wants("quests") || table("quests")) calls.push(refetchQuests());
+    if (wants("skills") || table("skills")) calls.push(refetchSkills());
+    if (wants("journal") || table("journal_entries")) calls.push(refetchJournal());
+    if (wants("equipment") || table("equipment")) calls.push(refetchEquipment());
+    if (wants("buffs") || wants("effects") || table("buffs")) calls.push(refetchEffects());
+    if (wants("achievements") || table("achievements")) calls.push(refetchAchievements());
+    await Promise.all(calls);
+  }
+
   if (!isReady) {
     return null;
   }
@@ -126,6 +155,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       skills, skillsLoading, addSkill, updateSkill, deleteSkill, refetchSkills,
       items, equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetchEquipment,
       effects, effectsLoading, addEffect, removeEffect, refetchEffects,
+      refreshAppData,
       chatMessages, setChatMessages, conversationId, setConversationId, chatDbLoaded, setChatDbLoaded,
     }}>
       {children}

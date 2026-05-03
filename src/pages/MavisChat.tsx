@@ -9,7 +9,8 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
+import { executeAction as executeClientAction, type NaviAction, type NaviActionResult } from "@/lib/naviActions";
+import { useNavigate } from "react-router-dom";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -291,6 +292,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user, session } = useAuth();
+  const navigate = useNavigate();
   const {
     profile, updateProfile, refetchProfile,
     quests, questStats, refetchQuests,
@@ -302,6 +304,7 @@ export default function MavisChat() {
     chatMessages: messages, setChatMessages: setMessages,
     conversationId, setConversationId,
     chatDbLoaded, setChatDbLoaded,
+    refreshAppData,
   } = useAppData();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

@@ -118,6 +118,36 @@ function inferFallbackActions(userMessage: string, cleanText: string, appData?: 
     }
   }
 
+  // Skill progression / level-up / XP intent
+  // Examples: "level up coding", "I practiced guitar", "trained Spanish for 30 min",
+  //          "give my fitness skill 50 xp", "increase my drawing skill"
+  if (appData?.skills?.length) {
+    const matchedSkill = appData.skills.find((s: any) =>
+      s.name && msg.includes(s.name.toLowerCase())
+    );
+    if (matchedSkill) {
+      // Explicit XP amount: "50 xp"
+      const xpMatch = msg.match(/(\d+)\s*xp/i);
+      if (xpMatch) {
+        return [{
+          type: "progress_skill",
+          params: { skill_id: matchedSkill.id, xp_amount: parseInt(xpMatch[1], 10), reason: userMessage.trim().slice(0, 80) },
+        }];
+      }
+      // Explicit level-up: "level up X", "X to next level"
+      if (/(level\s*up|next level|rank up|promote)/i.test(msg)) {
+        return [{ type: "level_up_skill", params: { skill_id: matchedSkill.id } }];
+      }
+      // Practice / train / progress verbs imply XP gain
+      if (/(practiced|trained|studied|worked on|did|drilled|improved|progressed|grinded|learned)/i.test(msg)) {
+        return [{
+          type: "progress_skill",
+          params: { skill_id: matchedSkill.id, xp_amount: 25, reason: userMessage.trim().slice(0, 80) },
+        }];
+      }
+    }
+  }
+
   // Complete/finish quest intent
   if (/(finish|complete|done|did it|finished|completed|mark.*done|close)/i.test(msg)) {
     if (appData?.quests) {

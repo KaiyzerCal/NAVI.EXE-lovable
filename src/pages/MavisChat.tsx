@@ -921,76 +921,70 @@ export default function MavisChat() {
           console.log("[NAVI] Fallback used:", functionCallingActions.length === 0 && actions.length > 0);
           console.log("[NAVI] Actions:", JSON.stringify(actions, null, 2));
 
+          // Strip any raw action JSON noise from visible chat
+          let visibleText = cleanText
+            .replace(/```actions[\s\S]*?```/gi, "")
+            .replace(/```json\s*\{[\s\S]*?\}\s*```/gi, "")
+            .replace(/:::ACTION[\s\S]*?:::/g, "")
+            .trim();
+
+          let summary = "";
+          let navigateTarget: string | null = null;
+
           if (actions.length > 0) {
-            let failedActions: NaviAction[] = [];
-
-            try {
-              const actionResp = await fetch(NAVI_ACTIONS_URL, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                  Authorization: `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({ actions }),
-              });
-
-              const actionJson = await actionResp.json().catch(() => ({ results: [] }));
-              console.log("[NAVI] Action response status:", actionResp.status);
-              console.log("[NAVI] Action response body:", JSON.stringify(actionJson));
-
-              if (!actionResp.ok) {
-                throw new Error(actionJson.error || `Action request failed (${actionResp.status})`);
-              }
-
-              const failures = Array.isArray(actionJson.results)
-                ? actionJson.results
-                    .map((result: { success: boolean }, index: number) => (!result.success ? actions[index] : null))
-                    .filter((result): result is NaviAction => Boolean(result))
-                : [];
-
-              if (failures.length > 0) {
-                console.error("[NAVI] Action failures:", failures);
-                failedActions = failures;
-              }
-            } catch (err) {
-              console.error("[NAVI] Backend action execution failed:", err);
-              failedActions = actions;
-            }
-
-            if (failedActions.length > 0) {
-              const fallbackActions = failedActions.filter((action) => CLIENT_FALLBACK_ACTION_TYPES.has(action.type));
-
-              for (const action of fallbackActions) {
-                try {
-                  await executeClientAction(user.id, action);
-                } catch (fallbackError) {
-                  console.error("[NAVI] Client fallback failed:", action.type, fallbackError);
-                }
+            const results: NaviActionResult[] = [];
+            for (const action of actions) {
+              try {
+                const r = await executeClientAction(user.id, action);
+                results.push(r);
+              } catch (e: any) {
+                results.push({ type: action.type, success: false, message: "Exception", error: e?.message ?? String(e) });
               }
             }
+            console.log("[NAVI] Action results:", results);
 
-            await Promise.all([
-              refetchQuests(),
-              refetchJournal(),
-              refetchSkills(),
-              refetchEquipment(),
-              refetchEffects(),
-              refetchProfile(),
-              refetchAchievements(),
-            ]);
+            const refreshSet = new Set<string>();
+            for (const r of results) {
+              for (const t of r.affectedTables ?? []) refreshSet.add(t);
+              for (const s of r.refreshSections ?? []) refreshSet.add(s);
+              if (r.navigateTo && !navigateTarget) navigateTarget = r.navigateTo;
+            }
+
+            // Map DB tables → context refresh sections
+            const sectionMap: Record<string, string> = {
+              profiles: "profile", quests: "quests", skills: "skills",
+              journal_entries: "journal", equipment: "equipment", buffs: "buffs",
+              activity_log: "activity_log", achievements: "achievements",
+            };
+            const sections = Array.from(refreshSet).map((t) => sectionMap[t] ?? t);
+            if (sections.length > 0) await refreshAppData(sections);
+
+            const successes = results.filter((r) => r.success);
+            const failures = results.filter((r) => !r.success);
+            const parts: string[] = [];
+            if (successes.length > 0) parts.push(successes.map((r) => r.message).join(" "));
+            if (failures.length > 0) parts.push(`Failed: ${failures.map((r) => r.message).join("; ")}`);
+            summary = parts.join(" ");
           }
 
+          const finalText = summary
+            ? (visibleText ? `${visibleText}\n\n— ${summary}` : summary)
+            : visibleText;
+
           try {
-            const assistantId = await saveMessage(conversationId, user.id, "assistant", cleanText);
+            const assistantId = await saveMessage(conversationId, user.id, "assistant", finalText);
             setMessages((prev) =>
-              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: cleanText } : m))
+              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: finalText } : m))
             );
           } catch (err) {
             console.error("Failed to save assistant message:", err);
             setMessages((prev) =>
-              prev.map((m) => (m.id === "streaming" ? { ...m, content: cleanText } : m))
+              prev.map((m) => (m.id === "streaming" ? { ...m, content: finalText } : m))
             );
+          }
+
+          if (navigateTarget) {
+            try { navigate(navigateTarget); } catch (e) { console.warn("[NAVI] navigate failed", e); }
           }
 
           setIsLoading(false);
@@ -1001,7 +995,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refreshAppData, navigate]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,

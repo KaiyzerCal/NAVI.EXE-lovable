@@ -990,39 +990,80 @@ serve(async (req) => {
 
     const systemPrompt = buildSystemPrompt(context || {}, webSearchResults, semanticMemories);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
-        stream: true,
-      }),
-    });
+    const chatPayload = {
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages,
+      ],
+      stream: true,
+    };
 
-    if (!response.ok) {
-      if (response.status === 429) {
+    let response: Response | null = null;
+    let usedFallback = false;
+
+    // Primary: Lovable AI Gateway (Gemini)
+    try {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...chatPayload, model: "google/gemini-2.5-flash" }),
+      });
+    } catch (e) {
+      console.error("Lovable AI gateway fetch threw:", e);
+      response = null;
+    }
+
+    const shouldFallback =
+      !response ||
+      response.status === 402 ||
+      response.status === 429 ||
+      response.status >= 500;
+
+    if (shouldFallback && OPENAI_API_KEY) {
+      const primaryStatus = response?.status ?? "network_error";
+      const primaryBody = response ? await response.text().catch(() => "") : "";
+      console.warn(
+        `Lovable AI unavailable (status=${primaryStatus}), falling back to OpenAI. Body:`,
+        primaryBody.slice(0, 300)
+      );
+      try {
+        response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...chatPayload, model: "gpt-4o-mini" }),
+        });
+        usedFallback = true;
+      } catch (e) {
+        console.error("OpenAI fallback fetch threw:", e);
+      }
+    }
+
+    if (!response || !response.ok) {
+      const status = response?.status ?? 500;
+      if (status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402 || response.status === 401) {
-        return new Response(JSON.stringify({ error: "AI gateway auth/credits issue." }), {
-          status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (status === 402 || status === 401) {
+        return new Response(JSON.stringify({ error: "AI credits exhausted on both providers." }), {
+          status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      const t = response ? await response.text().catch(() => "") : "no response";
+      console.error("AI provider error (final):", status, t);
       return new Response(JSON.stringify({ error: "AI API error" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    if (usedFallback) console.log("navi-chat: streaming response from OpenAI fallback (gpt-4o-mini).");
 
     // Fire-and-forget: bump last_active + engagement score on profile.
     // Adaptive personality drift was removed — it depended on a

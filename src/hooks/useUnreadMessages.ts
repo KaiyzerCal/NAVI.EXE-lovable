@@ -10,14 +10,14 @@ export function useUnreadMessages() {
 
   const fetchNaviUnread = useCallback(async () => {
     if (!user) return 0;
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("navi_message_threads")
       .select("id, sender_user_id, sender_unread, receiver_unread")
       .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`);
 
     const byThread: Record<string, number> = {};
     let total = 0;
-    for (const t of data ?? []) {
+    for (const t of (data ?? []) as any[]) {
       const count = t.sender_user_id === user.id
         ? (t.sender_unread ?? 0)
         : (t.receiver_unread ?? 0);
@@ -30,13 +30,18 @@ export function useUnreadMessages() {
 
   const fetchDMUnread = useCallback(async () => {
     if (!user) return 0;
-    const { count } = await supabase
-      .from("direct_messages" as any)
-      .select("id", { count: "exact", head: true })
-      .eq("recipient_id", user.id)
-      .is("read_at", null)
-      .eq("deleted_by_recipient", false);
-    return count ?? 0;
+    try {
+      const { count, error } = await (supabase as any)
+        .from("direct_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", user.id)
+        .is("read_at", null)
+        .eq("deleted_by_recipient", false);
+      if (error) return 0;
+      return count ?? 0;
+    } catch {
+      return 0;
+    }
   }, [user]);
 
   const fetchUnread = useCallback(async () => {
@@ -62,9 +67,9 @@ export function useUnreadMessages() {
 
   async function markThreadRead(threadId: string, isSender: boolean) {
     const col = isSender ? "sender_unread" : "receiver_unread";
-    await supabase
+    await (supabase as any)
       .from("navi_message_threads")
-      .update({ [col]: 0 } as any)
+      .update({ [col]: 0 })
       .eq("id", threadId);
     const prev = unreadByThread[threadId] ?? 0;
     setUnreadByThread((p) => ({ ...p, [threadId]: 0 }));

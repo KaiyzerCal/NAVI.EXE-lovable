@@ -56,6 +56,7 @@ export default function SearchPage() {
       setSearched(true);
 
       const COLS = "id, display_name, username, navi_name, character_class, mbti_type, operator_level, subscription_tier";
+      const COLS_SAFE = "id, display_name, navi_name, character_class, mbti_type, operator_level, subscription_tier";
       const term = q.trim();
 
       // Try combined display_name + username search; fall back to display_name only
@@ -68,13 +69,17 @@ export default function SearchPage() {
         .limit(30);
 
       if (error) {
+        // Fallback: exclude username from select so the query works even if
+        // the username column hasn't been migrated to the live DB yet.
         const fallback = await (supabase as any)
           .from("profiles")
-          .select(COLS)
+          .select(COLS_SAFE)
           .ilike("display_name", `%${term}%`)
           .neq("id", user.id)
           .limit(30);
-        data = fallback.data;
+        data = fallback.data
+          ? (fallback.data as any[]).map((r) => ({ ...r, username: null }))
+          : null;
         error = fallback.error;
       }
 

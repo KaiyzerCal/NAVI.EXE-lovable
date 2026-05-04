@@ -116,19 +116,23 @@ export default function InboxPage() {
   // ── Load thread list ─────────────────────────────────────────────────────
   const loadThreads = useCallback(async () => {
     if (!user) return;
-    const { data: rows } = await supabase
+    const { data: rows, error: threadsError } = await (supabase as any)
       .from("navi_message_threads")
-      .select("id, sender_user_id, receiver_user_id, last_message_at, deleted_by_sender, deleted_by_recipient")
+      .select("*")
       .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
       .order("last_message_at", { ascending: false });
 
+    if (threadsError) {
+      console.error("Failed to load threads:", threadsError.message);
+    }
+
     if (!rows?.length) { setThreads([]); setLoading(false); return; }
 
-    // Filter out threads the current user has deleted
-    const visibleRows = rows.filter((t) => {
+    // Filter out threads the current user has deleted (columns may not exist yet)
+    const visibleRows = (rows as any[]).filter((t) => {
       const isSender = t.sender_user_id === user.id;
-      if (isSender && (t as any).deleted_by_sender) return false;
-      if (!isSender && (t as any).deleted_by_recipient) return false;
+      if (isSender && t.deleted_by_sender) return false;
+      if (!isSender && t.deleted_by_recipient) return false;
       return true;
     });
 
@@ -147,7 +151,7 @@ export default function InboxPage() {
 
     const previews = await Promise.all(
       visibleRows.map((t) =>
-        supabase
+        (supabase as any)
           .from("navi_messages")
           .select("content, sender_navi_name, attachment_name, attachment_type")
           .eq("thread_id", t.id)
@@ -220,12 +224,17 @@ export default function InboxPage() {
   async function openThread(thread: Thread) {
     setActiveThread(thread);
     setComposing(false);
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("navi_messages")
       .select("*")
       .eq("thread_id", thread.id)
       .order("created_at", { ascending: true });
-    setMessages((data ?? []).map((m: any) => ({ ...m, sender_display_name: null })));
+    setMessages((data ?? []).map((m: any) => ({
+      ...m,
+      sender_display_name: null,
+      deleted_by_sender: m.deleted_by_sender ?? false,
+      deleted_by_recipient: m.deleted_by_recipient ?? false,
+    })));
     // Mark as read
     const isSender = thread.sender_user_id === user?.id;
     await markThreadRead(thread.id, isSender);
@@ -372,7 +381,7 @@ export default function InboxPage() {
 
   async function startThread(target: { id: string; display_name: string | null; navi_name: string | null }) {
     if (!user) return;
-    const { data: existing } = await supabase
+    const { data: existing } = await (supabase as any)
       .from("navi_message_threads")
       .select("*")
       .or(
@@ -381,7 +390,7 @@ export default function InboxPage() {
       )
       .maybeSingle();
 
-    const row = existing ?? (await supabase
+    const row = existing ?? (await (supabase as any)
       .from("navi_message_threads")
       .insert({ sender_user_id: user.id, receiver_user_id: target.id })
       .select()

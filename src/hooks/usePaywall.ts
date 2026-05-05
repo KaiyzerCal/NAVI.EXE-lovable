@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useOwner } from "@/hooks/useOwner";
 import { useSubscription } from "@/hooks/useSubscription";
 
 export const FREE_LIMITS = {
@@ -7,10 +6,6 @@ export const FREE_LIMITS = {
   DAILY_AI_MESSAGES: 15,
 } as const;
 
-/**
- * Starter skins available on the free tier. Everything else requires Core.
- * Owners/admins always have access to everything regardless of subscription.
- */
 export const FREE_SKINS = new Set([
   "NETOP",
   "GUARDIAN",
@@ -20,18 +15,19 @@ export const FREE_SKINS = new Set([
 ]);
 
 export function usePaywall() {
-  const isOwner = useOwner();
-  const { isActive, tier, loading } = useSubscription();
+  const { isOwner, isCore, isElite, isFree, tier, loading } = useSubscription();
 
   return useMemo(() => {
-    // Owners/admins/editors always have full access.
-    const hasFullAccess = isOwner || isActive;
+    // Owners/admins always have full access regardless of subscription tier.
+    const hasFullAccess = isOwner || isCore;
+
     return {
       loading,
       isOwner,
-      isCore: isActive,
+      isCore,
+      isElite,
       hasFullAccess,
-      tier: hasFullAccess ? ("core" as const) : tier,
+      tier: hasFullAccess ? tier : "free" as const,
       canCreateQuest: (currentActiveQuests: number) =>
         hasFullAccess || currentActiveQuests < FREE_LIMITS.MAX_ACTIVE_QUESTS,
       canSendMessage: (todayCount: number) =>
@@ -40,5 +36,5 @@ export function usePaywall() {
         hasFullAccess || FREE_SKINS.has(skinName.toUpperCase()),
       limits: FREE_LIMITS,
     };
-  }, [isOwner, isActive, tier, loading]);
+  }, [isOwner, isCore, isElite, isFree, tier, loading]);
 }

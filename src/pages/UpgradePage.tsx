@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Zap, Check, Lock, Loader2, Crown, Package, Swords, ChevronDown, ChevronUp, Coins } from "lucide-react";
+import { Zap, Check, Lock, Loader2, Crown, Package, Swords, ChevronDown, ChevronUp, Coins, Settings } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import SubscriptionBadge from "@/components/SubscriptionBadge";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
 
-const FREE_FEATURES  = ["3 active quests", "15 AI messages/day", "2 starter skins", "Basic NAVI personality"];
+const FREE_FEATURES  = ["3 active quests", "15 AI messages/day", "5 starter skins", "Basic NAVI personality"];
 const CORE_FEATURES  = ["Unlimited quests", "Unlimited AI messages", "All 64 skins", "All personality modes", "Push notifications", "Party system", "Full stats dashboard", "Guild access"];
 const ELITE_FEATURES = [
   "Everything in Core",
@@ -45,20 +45,26 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function UpgradePage() {
   const [params] = useSearchParams();
-  const { tier, startCheckout } = useSubscription();
+  const { tier, isOwner, startCheckout, openPortal } = useSubscription();
   const { user, session } = useAuth();
   const { profile } = useAppData();
-  const [loading, setLoading] = useState(false);
+
+  const [coreLoading,  setCoreLoading]  = useState(false);
   const [eliteLoading, setEliteLoading] = useState(false);
-  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [packs, setPacks] = useState<QuestPack[]>([]);
   const [ownedPackIds, setOwnedPackIds] = useState<Set<string>>(new Set());
   const [expandedPack, setExpandedPack] = useState<string | null>(null);
   const [purchasingPack, setPurchasingPack] = useState<string | null>(null);
-  const success = params.get("success") === "1";
+
+  const success   = params.get("success")   === "1";
   const cancelled = params.get("cancelled") === "1";
+  const successTier = params.get("tier") ?? "core";
 
   const forgeBalance = (profile as any).forge_balance ?? 0;
+
+  // Whether this user already has a paid subscription
+  const isSubscribed = tier === "core" || tier === "elite" || isOwner;
 
   useEffect(() => {
     (async () => {
@@ -75,20 +81,21 @@ export default function UpgradePage() {
     })();
   }, [user]);
 
-  async function handleUpgrade() {
-    setLoading(true);
-    try { await startCheckout(); } finally { setLoading(false); }
+  async function handleCoreCheckout() {
+    setCoreLoading(true);
+    try {
+      await startCheckout("core");
+    } catch (e: any) {
+      toast({ title: "Checkout Error", description: e.message || "Could not start checkout.", variant: "destructive" });
+    } finally {
+      setCoreLoading(false);
+    }
   }
 
   async function handleEliteCheckout() {
     setEliteLoading(true);
     try {
-      const ELITE_PRICE_ID = "price_elite_placeholder"; // replace with real Stripe Elite price ID
-      const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-        body: { priceId: ELITE_PRICE_ID, tier: "elite" },
-      });
-      if (error) throw error;
-      if (data?.url) window.location.href = data.url;
+      await startCheckout("elite");
     } catch (e: any) {
       toast({ title: "Checkout Error", description: e.message || "Could not start checkout.", variant: "destructive" });
     } finally {
@@ -96,11 +103,21 @@ export default function UpgradePage() {
     }
   }
 
+  async function handlePortal() {
+    setPortalLoading(true);
+    try {
+      await openPortal();
+    } catch (e: any) {
+      toast({ title: "Portal Error", description: e.message || "Could not open billing portal.", variant: "destructive" });
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
   async function handlePackPurchase(pack: QuestPack) {
     if (!user || !session?.access_token) return;
     setPurchasingPack(pack.id);
     try {
-      // Insert quest templates as quests for the user
       const quests = (pack.quest_templates as any[]).map((t: any) => ({
         user_id: user.id,
         name: t.name,
@@ -114,7 +131,6 @@ export default function UpgradePage() {
       const { error: qErr } = await supabase.from("quests").insert(quests as any);
       if (qErr) throw qErr;
 
-      // Record purchase
       await (supabase as any).from("operator_quest_packs").insert({ user_id: user.id, pack_id: pack.id });
       setOwnedPackIds((prev) => new Set([...prev, pack.id]));
       toast({ title: `${pack.name} Activated!`, description: `${pack.quest_count} quests have been added to your board.` });
@@ -125,15 +141,20 @@ export default function UpgradePage() {
     }
   }
 
+  const tierLabel = successTier === "elite" ? "Elite Operator" : "Core Operator";
+
   return (
     <div>
       <PageHeader title="UPGRADE" subtitle="// UNLOCK FULL OPERATOR ACCESS" />
 
+      {/* Success banner */}
       {success && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
           className="mb-6 p-4 rounded border border-neon-green/40 bg-neon-green/5 text-center">
           <p className="font-display text-neon-green font-bold tracking-wider">// OPERATOR ONLINE</p>
-          <p className="text-xs font-mono text-muted-foreground mt-1">Core Operator access activated. Welcome.</p>
+          <p className="text-xs font-mono text-muted-foreground mt-1">
+            {tierLabel} access activated. Welcome to the network.
+          </p>
         </motion.div>
       )}
 
@@ -143,14 +164,32 @@ export default function UpgradePage() {
         </div>
       )}
 
-      {/* Current tier */}
-      <div className="flex items-center gap-3 mb-6 p-4 rounded border border-border bg-muted/20">
-        <span className="text-xs font-mono text-muted-foreground">YOUR CURRENT TIER:</span>
-        <SubscriptionBadge tier={tier} />
+      {/* Current tier + manage subscription */}
+      <div className="flex items-center justify-between gap-3 mb-6 p-4 rounded border border-border bg-muted/20">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono text-muted-foreground">YOUR TIER:</span>
+          <SubscriptionBadge tier={isOwner ? "elite" : tier} />
+          {isOwner && (
+            <span className="text-[9px] font-mono text-amber-400 border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 rounded">
+              ADMIN
+            </span>
+          )}
+        </div>
+        {isSubscribed && !isOwner && (
+          <button
+            onClick={handlePortal}
+            disabled={portalLoading}
+            className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground hover:text-foreground border border-border rounded px-2.5 py-1.5 hover:border-border/80 transition-colors disabled:opacity-50"
+          >
+            {portalLoading ? <Loader2 size={10} className="animate-spin" /> : <Settings size={10} />}
+            MANAGE SUBSCRIPTION
+          </button>
+        )}
       </div>
 
       {/* Tier comparison */}
       <div className="grid md:grid-cols-3 gap-4 mb-8">
+
         {/* FREE */}
         <HudCard title="FREE" icon={<Lock size={14} />}>
           <div className="space-y-2 mb-4">
@@ -164,7 +203,7 @@ export default function UpgradePage() {
           <p className="text-[10px] font-mono text-muted-foreground">forever</p>
         </HudCard>
 
-        {/* CORE — highlighted */}
+        {/* CORE — recommended */}
         <motion.div
           className="rounded-lg border-2 border-primary/60 bg-primary/5 p-4 relative"
           style={{ boxShadow: "0 0 32px rgba(56,189,248,0.1)" }}
@@ -185,21 +224,22 @@ export default function UpgradePage() {
           </div>
           <p className="text-2xl font-display font-bold text-primary mb-0.5">$7.99</p>
           <p className="text-[10px] font-mono text-muted-foreground mb-4">per month</p>
-          {tier === "core" || tier === "elite" ? (
+
+          {tier === "core" || tier === "elite" || isOwner ? (
             <div className="py-2 text-center text-xs font-mono text-neon-green">// ACTIVE</div>
           ) : (
             <button
-              onClick={handleUpgrade}
-              disabled={loading}
+              onClick={handleCoreCheckout}
+              disabled={coreLoading}
               className="w-full py-2.5 rounded font-display font-bold tracking-wider text-sm bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 transition-all flex items-center justify-center gap-2"
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+              {coreLoading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
               UPGRADE NOW
             </button>
           )}
         </motion.div>
 
-        {/* ELITE OPERATOR */}
+        {/* ELITE */}
         <motion.div
           className="rounded-lg border-2 border-secondary/50 bg-secondary/5 p-4 relative"
           style={{ boxShadow: "0 0 24px rgba(168,85,247,0.08)" }}
@@ -217,29 +257,18 @@ export default function UpgradePage() {
           </div>
           <p className="text-2xl font-display font-bold text-secondary mb-0.5">$19.99</p>
           <p className="text-[10px] font-mono text-muted-foreground mb-4">per month</p>
-          {tier === "elite" ? (
+
+          {tier === "elite" || isOwner ? (
             <div className="py-2 text-center text-xs font-mono text-secondary">// ACTIVE — ELITE</div>
-          ) : waitlistSubmitted ? (
-            <div className="py-1.5 text-center rounded border border-amber-500/40 bg-amber-500/10">
-              <span className="text-[10px] font-mono text-amber-400 font-bold tracking-widest">YOU'RE ON THE LIST</span>
-            </div>
           ) : (
-            <div className="space-y-2">
-              <button
-                onClick={handleEliteCheckout}
-                disabled={eliteLoading}
-                className="w-full py-2 rounded font-display font-bold tracking-wider text-sm bg-secondary/20 border border-secondary/50 text-secondary hover:bg-secondary/30 transition-all flex items-center justify-center gap-2"
-              >
-                {eliteLoading ? <Loader2 size={14} className="animate-spin" /> : <Crown size={14} />}
-                UPGRADE TO ELITE
-              </button>
-              <button
-                onClick={() => setWaitlistSubmitted(true)}
-                className="w-full py-1.5 text-center rounded border border-secondary/20 bg-transparent text-[10px] font-mono text-muted-foreground hover:text-secondary hover:border-secondary/40 transition-colors"
-              >
-                JOIN WAITLIST INSTEAD
-              </button>
-            </div>
+            <button
+              onClick={handleEliteCheckout}
+              disabled={eliteLoading}
+              className="w-full py-2 rounded font-display font-bold tracking-wider text-sm bg-secondary/20 border border-secondary/50 text-secondary hover:bg-secondary/30 transition-all flex items-center justify-center gap-2"
+            >
+              {eliteLoading ? <Loader2 size={14} className="animate-spin" /> : <Crown size={14} />}
+              UPGRADE TO ELITE
+            </button>
           )}
         </motion.div>
       </div>
@@ -335,8 +364,8 @@ export default function UpgradePage() {
                       {(pack.quest_templates as any[]).map((t: any, idx: number) => (
                         <div key={idx} className="flex items-start gap-2">
                           <span className={`text-[9px] font-mono px-1 py-0.5 rounded shrink-0 mt-0.5 ${
-                            t.type === "Epic" ? "bg-accent/10 text-accent" :
-                            t.type === "Main" ? "bg-neon-purple/10 text-neon-purple" :
+                            t.type === "Epic"   ? "bg-accent/10 text-accent" :
+                            t.type === "Main"   ? "bg-neon-purple/10 text-neon-purple" :
                             t.type === "Weekly" ? "bg-primary/10 text-primary" :
                             "bg-muted/30 text-muted-foreground"
                           }`}>{t.type}</span>

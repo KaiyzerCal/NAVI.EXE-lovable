@@ -932,37 +932,47 @@ serve(async (req) => {
     const userId = context?.user_id as string | undefined;
 
     // ── Subscription enforcement ──────────────────────────────────────────────
-    // Uses the actual schema columns: profiles.daily_message_count and
-    // profiles.message_count_reset_date. Free tier is capped at FREE_LIMIT/day.
+    // Free tier: 15 msg/day cap. Core + Elite + admins: unlimited.
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
       try {
+        const serviceHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
         const profileRes = await fetch(
           `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,message_count_reset_date`,
-          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+          { headers: serviceHeaders }
         );
         if (profileRes.ok) {
           const profiles = await profileRes.json();
           const p = profiles?.[0];
           const tier = p?.subscription_tier ?? "free";
-          const today = new Date().toISOString().slice(0, 10);
-          const resetDate = p?.message_count_reset_date ?? today;
-          const dailyCount = resetDate < today ? 0 : Number(p?.daily_message_count ?? 0);
-          const FREE_LIMIT = 50;
-          if (tier === "free" && dailyCount >= FREE_LIMIT) {
-            return new Response(
-              JSON.stringify({ error: `Daily sync quota reached (${FREE_LIMIT} messages). Upgrade to Core Operator for unlimited bandwidth.` }),
-              { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+
+          // Core and Elite users are always unlimited — skip remaining checks.
+          if (tier !== "free") { /* unlimited */ }
+          else {
+            // Belt-and-suspenders: also check admin_users table in case the
+            // profile tier hasn't been updated after admin was added to DB.
+            const adminRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/admin_users?user_id=eq.${userId}&select=user_id`,
+              { headers: serviceHeaders }
             );
-          }
-          if (tier === "free") {
-            fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
-              method: "PATCH",
-              headers: {
-                apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-                "Content-Type": "application/json", Prefer: "return=minimal",
-              },
-              body: JSON.stringify({ daily_message_count: dailyCount + 1, message_count_reset_date: today }),
-            }).catch(() => {});
+            const isAdmin = adminRes.ok && ((await adminRes.json())?.length ?? 0) > 0;
+
+            if (!isAdmin) {
+              const today = new Date().toISOString().slice(0, 10);
+              const resetDate = p?.message_count_reset_date ?? today;
+              const dailyCount = resetDate < today ? 0 : Number(p?.daily_message_count ?? 0);
+              const FREE_LIMIT = 15;
+              if (dailyCount >= FREE_LIMIT) {
+                return new Response(
+                  JSON.stringify({ error: `Daily sync quota reached (${FREE_LIMIT} messages). Upgrade to Core Operator for unlimited bandwidth.` }),
+                  { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              }
+              fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+                method: "PATCH",
+                headers: { ...serviceHeaders, "Content-Type": "application/json", Prefer: "return=minimal" },
+                body: JSON.stringify({ daily_message_count: dailyCount + 1, message_count_reset_date: today }),
+              }).catch(() => {});
+            }
           }
         }
       } catch (e) { console.warn("Subscription check failed (non-blocking):", e); }

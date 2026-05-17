@@ -79,7 +79,7 @@ const STREAK_MILESTONES = [7, 14, 30, 60, 100];
 
 function AppShell() {
   const { profile, updateProfile } = useAppData();
-  const { autoPost } = useFeed();
+  const { autoPost, newPostCount, clearNewCount } = useFeed();
   const { user } = useAuth();
   const operatorLevel = profile.operator_level ?? 1;
   const lastTier = (profile as any).last_evolution_tier ?? 1;
@@ -122,6 +122,21 @@ function AppShell() {
     }
     prevStreakRef.current = streak;
   }, [profile.current_streak]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toast when new feed posts arrive and user isn't on the social page
+  const prevNewPostCountRef = useRef(0);
+  useEffect(() => {
+    if (newPostCount > 0 && newPostCount > prevNewPostCountRef.current) {
+      const onSocialPage = window.location.pathname === "/social";
+      if (!onSocialPage) {
+        toast({
+          title: "New activity in feed",
+          description: `${newPostCount} new post${newPostCount !== 1 ? "s" : ""} from operators`,
+        });
+      }
+    }
+    prevNewPostCountRef.current = newPostCount;
+  }, [newPostCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Global DM toast notification
   useEffect(() => {

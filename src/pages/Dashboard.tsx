@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2, Snowflake, Shield } from "lucide-react";
+import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2, Snowflake, Shield, Eye, Sword } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useNavigate } from "react-router-dom";
 import { Suspense, useState } from "react";
@@ -121,13 +121,30 @@ export default function Dashboard() {
           <p className="text-xs font-mono text-muted-foreground mb-1">
             LVL {profile.navi_level} // {profile.equipped_skin} // BOND {bondAvg}%
           </p>
-          <div className="flex items-center gap-2 text-xs font-mono">
+          <div className="flex items-center gap-2 text-xs font-mono mb-3">
             <Heart size={10} className="text-neon-purple" />
             <span className="text-muted-foreground">Bond</span>
             <span className="text-primary">{bondAvg}%</span>
             <span className="text-muted-foreground mx-1">·</span>
             <span className="text-muted-foreground">Streak</span>
             <span className="text-neon-amber">{profile.current_streak}d</span>
+          </div>
+          {/* Bond breakdown */}
+          <div className="flex items-center gap-4 text-[10px] font-mono">
+            {[
+              { label: "AFF", value: profile.bond_affection, icon: <Heart size={8} className="text-pink-400" />, color: "bg-pink-400" },
+              { label: "TRS", value: profile.bond_trust,     icon: <Eye size={8}  className="text-sky-400"  />, color: "bg-sky-400"  },
+              { label: "LOY", value: profile.bond_loyalty,   icon: <Sword size={8} className="text-violet-400" />, color: "bg-violet-400" },
+            ].map(({ label, value, icon, color }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                {icon}
+                <span className="text-muted-foreground">{label}</span>
+                <div className="w-12 h-1 rounded-full bg-muted/40 overflow-hidden">
+                  <div className={`h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
+                </div>
+                <span className="text-foreground/60">{value}</span>
+              </div>
+            ))}
           </div>
         </div>
       </motion.div>
@@ -153,7 +170,9 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            <ProgressBar value={operatorXp} max={xpForLevel(operatorLevel + 1)} variant="cyan" label={`${operatorXp.toLocaleString()} / ${xpForLevel(operatorLevel + 1).toLocaleString()} XP`} size="md" />
+            <motion.div key={operatorXp} initial={{ opacity: 0.6 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+              <ProgressBar value={operatorXp} max={xpForLevel(operatorLevel + 1)} variant="cyan" label={`${operatorXp.toLocaleString()} / ${xpForLevel(operatorLevel + 1).toLocaleString()} XP`} size="md" />
+            </motion.div>
           </div>
           <div className="text-right hidden sm:block">
             <p className="font-display text-2xl text-primary font-bold text-glow-cyan">{operatorLevel}</p>

@@ -84,6 +84,19 @@ export function useJournal() {
       } else {
         toast({ title: "Entry saved", description: `+${xp} XP earned.` });
       }
+
+      // Save substantial entries as NAVI memories (picked up by navi-embed-memories for vector search)
+      if (input.content.trim().length > 100) {
+        supabase.from("navi_core_memory").insert({
+          user_id: user.id,
+          memory_type: "journal",
+          content: `Journal — "${input.title}": ${input.content.trim().slice(0, 800)}`,
+          importance: 3,
+        }).then(({ error }) => {
+          if (error) console.warn("[useJournal] memory save failed:", error.message);
+        });
+      }
+
       return entry;
     },
     [user]

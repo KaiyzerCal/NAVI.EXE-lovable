@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { useProfile, type ProfileData } from "@/hooks/useProfile";
 import { useQuests, type Quest, type QuestType, type CreateQuestInput, type UpdateQuestInput } from "@/hooks/useQuests";
 import { useJournal, type JournalEntry, type CreateJournalInput, type UpdateJournalInput } from "@/hooks/useJournal";
@@ -101,7 +101,13 @@ const INITIAL_MESSAGE: DisplayMessage = {
 export function AppDataProvider({ children }: { children: ReactNode }) {
   // All hooks called once at top level
   const { profile, loading: profileLoading, updateProfile, refetchProfile } = useProfile();
-  const { quests, loading: questsLoading, stats: questStats, createQuest, updateQuest, toggleQuest, deleteQuest, refetch: refetchQuests } = useQuests();
+  const { quests, loading: questsLoading, stats: questStats, createQuest, updateQuest, toggleQuest: _toggleQuest, deleteQuest, refetch: refetchQuests } = useQuests();
+
+  // Wrap toggleQuest so XP changes are reflected in profile immediately
+  const toggleQuest = useCallback(async (id: string) => {
+    await _toggleQuest(id);
+    await refetchProfile();
+  }, [_toggleQuest, refetchProfile]);
   const { entries, loading: journalLoading, createEntry, updateEntry, deleteEntry, refetch: refetchJournal } = useJournal();
   const { achievements, loading: achievementsLoading, checkAchievements, stats: achievementStats, refetch: refetchAchievements } = useAchievements();
   const { skills, loading: skillsLoading, addSkill, updateSkill, deleteSkill, refetch: refetchSkills } = useOperatorSkills();

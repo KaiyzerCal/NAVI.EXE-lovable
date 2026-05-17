@@ -1026,7 +1026,7 @@ serve(async (req) => {
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ...chatPayload, model: "google/gemini-2.5-flash" }),
+        body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash" }),
       });
     } catch (e) {
       console.error("Lovable AI gateway fetch threw:", e);
@@ -1053,7 +1053,7 @@ serve(async (req) => {
             Authorization: `Bearer ${OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ ...chatPayload, model: "gpt-4o-mini" }),
+          body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "gpt-4o" : "gpt-4o-mini" }),
         });
         usedFallback = true;
       } catch (e) {

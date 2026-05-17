@@ -113,9 +113,12 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
       const codexMap: Record<string, number> = { Daily: 10, Weekly: 30, Main: 50, Side: 20, Minor: 5, Epic: 100 };
       const caliMap:  Record<string, number> = { Daily: 2,  Weekly: 8,  Main: 12, Side: 5,  Minor: 1, Epic: 25  };
       const qType = String((quest as any).type || "Daily");
-      const codexReward = codexMap[qType] ?? 10;
-      const caliReward  = caliMap[qType] ?? 2;
-      const { data: prof } = await sb.from("profiles").select("codex_points, cali_coins").eq("id", userId).single();
+      const baseCodex = codexMap[qType] ?? 10;
+      const baseCali  = caliMap[qType] ?? 2;
+      const { data: prof } = await sb.from("profiles").select("codex_points, cali_coins, subscription_tier").eq("id", userId).single();
+      const isEliteTier = (prof as any)?.subscription_tier === "elite";
+      const codexReward = isEliteTier ? baseCodex * 2 : baseCodex;
+      const caliReward  = isEliteTier ? baseCali  * 2 : baseCali;
       if (prof) {
         await sb.from("profiles").update({
           codex_points: Number((prof as any).codex_points || 0) + codexReward,

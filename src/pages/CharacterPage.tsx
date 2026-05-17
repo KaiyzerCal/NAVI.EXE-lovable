@@ -536,6 +536,7 @@ export default function CharacterPage() {
                   questsCompleted: (profile as any).quests_completed ?? questStats.completed ?? 0,
                   unlockedAchievements: new Set<string>(),
                   isPremium: (profile as any).subscription_tier === "core" || (profile as any).subscription_tier === "elite",
+                  isElite: (profile as any).subscription_tier === "elite",
                 };
 
             const visibleSkins = SKIN_DEFINITIONS.filter((skin) => {

@@ -27,12 +27,14 @@ import UpgradePage from "./pages/UpgradePage";
 import AdminPage from "./pages/AdminPage";
 import GamesPage from "./pages/GamesPage";
 import GuildPage from "./pages/GuildPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
 import SocialPage from "./pages/SocialPage";
 import InboxPage from "./pages/InboxPage";
 import AgentPage from "./pages/AgentPage";
 import SearchPage from "./pages/SearchPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import NotFound from "./pages/NotFound";
+import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel } from "@/lib/classEvolution";
@@ -213,6 +215,7 @@ function AppShell() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/guild" element={<GuildPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/social" element={<SocialPage />} />
           <Route path="/inbox" element={<InboxPage />} />
           <Route path="/upgrade" element={<UpgradePage />} />
@@ -230,19 +233,21 @@ function AppShell() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="navi-theme">
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <AppContent />
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+  <GlobalErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="navi-theme">
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  </GlobalErrorBoundary>
 );
 
 export default App;

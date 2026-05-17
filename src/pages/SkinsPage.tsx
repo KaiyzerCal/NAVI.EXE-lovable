@@ -168,6 +168,7 @@ export default function SkinsPage() {
     questsCompleted: (profile as any).quests_completed ?? 0,
     unlockedAchievements: new Set(),
     isPremium: (profile as any).subscription_tier === "core" || (profile as any).subscription_tier === "elite",
+    isElite: (profile as any).subscription_tier === "elite",
     isAdmin,
   };
 

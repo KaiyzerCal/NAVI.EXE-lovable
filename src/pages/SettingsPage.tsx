@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { User, Bell, Database, Shield, Check, Sun, Moon } from "lucide-react";
+import { User, Bell, Database, Shield, Check, Sun, Moon, Download } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
@@ -80,6 +80,7 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState({
     questReminders: true, streakWarnings: true, xpMilestones: false, dailySummary: true,
   });
+  const [exportingData, setExportingData] = useState(false);
 
   // Sync local state FROM profile once it loads from Supabase
   useEffect(() => {
@@ -88,6 +89,10 @@ export default function SettingsPage() {
     setNaviName(profile.navi_name ?? "NAVI");
     setUsername((profile as any).username ?? "");
     setPersonality(parsePersonality(profile.navi_personality));
+    const saved = (profile as any).notification_settings;
+    if (saved && typeof saved === "object") {
+      setNotifications((prev) => ({ ...prev, ...saved }));
+    }
   }, [loading, profile.display_name]); // re-sync when profile loads
 
   // Validate username uniqueness with debounce
@@ -138,8 +143,49 @@ export default function SettingsPage() {
     }
   };
 
-  const toggleNotif = (key: keyof typeof notifications) =>
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleNotif = async (key: keyof typeof notifications) => {
+    const next = { ...notifications, [key]: !notifications[key] };
+    setNotifications(next);
+    await updateProfile({ notification_settings: next } as any);
+  };
+
+  const handleExportData = async () => {
+    if (!user) return;
+    setExportingData(true);
+    try {
+      const [{ data: quests }, { data: entries }] = await Promise.all([
+        supabase.from("quests").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("journal_entries").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      ]);
+
+      const toCSV = (rows: any[], cols: string[]) => {
+        const header = cols.join(",");
+        const body = (rows ?? []).map((r) =>
+          cols.map((c) => {
+            const v = r[c] ?? "";
+            const s = Array.isArray(v) ? v.join(";") : String(v);
+            return `"${s.replace(/"/g, '""')}"`;
+          }).join(",")
+        );
+        return [header, ...body].join("\n");
+      };
+
+      const questCols = ["id", "name", "type", "completed", "progress", "total", "xp_reward", "created_at", "updated_at"];
+      const journalCols = ["id", "title", "content", "tags", "xp_earned", "created_at", "updated_at"];
+      const csv = `QUESTS\n${toCSV(quests ?? [], questCols)}\n\nJOURNAL ENTRIES\n${toCSV(entries ?? [], journalCols)}`;
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `navi-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export complete", description: "Your data has been downloaded." });
+    } finally {
+      setExportingData(false);
+    }
+  };
 
   return (
     <div>
@@ -243,8 +289,12 @@ export default function SettingsPage() {
 
         {/* Data */}
         <HudCard title="DATA" icon={<Database size={14} />}>
-          <div className="flex gap-2">
-            <button className="px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors">EXPORT DATA</button>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={handleExportData} disabled={exportingData}
+              className="flex items-center gap-1.5 px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors disabled:opacity-50">
+              <Download size={12} />
+              {exportingData ? "EXPORTING..." : "EXPORT DATA"}
+            </button>
             <button className="px-3 py-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-xs font-mono hover:bg-destructive/20 transition-colors">RESET PROGRESS</button>
           </div>
         </HudCard>

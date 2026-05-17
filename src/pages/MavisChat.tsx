@@ -926,6 +926,7 @@ export default function MavisChat() {
           media: mediaContext.length > 0 ? mediaContext : undefined,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           client_now_iso: new Date().toISOString(),
+          subscription_tier: (profile as any).subscription_tier ?? "free",
         },
         onDelta: (chunk) => {
           assistantContent += chunk;
@@ -1273,9 +1274,38 @@ export default function MavisChat() {
         )}
       </div>
 
-      <p className="text-[10px] font-mono text-muted-foreground/50 text-center mt-1.5">
-        Enter to send · Shift+Enter for new line
-      </p>
+      {(() => {
+        const tier = (profile as any).subscription_tier ?? "free";
+        const isFree = tier === "free";
+        if (!isFree) return (
+          <p className="text-[10px] font-mono text-muted-foreground/50 text-center mt-1.5">
+            Enter to send · Shift+Enter for new line
+          </p>
+        );
+        const today = new Date().toISOString().slice(0, 10);
+        const resetDate = (profile as any).message_count_reset_date ?? today;
+        const used = resetDate === today ? ((profile as any).daily_message_count ?? 0) : 0;
+        const limit = 15;
+        const remaining = Math.max(0, limit - used);
+        const urgent = remaining <= 3;
+        return (
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <p className="text-[10px] font-mono text-muted-foreground/50">
+              Enter to send · Shift+Enter for new line
+            </p>
+            <span className={`text-[10px] font-mono ${urgent ? "text-amber-400" : "text-muted-foreground/50"}`}>
+              {remaining}/{limit} messages
+              {urgent && remaining > 0 && " · "}
+              {urgent && remaining > 0 && (
+                <a href="/upgrade" className="underline hover:text-primary transition-colors">upgrade</a>
+              )}
+              {remaining === 0 && (
+                <> · <a href="/upgrade" className="underline text-destructive hover:text-primary transition-colors">limit reached</a></>
+              )}
+            </span>
+          </div>
+        );
+      })()}
     </div>
   );
 }

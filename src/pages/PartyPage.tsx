@@ -9,11 +9,14 @@ import { Loader2, Users, Crown, LogOut, Trash2, Swords, Plus, CheckCircle, Link2
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import OperatorProfileSheet from "@/components/OperatorProfileSheet";
+import { usePaywall } from "@/hooks/usePaywall";
+import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 export default function PartyPage() {
   const { party, members, openParties, loading, myRole, createParty, joinParty, leaveParty, disbandParty, kickMember, completePartyQuest } = useParty();
   const { quests } = useAppData();
   const { user } = useAuth();
+  const paywall = usePaywall();
   const activeQuests = quests.filter(q => !q.completed);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -65,6 +68,18 @@ export default function PartyPage() {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="animate-spin text-primary" size={24} />
+      </div>
+    );
+  }
+
+  if (!paywall.loading && !paywall.hasFullAccess) {
+    return (
+      <div>
+        <PageHeader title="PARTY" subtitle="// COOPERATIVE OPERATIONS" />
+        <UnlockWithCoreCard
+          description="Form parties, tackle quests together, and complete cooperative objectives. Requires Core Operator."
+          className="mt-4"
+        />
       </div>
     );
   }

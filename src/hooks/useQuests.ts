@@ -125,18 +125,20 @@ export function useQuests() {
         progress: nowCompleted ? quest.total : quest.progress,
       });
 
-      // Award XP to profile when completing
+      // Award XP on completion
       if (nowCompleted && user) {
-        // Atomic XP award via RPC — no race condition
-        const { error: xpErr } = await supabase.rpc("award_xp", {
-          _amount: quest.xp_reward,
-        });
+        const { error: xpErr } = await supabase.rpc("award_xp", { _amount: quest.xp_reward });
         if (xpErr) {
           console.error("[useQuests] XP award failed:", xpErr);
           toast({
             title: "XP not awarded",
             description: `Quest completed but ${quest.xp_reward} XP failed to save.`,
             variant: "destructive",
+          });
+        } else {
+          toast({
+            title: `✓ ${quest.name}`,
+            description: `+${quest.xp_reward} XP earned`,
           });
         }
       }

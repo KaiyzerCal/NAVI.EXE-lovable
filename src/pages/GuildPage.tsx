@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useGuild } from "@/hooks/useGuild";
+import { usePaywall } from "@/hooks/usePaywall";
+import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 interface GuildQuest {
   id: string;
@@ -22,6 +24,7 @@ interface GuildQuest {
 export default function GuildPage() {
   const { user } = useAuth();
   const { profile, updateProfile, refetchProfile } = useAppData();
+  const paywall = usePaywall();
   const guildId = (profile as any).guild_id ?? null;
   const { guild, members, myRole, loading, refetch } = useGuild(guildId);
 
@@ -104,6 +107,18 @@ export default function GuildPage() {
       .eq("id", questId);
     setQuests((prev) =>
       prev.map((q) => q.id === questId ? { ...q, status: "completed", completed_by: user.id } : q)
+    );
+  }
+
+  if (!paywall.loading && !paywall.hasFullAccess) {
+    return (
+      <div>
+        <PageHeader title="GUILD" subtitle="// OPERATE IN FORMATION" />
+        <UnlockWithCoreCard
+          description="Join guilds, run cooperative quests, and operate with other players. Requires Core Operator."
+          className="mt-4"
+        />
+      </div>
     );
   }
 

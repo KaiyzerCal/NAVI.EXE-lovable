@@ -119,13 +119,13 @@ export default function AdminPage() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {[
-          { label: "TOTAL OPERATORS", value: users.length },
-          { label: "CORE TIER", value: tierCounts["core"] ?? 0 },
-          { label: "BETA TESTERS", value: users.filter((u) => u.beta_tester).length },
-          { label: "PENDING REPORTS", value: reported.filter((r) => !r.reviewed).length },
+          { label: "TOTAL OPERATORS", value: users.length, color: "text-primary" },
+          { label: "CORE TIER",       value: tierCounts["core"] ?? 0, color: "text-primary" },
+          { label: "ELITE TIER",      value: tierCounts["elite"] ?? 0, color: "text-secondary" },
+          { label: "PENDING REPORTS", value: reported.filter((r) => !r.reviewed).length, color: "text-destructive" },
         ].map((s) => (
           <HudCard key={s.label} title={s.label}>
-            <p className="font-display text-2xl font-bold text-primary">{s.value}</p>
+            <p className={`font-display text-2xl font-bold ${s.color}`}>{s.value}</p>
           </HudCard>
         ))}
       </div>
@@ -172,7 +172,11 @@ export default function AdminPage() {
                   <tr key={u.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
                     <td className="py-2 pr-4 font-body">{u.display_name ?? "—"}</td>
                     <td className="py-2 pr-4">
-                      <span className={`px-1.5 py-0.5 rounded ${u.subscription_tier === "core" ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/40"}`}>
+                      <span className={`px-1.5 py-0.5 rounded ${
+                        u.subscription_tier === "elite" ? "text-secondary bg-secondary/10" :
+                        u.subscription_tier === "core"  ? "text-primary bg-primary/10" :
+                        "text-muted-foreground bg-muted/40"
+                      }`}>
                         {u.subscription_tier.toUpperCase()}
                       </span>
                     </td>

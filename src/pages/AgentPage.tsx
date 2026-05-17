@@ -5,6 +5,8 @@ import HudCard from "@/components/HudCard";
 import { Bot, Plus, Loader2, CheckCircle, XCircle, Clock, Play, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePaywall } from "@/hooks/usePaywall";
+import { UnlockWithCoreCard } from "@/components/UnlockWithCoreCard";
 
 interface AgentTask {
   id: string;
@@ -34,6 +36,7 @@ const AGENT_TYPES = [
 
 export default function AgentPage() {
   const { user } = useAuth();
+  const paywall = usePaywall();
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -93,6 +96,19 @@ export default function AgentPage() {
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.floor(hrs / 24)}d ago`;
+  }
+
+  if (!paywall.loading && !paywall.isElite) {
+    return (
+      <div>
+        <PageHeader title="AGENT FRAMEWORK" subtitle="// AUTONOMOUS TASK EXECUTION" />
+        <UnlockWithCoreCard
+          title="UNLOCK WITH ELITE"
+          description="Agent automation, scheduling, and autonomous task execution. Requires Elite Operator."
+          className="mt-4"
+        />
+      </div>
+    );
   }
 
   return (

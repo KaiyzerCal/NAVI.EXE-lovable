@@ -1,9 +1,11 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { BarChart3, TrendingUp, Target, Flame, BookOpen, Loader2, Trophy, Clock, Calendar } from "lucide-react";
+import { BarChart3, TrendingUp, Target, Flame, BookOpen, Loader2, Trophy, Clock, Calendar, Zap } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useEffect, useMemo } from "react";
+import { useOperatorSkills } from "@/hooks/useSkillsAndEquipment";
+import { NAVI_SKILL_UNLOCKS } from "@/lib/naviSkillUnlocks";
 
 // ── Data builders ──────────────────────────────────────────────────────────
 
@@ -80,6 +82,7 @@ export default function StatsPage() {
     entries, journalLoading, achievements, achievementsLoading: achLoading,
     checkAchievements, achievementStats: achStats,
   } = useAppData();
+  const { skills, loading: skillsLoading } = useOperatorSkills();
 
   const loading = profileLoading || questsLoading || journalLoading || achLoading;
 
@@ -313,6 +316,71 @@ export default function StatsPage() {
           </div>
         </HudCard>
       </div>
+
+      {/* Skill Mastery */}
+      <HudCard title="SKILL MASTERY" icon={<Zap size={14} />} className="mb-5">
+        {skillsLoading ? (
+          <Loader2 size={14} className="animate-spin text-primary" />
+        ) : skills.length === 0 ? (
+          <p className="text-xs font-mono text-muted-foreground">No skills tracked yet. Add skills on your Character page.</p>
+        ) : (
+          <div className="space-y-3">
+            {(() => {
+              const categories = Array.from(new Set(skills.map(s => s.category)));
+              return categories.map(cat => (
+                <div key={cat}>
+                  <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-2">{cat.toUpperCase()}</p>
+                  <div className="space-y-2">
+                    {skills.filter(s => s.category === cat).map(skill => {
+                      const pct = Math.round((skill.xp / (skill.xp_to_next || 1)) * 100);
+                      return (
+                        <div key={skill.id}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-body text-foreground">{skill.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono text-muted-foreground">{skill.xp}/{skill.xp_to_next} XP</span>
+                              <span className="text-[10px] font-mono text-primary font-bold">LVL {skill.level}</span>
+                            </div>
+                          </div>
+                          <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                            <motion.div
+                              className="h-full rounded-full"
+                              style={{ background: "linear-gradient(to right, hsl(var(--primary)/0.7), hsl(var(--secondary)/0.7))" }}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${pct}%` }}
+                              transition={{ duration: 0.6, ease: "easeOut" }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        )}
+
+        {/* NAVI skill unlocks */}
+        {!skillsLoading && (
+          <div className="mt-5 pt-4 border-t border-border">
+            <p className="text-[9px] font-mono text-muted-foreground tracking-widest mb-2">NAVI ABILITY UNLOCKS</p>
+            <div className="space-y-1.5">
+              {NAVI_SKILL_UNLOCKS.map(unlock => {
+                const naviLevel = profile.navi_level ?? 1;
+                const unlocked = naviLevel >= unlock.level;
+                return (
+                  <div key={unlock.skillName} className={`flex items-center gap-2 ${unlocked ? "" : "opacity-35"}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${unlocked ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                    <span className={`text-[10px] font-mono flex-1 ${unlocked ? "text-foreground" : "text-muted-foreground"}`}>{unlock.skillName}</span>
+                    <span className="text-[9px] font-mono text-muted-foreground">LVL {unlock.level}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </HudCard>
 
       {/* Achievements */}
       <HudCard title={`ACHIEVEMENTS (${achStats.unlocked}/${achStats.total})`} icon={<Trophy size={14} />}>

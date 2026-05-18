@@ -19,7 +19,7 @@ export default function PaywallCard({ feature, limit, compact = false }: Props) 
           <p className="text-xs font-mono text-amber-400">{limit ?? `${feature} requires Core Operator`}</p>
         </div>
         <button
-          onClick={startCheckout}
+          onClick={() => startCheckout()}
           className="px-3 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[10px] font-mono hover:bg-amber-500/30 transition-colors whitespace-nowrap"
         >
           UPGRADE $7.99
@@ -44,7 +44,7 @@ export default function PaywallCard({ feature, limit, compact = false }: Props) 
       {limit && <p className="text-sm font-body text-muted-foreground mb-4">{limit}</p>}
 
       <button
-        onClick={startCheckout}
+        onClick={() => startCheckout()}
         className="w-full py-3 rounded font-display font-bold tracking-wider text-sm bg-amber-500/20 border border-amber-500/50 text-amber-300 hover:bg-amber-500/30 transition-all mb-3"
         style={{ boxShadow: "0 0 12px rgba(245,158,11,0.15)" }}
       >

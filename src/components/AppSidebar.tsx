@@ -3,6 +3,7 @@ import {
   LayoutDashboard, MessageSquare, User, Swords, BookOpen,
   BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
   Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Search, Bell, Trophy,
+  ShoppingBag, TrendingUp, Calendar, Sword,
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,6 +28,10 @@ const navItems = [
   { to: "/search", icon: Search, label: "Search" },
   { to: "/notifications", icon: Bell, label: "Notifications" },
   { to: "/agents", icon: Bot, label: "Agents" },
+  { to: "/shop", icon: ShoppingBag, label: "Shop" },
+  { to: "/market", icon: TrendingUp, label: "Market" },
+  { to: "/season", icon: Calendar, label: "Season" },
+  { to: "/challenges", icon: Sword, label: "Challenges" },
   { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

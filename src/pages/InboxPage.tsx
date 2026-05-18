@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, ArrowLeft, Pencil, Search, X, Paperclip, Download, FileText, Trash2 } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Pencil, Search, X, Paperclip, Download, FileText, Trash2, Smile } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -34,6 +34,8 @@ interface Message {
   deleted_by_sender: boolean;
   deleted_by_recipient: boolean;
 }
+
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "🔥", "💯", "👀"] as const;
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -82,6 +84,78 @@ function AttachmentView({ url, type, name }: { url: string; type: string | null;
   );
 }
 
+/** Renders the reaction chips below a message bubble */
+function ReactionRow({
+  messageId, mine, reactions, userId, onReact,
+}: {
+  messageId: string;
+  mine: boolean;
+  reactions: Record<string, Record<string, string>>; // messageId -> userId -> emoji
+  userId: string;
+  onReact: (messageId: string, emoji: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const msgReactions = reactions[messageId] ?? {};
+
+  // Aggregate: emoji -> count
+  const counts: Record<string, number> = {};
+  for (const emoji of Object.values(msgReactions)) {
+    counts[emoji] = (counts[emoji] ?? 0) + 1;
+  }
+  const emojiList = Object.entries(counts);
+  const myEmoji = msgReactions[userId];
+
+  return (
+    <div className={`flex items-center gap-1 mt-0.5 flex-wrap ${mine ? "justify-end" : "justify-start"}`}>
+      {/* Existing reaction chips */}
+      {emojiList.map(([emoji, count]) => (
+        <button
+          key={emoji}
+          onClick={() => onReact(messageId, emoji)}
+          className={`flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full border transition-colors ${
+            myEmoji === emoji
+              ? "border-primary/50 bg-primary/10 text-foreground"
+              : "border-border bg-muted/40 text-foreground hover:border-primary/30"
+          }`}
+        >
+          <span>{emoji}</span>
+          {count > 1 && <span className="text-[9px] font-mono">{count}</span>}
+        </button>
+      ))}
+
+      {/* + button to pick reaction */}
+      <div className="relative">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="w-5 h-5 rounded-full border border-border bg-muted/40 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+        >
+          <Smile size={10} />
+        </button>
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className={`absolute bottom-full mb-1 z-50 flex gap-1 px-2 py-1.5 rounded-xl border border-border bg-card shadow-lg ${mine ? "right-0" : "left-0"}`}
+            >
+              {REACTION_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => { onReact(messageId, emoji); setOpen(false); }}
+                  className="text-base hover:scale-125 transition-transform leading-none"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
 export default function InboxPage() {
   const { user } = useAuth();
   const { profile } = useAppData();
@@ -107,6 +181,14 @@ export default function InboxPage() {
 
   // Profile sheet
   const [profileSheetId, setProfileSheetId] = useState<string | null>(null);
+
+  // Reactions: messageId -> userId -> emoji (local state only)
+  const [reactions, setReactions] = useState<Record<string, Record<string, string>>>({});
+
+  // Typing indicator
+  const [otherTyping, setOtherTyping] = useState(false);
+  const channelRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -220,6 +302,49 @@ export default function InboxPage() {
     return () => { supabase.removeChannel(channel); };
   }, [user, loadThreads]);
 
+  // ── Presence / typing indicator channel ─────────────────────────────────
+  useEffect(() => {
+    if (!activeThread || !user) return;
+
+    // Clean up any previous presence channel
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    const presenceChannel = supabase.channel(`presence-dm-${activeThread.id}`, {
+      config: { presence: { key: user.id } },
+    });
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = presenceChannel.presenceState();
+        let typing = false;
+        for (const [userId, presences] of Object.entries(state)) {
+          if (userId === user.id) continue;
+          const latest = (presences as any[])[0];
+          if (latest?.typing) { typing = true; break; }
+        }
+        setOtherTyping(typing);
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          presenceChannel.track({ typing: false, userId: user.id });
+        }
+      });
+
+    channelRef.current = presenceChannel;
+
+    return () => {
+      clearTimeout(typingTimeoutRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+      setOtherTyping(false);
+    };
+  }, [activeThread?.id, user]);
+
   // ── Open thread + mark read ──────────────────────────────────────────────
   async function openThread(thread: Thread) {
     setActiveThread(thread);
@@ -288,13 +413,37 @@ export default function InboxPage() {
     setSending(false);
   }
 
+  // ── Typing handler ───────────────────────────────────────────────────────
+  const handleTyping = () => {
+    if (!channelRef.current || !user) return;
+    channelRef.current.track({ typing: true, userId: user.id });
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      channelRef.current?.track({ typing: false, userId: user?.id });
+    }, 2000);
+  };
+
+  // ── Emoji reactions (local state) ────────────────────────────────────────
+  const handleReact = useCallback((messageId: string, emoji: string) => {
+    if (!user) return;
+    setReactions((prev) => {
+      const msgReactions = { ...(prev[messageId] ?? {}) };
+      // Toggle: if user already has this emoji, remove; otherwise set
+      if (msgReactions[user.id] === emoji) {
+        delete msgReactions[user.id];
+      } else {
+        msgReactions[user.id] = emoji;
+      }
+      return { ...prev, [messageId]: msgReactions };
+    });
+  }, [user]);
+
   // ── Upload file + send as attachment ────────────────────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !activeThread || !user) return;
     setUploading(true);
 
-    const ext = file.name.split(".").pop();
     const path = `${activeThread.id}/${Date.now()}_${file.name}`;
     const { error: uploadErr } = await supabase.storage
       .from("message-attachments")
@@ -501,7 +650,7 @@ export default function InboxPage() {
                   {msg.sender_display_name ?? msg.sender_navi_name}
                 </span>
                 <div className="relative flex items-end gap-1.5">
-                  {/* Delete button — appears on hover/tap (desktop: left side for mine, right side for theirs) */}
+                  {/* Delete button — appears on hover/tap */}
                   {!deleted && (
                     <button
                       onClick={() => setDeleteMsgId(deleteMsgId === msg.id ? null : msg.id)}
@@ -525,6 +674,17 @@ export default function InboxPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Reaction row */}
+                {!deleted && (
+                  <ReactionRow
+                    messageId={msg.id}
+                    mine={mine}
+                    reactions={reactions}
+                    userId={user?.id ?? ""}
+                    onReact={handleReact}
+                  />
+                )}
 
                 {/* Delete confirm popover */}
                 <AnimatePresence>
@@ -556,6 +716,14 @@ export default function InboxPage() {
               </motion.div>
             );
           })}
+
+          {/* Typing indicator */}
+          {otherTyping && (
+            <p className="text-[10px] font-mono text-muted-foreground animate-pulse px-1">
+              {activeThread.other_display_name ?? "Operator"} is typing...
+            </p>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -571,7 +739,7 @@ export default function InboxPage() {
           </button>
           <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => { setInput(e.target.value); handleTyping(); }}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
             placeholder={`Message ${activeThread.other_display_name ?? "Operator"}...`}
             autoFocus

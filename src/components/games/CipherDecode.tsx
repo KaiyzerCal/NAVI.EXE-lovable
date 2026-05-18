@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Timer, Check, X, Zap } from "lucide-react";
 import HudCard from "@/components/HudCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 const CIPHERS = [
   { encoded: "BQQMF",   decoded: "APPLE",  shift: 1 },
@@ -35,6 +36,13 @@ export default function CipherDecode() {
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
   const [gameOver, setGameOver] = useState(false);
   const [shuffled, setShuffled] = useState<typeof CIPHERS>([]);
+  const xpAwarded = useRef(false);
+
+  const awardGameXP = async (amount: number) => {
+    if (!user) return;
+    await supabase.rpc("award_xp", { _amount: amount });
+    toast({ title: `+${amount} XP`, description: "Game reward earned." });
+  };
 
   const currentCipher = shuffled[round];
 
@@ -62,6 +70,7 @@ export default function CipherDecode() {
     setGameOver(false);
     setInput("");
     setFeedback(null);
+    xpAwarded.current = false;
     setStarted(true);
   }
 
@@ -91,6 +100,11 @@ export default function CipherDecode() {
         score: finalScore,
         metadata: { xp_earned: xp },
       });
+    }
+    if (!xpAwarded.current) {
+      xpAwarded.current = true;
+      const xpAmount = Math.max(10, Math.min(30, timeLeft * 2));
+      awardGameXP(xpAmount);
     }
   }
 

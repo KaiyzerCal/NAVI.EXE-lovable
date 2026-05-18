@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Grid3X3, Check, X } from "lucide-react";
 import HudCard from "@/components/HudCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 type Phase = "idle" | "showing" | "input" | "result" | "gameover";
 
@@ -26,6 +27,13 @@ export default function MemoryMatrix() {
   const [selected, setSelected] = useState<number[]>([]);
   const [lastCorrect, setLastCorrect] = useState<boolean | null>(null);
   const [showingIndex, setShowingIndex] = useState(-1);
+  const xpAwarded = useRef(false);
+
+  const awardGameXP = async (amount: number) => {
+    if (!user) return;
+    await supabase.rpc("award_xp", { _amount: amount });
+    toast({ title: `+${amount} XP`, description: "Game reward earned." });
+  };
 
   const gridSize = Math.min(3 + Math.floor((level - 1) / 3), 5);
   const patternCount = Math.min(2 + level, gridSize * gridSize - 1);
@@ -56,6 +64,7 @@ export default function MemoryMatrix() {
     setLevel(1);
     setScore(0);
     setLastCorrect(null);
+    xpAwarded.current = false;
     startRound();
   }
 
@@ -90,6 +99,11 @@ export default function MemoryMatrix() {
             score: finalScore,
             metadata: { level_reached: level, xp_earned: finalScore },
           });
+        }
+        if (!xpAwarded.current) {
+          xpAwarded.current = true;
+          const xpAmount = Math.min(25, 10 + level * 3);
+          awardGameXP(xpAmount);
         }
       }, 1200);
     }

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Bot, Plus, Loader2, CheckCircle, XCircle, Clock, Play, AlertTriangle } from "lucide-react";
+import { Bot, Plus, Loader2, CheckCircle, XCircle, Clock, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -46,6 +46,7 @@ export default function AgentPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [executingTask, setExecutingTask] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) loadTasks();
@@ -84,6 +85,36 @@ export default function AgentPage() {
     setSubmitting(false);
   }
 
+  async function executeTask(task: AgentTask) {
+    if (!user) return;
+    setExecutingTask(task.id);
+    await supabase.from("agent_tasks").update({ status: "running" }).eq("id", task.id);
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "running" } : t));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-agent-runner`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ task_id: task.id }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "completed", result } : t));
+      } else {
+        throw new Error(await res.text());
+      }
+    } catch (e) {
+      await supabase.from("agent_tasks").update({ status: "failed" }).eq("id", task.id);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "failed" } : t));
+    } finally {
+      setExecutingTask(null);
+    }
+  }
+
   async function deleteTask(taskId: string) {
     await supabase.from("agent_tasks").delete().eq("id", taskId);
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
@@ -114,17 +145,6 @@ export default function AgentPage() {
   return (
     <div>
       <PageHeader title="AGENT FRAMEWORK" subtitle="// AUTONOMOUS TASK EXECUTION" />
-
-      {/* Coming soon banner */}
-      <div className="mb-5 p-3 rounded border border-secondary/30 bg-secondary/5">
-        <div className="flex items-center gap-2">
-          <AlertTriangle size={12} className="text-secondary" />
-          <p className="text-[10px] font-mono text-secondary">PHASE 4 PREVIEW — Agent execution requires Power Operator tier</p>
-        </div>
-        <p className="text-xs font-body text-muted-foreground mt-1">
-          Queue tasks now. Autonomous execution activates with Power tier release.
-        </p>
-      </div>
 
       <div className="flex justify-end mb-4">
         <button
@@ -219,12 +239,24 @@ export default function AgentPage() {
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => deleteTask(task.id)}
-                    className="text-[10px] font-mono text-muted-foreground/50 hover:text-destructive transition-colors shrink-0"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {task.status === "pending" && (
+                      <button
+                        onClick={() => executeTask(task)}
+                        disabled={!!executingTask}
+                        className="flex items-center gap-1 px-2 py-1 rounded border border-neon-green/40 bg-neon-green/10 text-neon-green text-[9px] font-mono hover:bg-neon-green/20 disabled:opacity-40 transition-colors"
+                      >
+                        {executingTask === task.id ? <Loader2 size={9} className="animate-spin" /> : <Play size={9} />}
+                        {executingTask === task.id ? "..." : "RUN"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteTask(task.id)}
+                      className="text-[10px] font-mono text-muted-foreground/50 hover:text-destructive transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
 
                 {isExpanded && (
@@ -235,7 +267,7 @@ export default function AgentPage() {
                     {task.result ? (
                       <div className="p-3 rounded bg-muted/20 border border-border">
                         <p className="text-[10px] font-mono text-muted-foreground mb-1">RESULT</p>
-                        <p className="text-xs font-body text-foreground">{task.result}</p>
+                        <p className="text-xs font-body text-foreground whitespace-pre-wrap">{typeof task.result === "object" ? (task.result as any).output ?? JSON.stringify(task.result) : String(task.result)}</p>
                       </div>
                     ) : (
                       <p className="text-[10px] font-mono text-muted-foreground">

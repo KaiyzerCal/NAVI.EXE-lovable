@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { User, Bell, Database, Shield, Check, Sun, Moon, Download } from "lucide-react";
+import { User, Bell, Database, Shield, Check, Sun, Moon, Download, Mail } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
@@ -80,6 +80,10 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState({
     questReminders: true, streakWarnings: true, xpMilestones: false, dailySummary: true,
   });
+  const [emailPrefs, setEmailPrefs] = useState({ dailySummary: false, streakWarning: true, weeklyReport: false });
+  const [dndEnabled, setDndEnabled] = useState(false);
+  const [dndStart, setDndStart] = useState("22:00");
+  const [dndEnd, setDndEnd] = useState("08:00");
   const [exportingData, setExportingData] = useState(false);
 
   // Sync local state FROM profile once it loads from Supabase
@@ -92,6 +96,12 @@ export default function SettingsPage() {
     const saved = (profile as any).notification_settings;
     if (saved && typeof saved === "object") {
       setNotifications((prev) => ({ ...prev, ...saved }));
+      if (saved.dnd_enabled !== undefined) setDndEnabled(!!saved.dnd_enabled);
+      if (saved.dnd_start) setDndStart(saved.dnd_start);
+      if (saved.dnd_end) setDndEnd(saved.dnd_end);
+    }
+    if ((profile as any).email_preferences) {
+      setEmailPrefs((prev) => ({ ...prev, ...(profile as any).email_preferences }));
     }
   }, [loading, profile.display_name]); // re-sync when profile loads
 
@@ -147,6 +157,16 @@ export default function SettingsPage() {
     const next = { ...notifications, [key]: !notifications[key] };
     setNotifications(next);
     await updateProfile({ notification_settings: next } as any);
+  };
+
+  const toggleEmailPref = async (key: keyof typeof emailPrefs) => {
+    const next = { ...emailPrefs, [key]: !emailPrefs[key] };
+    setEmailPrefs(next);
+    await updateProfile({ email_preferences: next } as any);
+  };
+
+  const saveDnd = async (enabled: boolean, start: string, end: string) => {
+    await updateProfile({ notification_settings: { ...notifications, dnd_enabled: enabled, dnd_start: start, dnd_end: end } } as any);
   };
 
   const handleExportData = async () => {
@@ -284,6 +304,60 @@ export default function SettingsPage() {
                 </div>
               );
             })}
+          </div>
+          <div className="mt-4 pt-3 border-t border-border">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-sm font-body">Do Not Disturb</p>
+                <p className="text-[10px] font-mono text-muted-foreground">Silence all notifications during set hours</p>
+              </div>
+              <button onClick={() => { const next = !dndEnabled; setDndEnabled(next); saveDnd(next, dndStart, dndEnd); }} className={`w-10 h-5 rounded-full relative transition-colors ${dndEnabled ? "bg-primary/30" : "bg-muted"}`}>
+                <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-all ${dndEnabled ? "right-0.5 bg-primary" : "left-0.5 bg-muted-foreground"}`} />
+              </button>
+            </div>
+            {dndEnabled && (
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="text-muted-foreground">FROM</span>
+                <input type="time" value={dndStart} onChange={(e) => { setDndStart(e.target.value); saveDnd(dndEnabled, e.target.value, dndEnd); }}
+                  className="bg-muted border border-border rounded px-2 py-1 text-foreground outline-none focus:border-primary/40" />
+                <span className="text-muted-foreground">TO</span>
+                <input type="time" value={dndEnd} onChange={(e) => { setDndEnd(e.target.value); saveDnd(dndEnabled, dndStart, e.target.value); }}
+                  className="bg-muted border border-border rounded px-2 py-1 text-foreground outline-none focus:border-primary/40" />
+              </div>
+            )}
+          </div>
+        </HudCard>
+
+        {/* Email Digest */}
+        <HudCard title="EMAIL DIGEST" icon={<Mail size={14} />}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-body">Daily Summary Email</p>
+                <p className="text-[10px] font-mono text-muted-foreground">Morning recap of your streak, active quests, and XP</p>
+              </div>
+              <button onClick={() => toggleEmailPref("dailySummary")} className={`w-10 h-5 rounded-full relative transition-colors ${emailPrefs.dailySummary ? "bg-primary/30" : "bg-muted"}`}>
+                <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-all ${emailPrefs.dailySummary ? "right-0.5 bg-primary" : "left-0.5 bg-muted-foreground"}`} />
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-body">Streak Warning</p>
+                <p className="text-[10px] font-mono text-muted-foreground">Reminder before your streak breaks at midnight</p>
+              </div>
+              <button onClick={() => toggleEmailPref("streakWarning")} className={`w-10 h-5 rounded-full relative transition-colors ${emailPrefs.streakWarning ? "bg-primary/30" : "bg-muted"}`}>
+                <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-all ${emailPrefs.streakWarning ? "right-0.5 bg-primary" : "left-0.5 bg-muted-foreground"}`} />
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-body">Weekly Report</p>
+                <p className="text-[10px] font-mono text-muted-foreground">Your progress summary every Monday morning</p>
+              </div>
+              <button onClick={() => toggleEmailPref("weeklyReport")} className={`w-10 h-5 rounded-full relative transition-colors ${emailPrefs.weeklyReport ? "bg-primary/30" : "bg-muted"}`}>
+                <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-all ${emailPrefs.weeklyReport ? "right-0.5 bg-primary" : "left-0.5 bg-muted-foreground"}`} />
+              </button>
+            </div>
           </div>
         </HudCard>
 

@@ -116,7 +116,10 @@ export default function GamesPage() {
               </p>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono text-muted-foreground">REWARD</span>
-                <span className="text-[10px] font-mono text-primary">{game.xpReward}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-primary">{game.xpReward}</span>
+                  <span className="text-[9px] font-mono px-1 py-0.5 rounded border border-neon-green/50 text-neon-green bg-neon-green/10 leading-none">REAL XP</span>
+                </div>
               </div>
             </motion.button>
           ))}

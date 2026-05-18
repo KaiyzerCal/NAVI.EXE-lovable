@@ -4,6 +4,7 @@ import { Timer, Target } from "lucide-react";
 import HudCard from "@/components/HudCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 const ROUNDS = 8;
 const WINDOW_MS = 700; // how long target is visible
@@ -21,6 +22,13 @@ export default function ReflexStrike() {
   const [targetPos, setTargetPos] = useState({ x: 50, y: 50 });
   const appearTime = useRef(0);
   const timeoutRef = useRef<NodeJS.Timeout>();
+  const xpAwarded = useRef(false);
+
+  const awardGameXP = async (amount: number) => {
+    if (!user) return;
+    await supabase.rpc("award_xp", { _amount: amount });
+    toast({ title: `+${amount} XP`, description: "Game reward earned." });
+  };
 
   function randomPos() {
     return { x: 15 + Math.random() * 70, y: 15 + Math.random() * 70 };
@@ -56,6 +64,7 @@ export default function ReflexStrike() {
     setTimes([]);
     setMissedRounds(0);
     setRound(0);
+    xpAwarded.current = false;
     setPhase("waiting");
     scheduleTarget();
   }
@@ -91,6 +100,11 @@ export default function ReflexStrike() {
         score,
         metadata: { avg_ms: avg, missed: missedRounds, xp_earned: Math.max(5, score) },
       });
+    }
+    if (!xpAwarded.current) {
+      xpAwarded.current = true;
+      const xpAmount = Math.max(5, Math.min(20, score * 2));
+      awardGameXP(xpAmount);
     }
   }
 

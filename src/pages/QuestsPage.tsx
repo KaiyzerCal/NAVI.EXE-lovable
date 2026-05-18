@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Quest, QuestType, CreateQuestInput } from "@/hooks/useQuests";
 import UploadZone from "@/components/UploadZone";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -400,9 +401,12 @@ function QuestDetailModal({
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+const DAILY_QUESTS_LS_KEY = "navi_daily_quests_last_generated";
+
 export default function QuestsPage() {
-  const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest, entries, skills } = useAppData();
+  const { quests, questsLoading: loading, questStats: stats, createQuest, updateQuest, toggleQuest, deleteQuest, entries, skills, refetchQuests } = useAppData() as any;
   const paywall = usePaywall();
+  const { session } = useAuth();
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [typeFilter, setTypeFilter] = useState<QuestType | "all">("all");
   const [showNewForm, setShowNewForm] = useState(false);
@@ -412,6 +416,34 @@ export default function QuestsPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateCategory, setTemplateCategory] = useState<string>("Fitness");
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+  const [generatingDaily, setGeneratingDaily] = useState(false);
+
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const lastGenerated = localStorage.getItem(DAILY_QUESTS_LS_KEY);
+  const generatedToday = lastGenerated === todayISO;
+
+  const handleGenerateDailyQuests = useCallback(async () => {
+    setGeneratingDaily(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-generate-daily-quests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      localStorage.setItem(DAILY_QUESTS_LS_KEY, todayISO);
+      await refetchQuests();
+      toast({ title: "Daily quests generated!" });
+    } catch (err) {
+      toast({ title: "Failed to generate quests", description: String(err), variant: "destructive" });
+    } finally {
+      setGeneratingDaily(false);
+    }
+  }, [session, todayISO, refetchQuests]);
 
   const activeCount = quests.filter((q) => !q.completed).length;
   const canCreate = paywall.canCreateQuest(activeCount);
@@ -542,6 +574,35 @@ export default function QuestsPage() {
             <p className="text-[9px] font-mono text-muted-foreground">{s.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Daily Quests */}
+      <div className="mb-4">
+        <HudCard title="DAILY QUESTS" icon={<Zap size={14} />}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-mono text-muted-foreground">
+                {generatedToday
+                  ? `Last generated: ${lastGenerated}`
+                  : "Generate your AI-powered daily quest set"}
+              </p>
+            </div>
+            {generatedToday ? (
+              <span className="text-[10px] font-mono px-3 py-1.5 rounded border border-neon-green/20 bg-neon-green/10 text-neon-green/60 flex items-center gap-1.5">
+                <Check size={10} /> DAILY QUESTS GENERATED
+              </span>
+            ) : (
+              <button
+                onClick={handleGenerateDailyQuests}
+                disabled={generatingDaily}
+                className="flex items-center gap-2 px-3 py-1.5 rounded bg-neon-amber/10 border border-neon-amber/30 text-neon-amber text-xs font-mono hover:bg-neon-amber/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generatingDaily ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                {generatingDaily ? "GENERATING..." : "GENERATE DAILY QUESTS"}
+              </button>
+            )}
+          </div>
+        </HudCard>
       </div>
 
       {/* Templates */}

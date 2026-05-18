@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Check, X, ChevronRight } from "lucide-react";
 import HudCard from "@/components/HudCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 interface Scenario {
   situation: string;
@@ -77,6 +78,13 @@ export default function StreakDefense() {
   const [chosen, setChosen] = useState<number | null>(null);
   const [shuffled, setShuffled] = useState<Scenario[]>([]);
   const [done, setDone] = useState(false);
+  const xpAwarded = useRef(false);
+
+  const awardGameXP = async (amount: number) => {
+    if (!user) return;
+    await supabase.rpc("award_xp", { _amount: amount });
+    toast({ title: `+${amount} XP`, description: "Game reward earned." });
+  };
 
   const current = shuffled[round];
 
@@ -87,6 +95,7 @@ export default function StreakDefense() {
     setScore(0);
     setChosen(null);
     setDone(false);
+    xpAwarded.current = false;
     setStarted(true);
   }
 
@@ -97,14 +106,20 @@ export default function StreakDefense() {
     if (correct) setScore((s) => s + 1);
     setTimeout(() => {
       if (round + 1 >= shuffled.length) {
+        const finalScore = correct ? score + 1 : score;
         setDone(true);
         if (user) {
           supabase.from("mini_game_scores").insert({
             user_id: user.id,
             game_id: "defense",
-            score: correct ? score + 1 : score,
-            metadata: { total: shuffled.length, xp_earned: (correct ? score + 1 : score) * 7 },
+            score: finalScore,
+            metadata: { total: shuffled.length, xp_earned: finalScore * 7 },
           });
+        }
+        if (!xpAwarded.current) {
+          xpAwarded.current = true;
+          const xpAmount = Math.max(15, Math.min(40, finalScore * 8));
+          awardGameXP(xpAmount);
         }
       } else {
         setRound((r) => r + 1);

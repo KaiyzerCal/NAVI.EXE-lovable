@@ -35,6 +35,11 @@ import SearchPage from "./pages/SearchPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import NotFound from "./pages/NotFound";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
+import MobileBottomNav from "./components/MobileBottomNav";
+import ShopPage from "./pages/ShopPage";
+import MarketplacePage from "./pages/MarketplacePage";
+import SeasonPage from "./pages/SeasonPage";
+import ChallengePage from "./pages/ChallengePage";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel } from "@/lib/classEvolution";
@@ -203,7 +208,7 @@ function AppShell() {
       )}
       <div className="flex min-h-screen">
         <AppSidebar />
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-6 pb-20 md:pb-6 overflow-y-auto">
           <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/navi" element={<NaviPage />} />
@@ -224,10 +229,15 @@ function AppShell() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/market" element={<MarketplacePage />} />
+          <Route path="/season" element={<SeasonPage />} />
+          <Route path="/challenges" element={<ChallengePage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
       </div>
+      <MobileBottomNav />
     </>
   );
 }

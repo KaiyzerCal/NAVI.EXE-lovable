@@ -1,13 +1,14 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Radio, Loader2, Send, Trash2, Heart, MessageSquare,
-  ChevronUp, Swords, Zap, Trophy, Flame, Star, Diamond, Shield, Plus,
+  ChevronUp, Swords, Zap, Trophy, Flame, Star, Diamond, Shield, Plus, Pencil, Check, X,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useFeed, type FeedPost, type FeedReply } from "@/contexts/FeedContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
+import { supabase } from "@/integrations/supabase/client";
 import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 import PageHeader from "@/components/PageHeader";
 
@@ -27,11 +28,19 @@ function relTime(iso: string) {
   catch { return "just now"; }
 }
 
+interface MentionResult {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+}
+
 function FeedCard({
-  post, myId, onLike, onDelete, onAuthorClick,
+  post, myId, onLike, onDelete, onAuthorClick, localContent, localUpdatedAt, onEditSaved,
 }: {
   post: FeedPost; myId: string;
   onLike: () => void; onDelete: () => void; onAuthorClick: () => void;
+  localContent?: string; localUpdatedAt?: string;
+  onEditSaved: (postId: string, newContent: string) => void;
 }) {
   const { submitReply, fetchReplies } = useFeed();
   const cfg = TYPE_CFG[post.content_type] ?? TYPE_CFG.CUSTOM;
@@ -45,6 +54,43 @@ function FeedCard({
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Edit state
+  const [editing, setEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const displayContent = localContent ?? post.content;
+  const displayUpdatedAt = localUpdatedAt;
+  const isEdited = displayUpdatedAt
+    ? Math.abs(new Date(displayUpdatedAt).getTime() - new Date(post.created_at).getTime()) > 30000
+    : false;
+
+  const startEdit = () => {
+    setEditedContent(displayContent);
+    setEditing(true);
+    setConfirmDelete(false);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditedContent("");
+  };
+
+  const saveEdit = async () => {
+    const trimmed = editedContent.trim();
+    if (!trimmed || trimmed === displayContent) { cancelEdit(); return; }
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from("feed_posts" as any)
+      .update({ content: trimmed } as any)
+      .eq("id", post.id);
+    if (!error) {
+      onEditSaved(post.id, trimmed);
+    }
+    setSavingEdit(false);
+    setEditing(false);
+  };
 
   const toggleReplies = async () => {
     if (!repliesLoaded) { setReplies(await fetchReplies(post.id)); setRepliesLoaded(true); }
@@ -95,10 +141,15 @@ function FeedCard({
             <Icon size={8} />{cfg.label}
           </span>
           <span className="text-[9px] font-mono text-muted-foreground whitespace-nowrap">{relTime(post.created_at)}</span>
-          {isOwner && !confirmDelete && (
-            <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive transition-colors p-0.5">
-              <Trash2 size={11} />
-            </button>
+          {isOwner && !confirmDelete && !editing && (
+            <>
+              <button onClick={startEdit} className="text-muted-foreground hover:text-primary transition-colors p-0.5">
+                <Pencil size={11} />
+              </button>
+              <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive transition-colors p-0.5">
+                <Trash2 size={11} />
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -119,10 +170,50 @@ function FeedCard({
         )}
       </AnimatePresence>
 
-      {/* Content */}
-      <p className={`text-sm font-body leading-relaxed mb-3 ${cfg.color !== "text-foreground" ? `${cfg.color} font-medium` : "text-foreground"}`}>
-        {post.content}
-      </p>
+      {/* Content — inline edit or display */}
+      <AnimatePresence mode="wait">
+        {editing ? (
+          <motion.div
+            key="edit"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="mb-3 space-y-2"
+          >
+            <textarea
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              rows={3}
+              maxLength={280}
+              autoFocus
+              className="w-full bg-muted border border-primary/40 rounded px-3 py-2 text-sm font-body text-foreground outline-none resize-none transition-colors"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={cancelEdit}
+                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-mono text-muted-foreground hover:text-foreground border border-border rounded transition-colors"
+              >
+                <X size={9} /> CANCEL
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={savingEdit || !editedContent.trim()}
+                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-mono text-primary border border-primary/40 bg-primary/10 hover:bg-primary/20 rounded disabled:opacity-40 transition-colors"
+              >
+                {savingEdit ? <Loader2 size={9} className="animate-spin" /> : <Check size={9} />}
+                SAVE
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key="display" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mb-3">
+            <p className={`text-sm font-body leading-relaxed ${cfg.color !== "text-foreground" ? `${cfg.color} font-medium` : "text-foreground"}`}>
+              {displayContent}
+            </p>
+            {isEdited && (
+              <span className="text-[9px] font-mono text-muted-foreground/60">(edited)</span>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Actions */}
       <div className="flex items-center gap-4">
@@ -213,6 +304,15 @@ export default function SocialPage() {
   const [filterTab, setFilterTab] = useState<FilterTab>("ALL");
   const [profileSheetId, setProfileSheetId] = useState<string | null>(null);
 
+  // Track local edits: postId -> { content, updatedAt }
+  const [localEdits, setLocalEdits] = useState<Record<string, { content: string; updatedAt: string }>>({});
+
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionResults, setMentionResults] = useState<MentionResult[]>([]);
+  const mentionSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+
   const MAX = 280;
   const charCount = postContent.length;
 
@@ -229,12 +329,74 @@ export default function SocialPage() {
     await submitPost(postContent.trim(), "CUSTOM");
     setPostContent("");
     setComposing(false);
+    setMentionResults([]);
+    setMentionQuery("");
     setSubmitting(false);
   };
 
   const handleAuthorClick = useCallback((operatorId: string) => {
     if (operatorId !== user?.id) setProfileSheetId(operatorId);
   }, [user]);
+
+  const handleEditSaved = useCallback((postId: string, newContent: string) => {
+    setLocalEdits((prev) => ({
+      ...prev,
+      [postId]: { content: newContent, updatedAt: new Date().toISOString() },
+    }));
+  }, []);
+
+  // Handle @mention detection in composer
+  const handleComposerChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setPostContent(value);
+
+    // Find if the current word (at cursor) starts with @
+    const cursorPos = e.target.selectionStart ?? value.length;
+    const textUpToCursor = value.slice(0, cursorPos);
+    const lastWordMatch = textUpToCursor.match(/@([\w]*)$/);
+
+    if (lastWordMatch) {
+      const query = lastWordMatch[1];
+      setMentionQuery(query);
+      if (mentionSearchRef.current) clearTimeout(mentionSearchRef.current);
+      mentionSearchRef.current = setTimeout(async () => {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, display_name, username")
+          .or(
+            query
+              ? `display_name.ilike.%${query}%,username.ilike.%${query}%`
+              : `display_name.neq.`
+          )
+          .neq("id", user?.id ?? "")
+          .limit(5);
+        setMentionResults((data as MentionResult[]) ?? []);
+      }, 150);
+    } else {
+      setMentionQuery("");
+      setMentionResults([]);
+    }
+  };
+
+  const insertMention = (result: MentionResult) => {
+    const handle = result.username ?? result.display_name ?? "operator";
+    const textarea = composerRef.current;
+    if (!textarea) return;
+    const cursorPos = textarea.selectionStart ?? postContent.length;
+    const textUpToCursor = postContent.slice(0, cursorPos);
+    // Replace the @query with @handle
+    const replaced = textUpToCursor.replace(/@([\w]*)$/, `@${handle} `);
+    const newContent = replaced + postContent.slice(cursorPos);
+    setPostContent(newContent);
+    setMentionResults([]);
+    setMentionQuery("");
+    // Restore focus
+    setTimeout(() => {
+      textarea.focus();
+      const newCursor = replaced.length;
+      textarea.setSelectionRange(newCursor, newCursor);
+    }, 0);
+  };
 
   return (
     <div>
@@ -274,21 +436,47 @@ export default function SocialPage() {
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
             className="rounded-lg border border-primary/30 bg-card p-4 space-y-3"
           >
-            <textarea
-              value={postContent}
-              onChange={(e) => setPostContent(e.target.value)}
-              placeholder="What's your status, Operator?"
-              rows={3}
-              maxLength={MAX}
-              autoFocus
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 resize-none placeholder:text-muted-foreground/60 transition-colors"
-            />
+            <div className="relative">
+              <textarea
+                ref={composerRef}
+                value={postContent}
+                onChange={handleComposerChange}
+                placeholder="What's your status, Operator?"
+                rows={3}
+                maxLength={MAX}
+                autoFocus
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 resize-none placeholder:text-muted-foreground/60 transition-colors"
+              />
+              {/* @mention dropdown */}
+              <AnimatePresence>
+                {mentionResults.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    className="absolute left-0 right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg overflow-hidden"
+                  >
+                    {mentionResults.map((r) => (
+                      <button
+                        key={r.id}
+                        onMouseDown={(e) => { e.preventDefault(); insertMention(r); }}
+                        className="w-full text-left px-3 py-2 text-xs font-body text-foreground hover:bg-muted/60 transition-colors flex items-center gap-2"
+                      >
+                        <div className="w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-[9px] shrink-0">
+                          {(r.display_name ?? "O")[0].toUpperCase()}
+                        </div>
+                        <span className="font-semibold">{r.display_name}</span>
+                        {r.username && <span className="text-muted-foreground text-[10px]">@{r.username}</span>}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <div className="flex items-center justify-between">
               <span className={`text-[10px] font-mono tabular-nums ${charCount > MAX * 0.9 ? "text-destructive" : "text-muted-foreground"}`}>
                 {charCount}/{MAX}
               </span>
               <div className="flex gap-2">
-                <button onClick={() => { setComposing(false); setPostContent(""); }} className="px-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors">
+                <button onClick={() => { setComposing(false); setPostContent(""); setMentionResults([]); setMentionQuery(""); }} className="px-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors">
                   CANCEL
                 </button>
                 <button
@@ -327,16 +515,22 @@ export default function SocialPage() {
         <>
           <AnimatePresence mode="popLayout">
             <div className="space-y-3">
-              {filtered.map((post) => (
-                <FeedCard
-                  key={post.id}
-                  post={post}
-                  myId={user?.id ?? ""}
-                  onLike={() => toggleLike(post.id)}
-                  onDelete={() => deletePost(post.id)}
-                  onAuthorClick={() => handleAuthorClick(post.operator_id)}
-                />
-              ))}
+              {filtered.map((post) => {
+                const edit = localEdits[post.id];
+                return (
+                  <FeedCard
+                    key={post.id}
+                    post={post}
+                    myId={user?.id ?? ""}
+                    onLike={() => toggleLike(post.id)}
+                    onDelete={() => deletePost(post.id)}
+                    onAuthorClick={() => handleAuthorClick(post.operator_id)}
+                    localContent={edit?.content}
+                    localUpdatedAt={edit?.updatedAt}
+                    onEditSaved={handleEditSaved}
+                  />
+                );
+              })}
             </div>
           </AnimatePresence>
 

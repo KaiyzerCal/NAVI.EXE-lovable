@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film, Image as ImageIcon, Search } from "lucide-react";
+import { BookOpen, Plus, Calendar, X, Copy, Pencil, Loader2, Images, FileText, Film, Image as ImageIcon, Search, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import type { JournalEntry } from "@/hooks/useJournal";
@@ -163,10 +163,24 @@ function EntryModal({
             </div>
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <button onClick={copyEntry} className="py-2 rounded border border-border bg-muted text-muted-foreground text-xs font-mono flex items-center justify-center gap-1.5 hover:text-foreground transition-colors">
             <Copy size={12} /> COPY
           </button>
+          <button onClick={() => {
+            const md = `# ${entry.title}\n\n**Date:** ${new Date(entry.created_at).toLocaleDateString()}\n**Tags:** ${entry.tags.join(", ")}\n**XP Earned:** +${entry.xp_earned}\n\n---\n\n${entry.content}`;
+            const blob = new Blob([md], { type: "text/markdown" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${entry.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }} className="py-2 rounded border border-primary/30 bg-primary/5 text-primary text-xs font-mono flex items-center justify-center gap-1.5 hover:bg-primary/20 transition-colors">
+            <Download size={12} /> EXPORT MD
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <button onClick={onEdit} className="py-2 rounded border border-primary/30 bg-primary/10 text-primary text-xs font-mono flex items-center justify-center gap-1.5 hover:bg-primary/20 transition-colors">
             <Pencil size={12} /> EDIT
           </button>
@@ -227,6 +241,17 @@ export default function JournalPage() {
     toast({ title: "File deleted" });
   };
 
+
+  const exportAsMarkdown = useCallback((entry: JournalEntry) => {
+    const md = `# ${entry.title}\n\n**Date:** ${new Date(entry.created_at).toLocaleDateString()}\n**Tags:** ${entry.tags.join(", ")}\n**XP Earned:** +${entry.xp_earned}\n\n---\n\n${entry.content}`;
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${entry.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
 
   const handleCreate = useCallback(async (form: FormState) => {
     if (!form.title.trim()) return;
@@ -447,6 +472,13 @@ export default function JournalPage() {
                     title="Copy entry"
                   >
                     <Copy size={12} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); exportAsMarkdown(entry); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+                    title="Export as Markdown"
+                  >
+                    <Download size={12} />
                   </button>
                 </div>
               </div>

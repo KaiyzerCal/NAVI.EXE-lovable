@@ -26,6 +26,8 @@ export default function SearchPage() {
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [togglingFollow, setTogglingFollow] = useState<Set<string>>(new Set());
   const [profileSheetId, setProfileSheetId] = useState<string | null>(null);
+  const [classFilter, setClassFilter] = useState("ALL");
+  const [levelRange, setLevelRange] = useState("ALL");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -161,8 +163,21 @@ export default function SearchPage() {
 
   const trimmedQuery = query.trim();
   const showEmpty = !loading && !searched;
-  const showNoResults = !loading && searched && results.length === 0;
-  const showResults = !loading && results.length > 0;
+
+  const uniqueClasses = ["ALL", ...Array.from(new Set(results.map(op => op.character_class).filter(Boolean) as string[]))];
+  const LEVEL_RANGES = ["ALL", "1-10", "11-30", "31+"];
+
+  const visibleResults = results.filter(op => {
+    if (classFilter !== "ALL" && op.character_class !== classFilter) return false;
+    const lvl = op.operator_level ?? 1;
+    if (levelRange === "1-10" && lvl > 10) return false;
+    if (levelRange === "11-30" && (lvl < 11 || lvl > 30)) return false;
+    if (levelRange === "31+" && lvl < 31) return false;
+    return true;
+  });
+
+  const showNoResults = !loading && searched && visibleResults.length === 0;
+  const showResults = !loading && visibleResults.length > 0;
 
   return (
     <div>
@@ -194,6 +209,36 @@ export default function SearchPage() {
           )}
         </div>
       </div>
+
+      {/* Filters — shown once results exist */}
+      {searched && results.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {uniqueClasses.length > 1 && (
+            <div className="flex gap-1.5 flex-wrap">
+              <span className="text-[9px] font-mono text-muted-foreground self-center">CLASS:</span>
+              {uniqueClasses.map(cls => (
+                <button key={cls} onClick={() => setClassFilter(cls)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${
+                    classFilter === cls ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {cls}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-1.5 flex-wrap">
+            <span className="text-[9px] font-mono text-muted-foreground self-center">LEVEL:</span>
+            {LEVEL_RANGES.map(r => (
+              <button key={r} onClick={() => setLevelRange(r)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${
+                  levelRange === r ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                }`}>
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* States */}
       <AnimatePresence mode="wait">
@@ -270,9 +315,9 @@ export default function SearchPage() {
             className="space-y-2"
           >
             <p className="text-[10px] font-mono text-muted-foreground mb-3 tracking-widest">
-              // {results.length} OPERATOR{results.length !== 1 ? "S" : ""} FOUND
+              // {visibleResults.length} OPERATOR{visibleResults.length !== 1 ? "S" : ""} FOUND
             </p>
-            {results.map((op, i) => {
+            {visibleResults.map((op, i) => {
               const initials = (op.display_name ?? op.username ?? "O")
                 .slice(0, 2)
                 .toUpperCase();

@@ -52,6 +52,19 @@ const TYPE_ICON: Record<string, IconConfig> = {
 };
 const DEFAULT_ICON: IconConfig = { icon: Bell, color: "text-muted-foreground" };
 
+type NotifTab = "ALL" | "QUESTS" | "SOCIAL" | "SYSTEM";
+const CATEGORY_MAP: Record<string, NotifTab> = {
+  QUEST_DUE:    "QUESTS",
+  ACHIEVEMENT:  "QUESTS",
+  DM:           "SOCIAL",
+  FEED_LIKE:    "SOCIAL",
+  PARTY_INVITE: "SOCIAL",
+  GUILD_INVITE: "SOCIAL",
+  LEVEL_UP:     "SYSTEM",
+  EVOLUTION:    "SYSTEM",
+  STREAK:       "SYSTEM",
+};
+
 function getIconCfg(type: string): IconConfig {
   return TYPE_ICON[type] ?? DEFAULT_ICON;
 }
@@ -170,9 +183,17 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [notifTab, setNotifTab] = useState<NotifTab>("ALL");
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const tabUnreadCount = (tab: NotifTab) =>
+    notifications.filter((n) => !n.read && (tab === "ALL" || CATEGORY_MAP[n.type] === tab)).length;
+
+  const visibleNotifications = notifTab === "ALL"
+    ? notifications
+    : notifications.filter((n) => CATEGORY_MAP[n.type] === notifTab);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -304,6 +325,22 @@ export default function NotificationsPage() {
         )}
       </AnimatePresence>
 
+      {/* Category tabs */}
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {(["ALL", "QUESTS", "SOCIAL", "SYSTEM"] as NotifTab[]).map(tab => {
+          const cnt = tabUnreadCount(tab);
+          return (
+            <button key={tab} onClick={() => setNotifTab(tab)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded text-[10px] font-mono border transition-colors ${
+                notifTab === tab ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted border-border text-muted-foreground hover:text-foreground"
+              }`}>
+              {tab}
+              {cnt > 0 && <span className="ml-1 px-1 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-bold">{cnt}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Loading state */}
       {loading && <NotifSkeleton />}
 
@@ -328,14 +365,14 @@ export default function NotificationsPage() {
       )}
 
       {/* Empty state */}
-      {!loading && !error && notifications.length === 0 && (
+      {!loading && !error && visibleNotifications.length === 0 && (
         <div className="text-center py-16">
           <Bell
             size={36}
             className="mx-auto mb-3 opacity-20 text-muted-foreground"
           />
           <p className="font-mono text-muted-foreground text-sm">
-            No notifications yet.
+            {notifTab === "ALL" ? "No notifications yet." : `No ${notifTab.toLowerCase()} notifications.`}
           </p>
           <p className="font-mono text-muted-foreground/50 text-xs mt-1">
             Signals will appear here when received.
@@ -344,10 +381,10 @@ export default function NotificationsPage() {
       )}
 
       {/* Notifications list */}
-      {!loading && !error && notifications.length > 0 && (
+      {!loading && !error && visibleNotifications.length > 0 && (
         <AnimatePresence mode="popLayout">
           <div className="space-y-2">
-            {notifications.map((notif) => (
+            {visibleNotifications.map((notif) => (
               <NotifCard key={notif.id} notif={notif} onRead={markRead} />
             ))}
           </div>

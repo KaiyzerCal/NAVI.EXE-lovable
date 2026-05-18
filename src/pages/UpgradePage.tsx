@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Zap, Check, Lock, Loader2, Crown, Package, Swords, ChevronDown, ChevronUp, Coins, Settings } from "lucide-react";
+import { Zap, Check, Lock, Loader2, Crown, Package, Swords, ChevronDown, ChevronUp, Coins, Settings, ShoppingCart, X } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import SubscriptionBadge from "@/components/SubscriptionBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
+import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
+import { isPaymentsConfigured } from "@/lib/stripe";
 
 const FREE_FEATURES  = ["3 active quests", "15 AI messages/day", "5 starter skins", "Basic NAVI personality"];
 const CORE_FEATURES  = ["Unlimited quests", "Unlimited AI messages", "All 64 skins", "All personality modes", "Push notifications", "Party system", "Full stats dashboard", "Guild access"];
@@ -43,6 +45,18 @@ const CATEGORY_COLORS: Record<string, string> = {
   fitness:   "text-neon-green border-neon-green/30 bg-neon-green/5",
 };
 
+const CODEX_BUNDLES = [
+  { key: "cp_bundle_500",  amount: 500,  display: "500",   price: "$1.99",  popular: false },
+  { key: "cp_bundle_1500", amount: 1500, display: "1,500", price: "$4.99",  popular: true  },
+  { key: "cp_bundle_4000", amount: 4000, display: "4,000", price: "$9.99",  popular: false },
+];
+
+const CALI_BUNDLES = [
+  { key: "cc_bundle_50",  amount: 50,  display: "50",  price: "$4.99",  popular: false },
+  { key: "cc_bundle_150", amount: 150, display: "150", price: "$12.99", popular: true  },
+  { key: "cc_bundle_350", amount: 350, display: "350", price: "$24.99", popular: false },
+];
+
 export default function UpgradePage() {
   const [params] = useSearchParams();
   const { tier, isOwner, startCheckout, openPortal } = useSubscription();
@@ -56,6 +70,9 @@ export default function UpgradePage() {
   const [ownedPackIds, setOwnedPackIds] = useState<Set<string>>(new Set());
   const [expandedPack, setExpandedPack] = useState<string | null>(null);
   const [purchasingPack, setPurchasingPack] = useState<string | null>(null);
+  const [bundleCheckout, setBundleCheckout] = useState<{
+    priceKey: string; currencyType: "codex" | "cali"; amount: number;
+  } | null>(null);
 
   const success   = params.get("success")   === "1";
   const cancelled = params.get("cancelled") === "1";
@@ -272,6 +289,130 @@ export default function UpgradePage() {
           )}
         </motion.div>
       </div>
+
+      {/* Currency Bundles */}
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <ShoppingCart size={14} className="text-primary" />
+          <h2 className="font-display text-sm font-bold text-primary tracking-widest">CURRENCY BUNDLES</h2>
+        </div>
+        <p className="text-xs font-mono text-muted-foreground mb-4">
+          Buy Codex Points and Cali Coins directly. Credited instantly to your account.
+        </p>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Codex Points */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Zap size={12} className="text-primary" />
+              <span className="text-[10px] font-mono text-primary tracking-widest">CODEX POINTS</span>
+            </div>
+            <div className="space-y-2">
+              {CODEX_BUNDLES.map(bundle => (
+                <div key={bundle.key}
+                  className={`flex items-center justify-between p-3 rounded-lg border bg-card transition-colors ${bundle.popular ? "border-primary/40" : "border-border"}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-display font-bold text-foreground">{bundle.display} CP</span>
+                      {bundle.popular && <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/30">BEST VALUE</span>}
+                    </div>
+                    <span className="text-xs font-mono text-muted-foreground">{bundle.price}</span>
+                  </div>
+                  <button
+                    onClick={() => setBundleCheckout({ priceKey: bundle.key, currencyType: "codex", amount: bundle.amount })}
+                    disabled={!isPaymentsConfigured()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 border border-primary/30 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Zap size={10} /> BUY
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cali Coins */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Coins size={12} className="text-accent" />
+              <span className="text-[10px] font-mono text-accent tracking-widest">CALI COINS</span>
+            </div>
+            <div className="space-y-2">
+              {CALI_BUNDLES.map(bundle => (
+                <div key={bundle.key}
+                  className={`flex items-center justify-between p-3 rounded-lg border bg-card transition-colors ${bundle.popular ? "border-accent/40" : "border-border"}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-display font-bold text-foreground">{bundle.display} CC</span>
+                      {bundle.popular && <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/30">BEST VALUE</span>}
+                    </div>
+                    <span className="text-xs font-mono text-muted-foreground">{bundle.price}</span>
+                  </div>
+                  <button
+                    onClick={() => setBundleCheckout({ priceKey: bundle.key, currencyType: "cali", amount: bundle.amount })}
+                    disabled={!isPaymentsConfigured()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-accent/10 border border-accent/30 text-accent text-[10px] font-mono hover:bg-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Coins size={10} /> BUY
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {!isPaymentsConfigured() && (
+          <p className="text-[10px] font-mono text-muted-foreground/60 mt-3 text-center">
+            Payments not configured — set VITE_PAYMENTS_CLIENT_TOKEN to enable purchases.
+          </p>
+        )}
+      </div>
+
+      {/* Bundle checkout overlay */}
+      <AnimatePresence>
+        {bundleCheckout && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setBundleCheckout(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg bg-card border border-primary/30 rounded-lg overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  {bundleCheckout.currencyType === "codex"
+                    ? <Zap size={14} className="text-primary" />
+                    : <Coins size={14} className="text-accent" />}
+                  <span className="text-xs font-mono font-bold">
+                    {bundleCheckout.currencyType === "codex"
+                      ? `${bundleCheckout.amount.toLocaleString()} Codex Points`
+                      : `${bundleCheckout.amount.toLocaleString()} Cali Coins`}
+                  </span>
+                </div>
+                <button onClick={() => setBundleCheckout(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+              <StripeEmbeddedCheckout
+                priceId={bundleCheckout.priceKey}
+                userId={user?.id}
+                customerEmail={user?.email}
+                returnUrl={`${window.location.origin}/upgrade?success=1&tier=bundle`}
+                extraMetadata={{
+                  currency_type: bundleCheckout.currencyType,
+                  currency_amount: String(bundleCheckout.amount),
+                }}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Quest Packs */}
       <div className="mb-2">

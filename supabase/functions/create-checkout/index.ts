@@ -13,6 +13,7 @@ interface CheckoutBody {
   userId?: string;
   returnUrl: string;
   environment: StripeEnv;
+  extraMetadata?: Record<string, string>;
 }
 
 async function createCheckoutSession(options: CheckoutBody) {
@@ -32,7 +33,7 @@ async function createCheckoutSession(options: CheckoutBody) {
     managed_payments: { enabled: true },
     ...(options.customerEmail && { customer_email: options.customerEmail }),
     ...(options.userId && {
-      metadata: { userId: options.userId, managed_payments: "true" },
+      metadata: { userId: options.userId, managed_payments: "true", ...(options.extraMetadata ?? {}) },
       ...(isRecurring && { subscription_data: { metadata: { userId: options.userId } } }),
     }),
   });

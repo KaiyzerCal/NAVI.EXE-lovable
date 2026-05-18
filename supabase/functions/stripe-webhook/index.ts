@@ -151,11 +151,29 @@ serve(async (req) => {
         break;
       }
 
-      // Checkout completed (backup path — subscription events are more reliable)
+      // Checkout completed — handles both subscriptions (backup) and one-time currency purchases
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.metadata?.supabase_user_id;
+        const userId = session.metadata?.userId ?? session.metadata?.supabase_user_id;
         if (!userId) break;
+
+        if (session.mode === "payment" && session.metadata?.currency_type) {
+          // One-time currency bundle purchase — credit the user's account
+          const currencyType = session.metadata.currency_type; // "codex" | "cali"
+          const amount = parseInt(session.metadata.currency_amount ?? "0", 10);
+          if (amount > 0) {
+            const col = currencyType === "cali" ? "cali_coins" : "codex_points";
+            const { data: prof } = await supabase
+              .from("profiles").select(col).eq("id", userId).single();
+            const current = (prof as any)?.[col] ?? 0;
+            await supabase.from("profiles")
+              .update({ [col]: current + amount }).eq("id", userId);
+            console.log(`[stripe-webhook] credited ${amount} ${col} to user=${userId}`);
+          }
+          break;
+        }
+
+        // Subscription backup path
         const requestedTier = (session.metadata?.tier ?? "core") as "core" | "elite";
         await setTier(userId, requestedTier);
         break;

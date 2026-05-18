@@ -35,7 +35,6 @@ import SearchPage from "./pages/SearchPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import NotFound from "./pages/NotFound";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
-import MobileBottomNav from "./components/MobileBottomNav";
 import ShopPage from "./pages/ShopPage";
 import MarketplacePage from "./pages/MarketplacePage";
 import SeasonPage from "./pages/SeasonPage";
@@ -208,7 +207,7 @@ function AppShell() {
       )}
       <div className="flex min-h-screen">
         <AppSidebar />
-        <main className="flex-1 p-6 pb-20 md:pb-6 overflow-y-auto">
+        <main className="flex-1 p-6 overflow-y-auto">
           <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/navi" element={<NaviPage />} />
@@ -237,7 +236,6 @@ function AppShell() {
           </Routes>
         </main>
       </div>
-      <MobileBottomNav />
     </>
   );
 }

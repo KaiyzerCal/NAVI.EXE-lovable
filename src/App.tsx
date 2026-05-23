@@ -39,6 +39,8 @@ import ShopPage from "./pages/ShopPage";
 import MarketplacePage from "./pages/MarketplacePage";
 import SeasonPage from "./pages/SeasonPage";
 import ChallengePage from "./pages/ChallengePage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import TermsOfServicePage from "./pages/TermsOfServicePage";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel } from "@/lib/classEvolution";
@@ -66,7 +68,12 @@ function AppContent() {
     );
   }
 
-  if (!user) return <AuthPage />;
+  if (!user) {
+    const path = window.location.pathname;
+    if (path === "/privacy") return <div className="min-h-screen bg-background p-6"><PrivacyPolicyPage /></div>;
+    if (path === "/terms") return <div className="min-h-screen bg-background p-6"><TermsOfServicePage /></div>;
+    return <AuthPage />;
+  }
 
   if (showOnboarding) {
     return <Onboarding onComplete={() => setShowOnboarding(false)} />;
@@ -232,6 +239,8 @@ function AppShell() {
           <Route path="/market" element={<MarketplacePage />} />
           <Route path="/season" element={<SeasonPage />} />
           <Route path="/challenges" element={<ChallengePage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

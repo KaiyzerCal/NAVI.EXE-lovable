@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { User, Bell, Database, Shield, Check, Sun, Moon, Download, Mail } from "lucide-react";
+import { User, Bell, Database, Shield, Check, Sun, Moon, Download, Mail, Trash2, AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
@@ -85,6 +85,9 @@ export default function SettingsPage() {
   const [dndStart, setDndStart] = useState("22:00");
   const [dndEnd, setDndEnd] = useState("08:00");
   const [exportingData, setExportingData] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Sync local state FROM profile once it loads from Supabase
   useEffect(() => {
@@ -167,6 +170,32 @@ export default function SettingsPage() {
 
   const saveDnd = async (enabled: boolean, start: string, end: string) => {
     await updateProfile({ notification_settings: { ...notifications, dnd_enabled: enabled, dnd_start: start, dnd_end: end } } as any);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user || deleteConfirmText !== "DELETE") return;
+    setDeletingAccount(true);
+    try {
+      // Delete all user data from tables
+      await Promise.all([
+        supabase.from("quests").delete().eq("user_id", user.id),
+        supabase.from("journal_entries").delete().eq("user_id", user.id),
+        supabase.from("navi_core_memory" as any).delete().eq("user_id", user.id),
+        supabase.from("navi_memories" as any).delete().eq("user_id", user.id),
+        supabase.from("operator_feed" as any).delete().eq("operator_id", user.id),
+        supabase.from("notifications" as any).delete().eq("user_id", user.id),
+        supabase.from("buffs" as any).delete().eq("user_id", user.id),
+        supabase.from("skills" as any).delete().eq("user_id", user.id),
+      ]);
+      // Mark profile as deleted and sign out (auth record removed by admin function)
+      await supabase.from("profiles").update({ display_name: "[deleted]", navi_name: "[deleted]" } as any).eq("id", user.id);
+      await supabase.functions.invoke("delete-account", {}).catch(() => {}); // best-effort
+      await supabase.auth.signOut();
+      toast({ title: "Account deleted", description: "Your data has been permanently removed." });
+    } catch (err: any) {
+      toast({ title: "Error deleting account", description: err.message, variant: "destructive" });
+      setDeletingAccount(false);
+    }
   };
 
   const handleExportData = async () => {
@@ -369,8 +398,64 @@ export default function SettingsPage() {
               <Download size={12} />
               {exportingData ? "EXPORTING..." : "EXPORT DATA"}
             </button>
-            <button className="px-3 py-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-xs font-mono hover:bg-destructive/20 transition-colors">RESET PROGRESS</button>
           </div>
+        </HudCard>
+
+        {/* Legal */}
+        <HudCard title="LEGAL" icon={<Shield size={14} />}>
+          <div className="flex gap-3 flex-wrap">
+            <a href="/privacy" target="_blank" rel="noopener"
+              className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-primary transition-colors">
+              <ExternalLink size={11} /> Privacy Policy
+            </a>
+            <a href="/terms" target="_blank" rel="noopener"
+              className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-primary transition-colors">
+              <ExternalLink size={11} /> Terms of Service
+            </a>
+          </div>
+        </HudCard>
+
+        {/* Danger Zone */}
+        <HudCard title="DANGER ZONE" icon={<AlertTriangle size={14} className="text-destructive" />}>
+          {!showDeleteConfirm ? (
+            <div>
+              <p className="text-xs font-mono text-muted-foreground mb-3">Permanently delete your account and all associated data. This action cannot be undone.</p>
+              <button onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-xs font-mono hover:bg-destructive/20 transition-colors">
+                <Trash2 size={12} /> DELETE ACCOUNT
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3 rounded border border-destructive/30 bg-destructive/5">
+                <p className="text-xs font-mono text-destructive font-bold mb-1">⚠ THIS CANNOT BE UNDONE</p>
+                <p className="text-[10px] font-mono text-muted-foreground">All quests, journal entries, AI memories, currency, and progress will be permanently deleted.</p>
+              </div>
+              <div>
+                <label className="text-[10px] font-mono text-muted-foreground block mb-1">Type <span className="text-destructive font-bold">DELETE</span> to confirm</label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  className="w-full bg-muted border border-destructive/30 rounded px-3 py-2 text-sm font-mono text-foreground outline-none focus:border-destructive transition-colors"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText !== "DELETE" || deletingAccount}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded bg-destructive/20 border border-destructive/50 text-destructive text-xs font-mono hover:bg-destructive/30 transition-colors disabled:opacity-40">
+                  {deletingAccount ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  {deletingAccount ? "DELETING..." : "CONFIRM DELETE"}
+                </button>
+                <button onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(""); }}
+                  className="px-3 py-2 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground transition-colors">
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          )}
         </HudCard>
       </div>
     </div>

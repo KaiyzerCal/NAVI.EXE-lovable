@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#0a0a0f"/>
+
+  <!-- Subtle grid lines -->
+  <line x1="0" y1="170" x2="512" y2="170" stroke="#00d4ff" stroke-opacity="0.06" stroke-width="1"/>
+  <line x1="0" y1="256" x2="512" y2="256" stroke="#00d4ff" stroke-opacity="0.06" stroke-width="1"/>
+  <line x1="0" y1="342" x2="512" y2="342" stroke="#00d4ff" stroke-opacity="0.06" stroke-width="1"/>
+  <line x1="170" y1="0" x2="170" y2="512" stroke="#00d4ff" stroke-opacity="0.06" stroke-width="1"/>
+  <line x1="256" y1="0" x2="256" y2="512" stroke="#00d4ff" stroke-opacity="0.06" stroke-width="1"/>
+  <line x1="342" y1="0" x2="342" y2="512" stroke="#00d4ff" stroke-opacity="0.06" stroke-width="1"/>
+
+  <!-- Outer border glow -->
+  <rect x="16" y="16" width="480" height="480" rx="68" fill="none" stroke="#00d4ff" stroke-opacity="0.3" stroke-width="2"/>
+
+  <!-- Inner accent border -->
+  <rect x="28" y="28" width="456" height="456" rx="58" fill="none" stroke="#00d4ff" stroke-opacity="0.12" stroke-width="1"/>
+
+  <!-- Bot head / visor shape -->
+  <rect x="136" y="120" width="240" height="200" rx="28" fill="#0e0e18" stroke="#00d4ff" stroke-opacity="0.6" stroke-width="3"/>
+
+  <!-- Antenna -->
+  <rect x="248" y="80" width="16" height="44" rx="8" fill="#00d4ff" opacity="0.7"/>
+  <circle cx="256" cy="76" r="10" fill="#00d4ff"/>
+
+  <!-- Eyes — glowing cyan -->
+  <rect x="166" y="174" width="70" height="44" rx="12" fill="#00d4ff" opacity="0.15"/>
+  <rect x="166" y="174" width="70" height="44" rx="12" fill="none" stroke="#00d4ff" stroke-opacity="0.8" stroke-width="2"/>
+  <rect x="276" y="174" width="70" height="44" rx="12" fill="#00d4ff" opacity="0.15"/>
+  <rect x="276" y="174" width="70" height="44" rx="12" fill="none" stroke="#00d4ff" stroke-opacity="0.8" stroke-width="2"/>
+
+  <!-- Eye pupils -->
+  <circle cx="201" cy="196" r="14" fill="#00d4ff" opacity="0.9"/>
+  <circle cx="311" cy="196" r="14" fill="#00d4ff" opacity="0.9"/>
+  <circle cx="201" cy="196" r="6" fill="#ffffff"/>
+  <circle cx="311" cy="196" r="6" fill="#ffffff"/>
+
+  <!-- Mouth / signal bar -->
+  <rect x="186" y="268" width="140" height="10" rx="5" fill="#00d4ff" opacity="0.25"/>
+  <rect x="186" y="268" width="42" height="10" rx="5" fill="#00d4ff" opacity="0.9"/>
+  <rect x="235" y="268" width="42" height="10" rx="5" fill="#00d4ff" opacity="0.6"/>
+  <rect x="284" y="268" width="42" height="10" rx="5" fill="#00d4ff" opacity="0.2"/>
+
+  <!-- Body -->
+  <rect x="156" y="336" width="200" height="90" rx="18" fill="#0e0e18" stroke="#00d4ff" stroke-opacity="0.4" stroke-width="2"/>
+
+  <!-- Body circuit lines -->
+  <line x1="196" y1="358" x2="316" y2="358" stroke="#00d4ff" stroke-opacity="0.3" stroke-width="1.5"/>
+  <line x1="196" y1="374" x2="276" y2="374" stroke="#00d4ff" stroke-opacity="0.2" stroke-width="1.5"/>
+  <line x1="196" y1="390" x2="296" y2="390" stroke="#00d4ff" stroke-opacity="0.3" stroke-width="1.5"/>
+  <circle cx="316" cy="374" r="4" fill="#00d4ff" opacity="0.5"/>
+  <circle cx="296" cy="406" r="4" fill="#a855f7" opacity="0.6"/>
+
+  <!-- Arms -->
+  <rect x="96" y="336" width="52" height="64" rx="14" fill="#0e0e18" stroke="#00d4ff" stroke-opacity="0.35" stroke-width="2"/>
+  <rect x="364" y="336" width="52" height="64" rx="14" fill="#0e0e18" stroke="#00d4ff" stroke-opacity="0.35" stroke-width="2"/>
+
+  <!-- Corner markers -->
+  <path d="M48 80 L48 48 L80 48" fill="none" stroke="#00d4ff" stroke-opacity="0.4" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M432 48 L464 48 L464 80" fill="none" stroke="#00d4ff" stroke-opacity="0.4" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M48 432 L48 464 L80 464" fill="none" stroke="#00d4ff" stroke-opacity="0.4" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M464 432 L464 464 L432 464" fill="none" stroke="#00d4ff" stroke-opacity="0.4" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

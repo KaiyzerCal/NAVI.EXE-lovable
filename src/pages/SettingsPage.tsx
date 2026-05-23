@@ -2,7 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
 import { User, Bell, Database, Shield, Check, Sun, Moon, Download, Mail, Trash2, AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
@@ -85,6 +85,10 @@ export default function SettingsPage() {
   const [dndStart, setDndStart] = useState("22:00");
   const [dndEnd, setDndEnd] = useState("08:00");
   const [exportingData, setExportingData] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>("default");
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [subscribingPush, setSubscribingPush] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -171,6 +175,65 @@ export default function SettingsPage() {
   const saveDnd = async (enabled: boolean, start: string, end: string) => {
     await updateProfile({ notification_settings: { ...notifications, dnd_enabled: enabled, dnd_start: start, dnd_end: end } } as any);
   };
+
+  // Check push notification support and current subscription state
+  useEffect(() => {
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    setPushSupported(supported);
+    if (!supported) return;
+    setPushPermission(Notification.permission);
+    navigator.serviceWorker.ready.then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription();
+      setPushSubscribed(!!sub);
+    }).catch(() => {});
+  }, []);
+
+  const handlePushSubscribe = useCallback(async () => {
+    if (!user) return;
+    setSubscribingPush(true);
+    try {
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      if (permission !== "granted") {
+        toast({ title: "Notifications blocked", description: "Enable notifications in your browser settings.", variant: "destructive" });
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        toast({ title: "Push not configured", description: "VAPID key is missing.", variant: "destructive" });
+        return;
+      }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey,
+      });
+      await supabase.from("push_subscriptions" as any).upsert({ user_id: user.id, subscription: sub.toJSON() });
+      setPushSubscribed(true);
+      toast({ title: "Notifications enabled", description: "NAVI will send you push alerts." });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSubscribingPush(false);
+    }
+  }, [user]);
+
+  const handlePushUnsubscribe = useCallback(async () => {
+    if (!user) return;
+    setSubscribingPush(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+      await supabase.from("push_subscriptions" as any).delete().eq("user_id", user.id);
+      setPushSubscribed(false);
+      toast({ title: "Notifications disabled" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSubscribingPush(false);
+    }
+  }, [user]);
 
   const handleDeleteAccount = async () => {
     if (!user || deleteConfirmText !== "DELETE") return;
@@ -389,6 +452,40 @@ export default function SettingsPage() {
             </div>
           </div>
         </HudCard>
+
+        {/* Push Notifications */}
+        {pushSupported && (
+          <HudCard title="PUSH NOTIFICATIONS" icon={<Bell size={14} />}>
+            <div className="space-y-3">
+              <p className="text-xs font-mono text-muted-foreground">
+                Receive NAVI alerts even when the app is closed — streak warnings, quest reminders, and level-up events.
+              </p>
+              {pushPermission === "denied" ? (
+                <p className="text-xs font-mono text-destructive">
+                  Notifications are blocked in your browser. Enable them in browser settings to use this feature.
+                </p>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={pushSubscribed ? handlePushUnsubscribe : handlePushSubscribe}
+                    disabled={subscribingPush}
+                    className={`px-4 py-2 rounded border text-xs font-mono transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                      pushSubscribed
+                        ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
+                        : "bg-muted border-border text-muted-foreground hover:text-foreground hover:border-primary/30"
+                    }`}
+                  >
+                    {subscribingPush && <Loader2 size={12} className="animate-spin" />}
+                    {pushSubscribed ? "DISABLE PUSH ALERTS" : "ENABLE PUSH ALERTS"}
+                  </button>
+                  {pushSubscribed && (
+                    <span className="text-[10px] font-mono text-primary">● ACTIVE</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </HudCard>
+        )}
 
         {/* Data */}
         <HudCard title="DATA" icon={<Database size={14} />}>

@@ -12,37 +12,38 @@ import { FeedProvider } from "@/contexts/FeedContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
 import EvolutionEvent from "@/components/EvolutionEvent";
-// FeedbackWidget removed from layout — accessible via Settings if/when re-enabled.
-import AuthPage from "./pages/AuthPage";
-import Index from "./pages/Index";
-import NaviPage from "./pages/NaviPage";
-import MavisChat from "./pages/MavisChat";
-import CharacterPage from "./pages/CharacterPage";
-import QuestsPage from "./pages/QuestsPage";
-import JournalPage from "./pages/JournalPage";
-import StatsPage from "./pages/StatsPage";
-import PartyPage from "./pages/PartyPage";
-import SettingsPage from "./pages/SettingsPage";
-import UpgradePage from "./pages/UpgradePage";
-import AdminPage from "./pages/AdminPage";
-import GamesPage from "./pages/GamesPage";
-import GuildPage from "./pages/GuildPage";
-import LeaderboardPage from "./pages/LeaderboardPage";
-import SocialPage from "./pages/SocialPage";
-import InboxPage from "./pages/InboxPage";
-import AgentPage from "./pages/AgentPage";
-import SearchPage from "./pages/SearchPage";
-import NotificationsPage from "./pages/NotificationsPage";
-import NotFound from "./pages/NotFound";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
-import ShopPage from "./pages/ShopPage";
-import MarketplacePage from "./pages/MarketplacePage";
-import SeasonPage from "./pages/SeasonPage";
-import ChallengePage from "./pages/ChallengePage";
+import AuthPage from "./pages/AuthPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
+
+// Lazy-loaded routes — split into async chunks to reduce initial bundle size
+const Index = lazy(() => import("./pages/Index"));
+const NaviPage = lazy(() => import("./pages/NaviPage"));
+const MavisChat = lazy(() => import("./pages/MavisChat"));
+const CharacterPage = lazy(() => import("./pages/CharacterPage"));
+const QuestsPage = lazy(() => import("./pages/QuestsPage"));
+const JournalPage = lazy(() => import("./pages/JournalPage"));
+const StatsPage = lazy(() => import("./pages/StatsPage"));
+const PartyPage = lazy(() => import("./pages/PartyPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const UpgradePage = lazy(() => import("./pages/UpgradePage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const GamesPage = lazy(() => import("./pages/GamesPage"));
+const GuildPage = lazy(() => import("./pages/GuildPage"));
+const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const SocialPage = lazy(() => import("./pages/SocialPage"));
+const InboxPage = lazy(() => import("./pages/InboxPage"));
+const AgentPage = lazy(() => import("./pages/AgentPage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const ShopPage = lazy(() => import("./pages/ShopPage"));
+const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
+const SeasonPage = lazy(() => import("./pages/SeasonPage"));
+const ChallengePage = lazy(() => import("./pages/ChallengePage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 import { Loader2 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel } from "@/lib/classEvolution";
 import { useFeed } from "@/contexts/FeedContext";
 import { toast } from "@/hooks/use-toast";
@@ -215,6 +216,7 @@ function AppShell() {
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">
+          <Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-primary" size={24} /></div>}>
           <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/navi" element={<NaviPage />} />
@@ -243,6 +245,7 @@ function AppShell() {
           <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </main>
       </div>
     </>

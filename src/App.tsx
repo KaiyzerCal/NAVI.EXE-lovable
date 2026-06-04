@@ -55,10 +55,22 @@ function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      const done = localStorage.getItem("navi_onboarding_done");
-      if (!done) setShowOnboarding(true);
-    }
+    if (!user) return;
+    const done = localStorage.getItem("navi_onboarding_done");
+    if (done) return; // fast path: already cached locally
+    // localStorage empty (new device / cleared cache) — check DB as source of truth
+    supabase
+      .from("profiles")
+      .select("onboarding_done")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if ((data as any)?.onboarding_done) {
+          localStorage.setItem("navi_onboarding_done", "1"); // cache for next time
+        } else {
+          setShowOnboarding(true);
+        }
+      });
   }, [user]);
 
   if (loading) {

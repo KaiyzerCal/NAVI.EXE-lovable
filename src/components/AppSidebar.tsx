@@ -9,7 +9,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
-import { useNotificationCount } from "@/pages/NotificationsPage";
+import { useNotificationCount } from "@/hooks/useNotificationCount";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -63,9 +63,9 @@ export default function AppSidebar() {
               className="overflow-hidden"
             >
               <h1 className="font-display text-primary text-sm font-bold tracking-widest text-glow-cyan whitespace-nowrap">
-                MAVIS-LITE
+                NAVI.EXE
               </h1>
-              <p className="text-muted-foreground text-[10px] font-mono whitespace-nowrap">v4.2 // NAVI.EXE</p>
+              <p className="text-muted-foreground text-[10px] font-mono whitespace-nowrap">// OPERATOR SYSTEM</p>
             </motion.div>
           )}
         </AnimatePresence>

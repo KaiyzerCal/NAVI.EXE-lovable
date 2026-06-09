@@ -9,6 +9,7 @@ import { AppDataProvider } from "@/contexts/AppDataContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { supabase } from "@/integrations/supabase/client";
 import { FeedProvider } from "@/contexts/FeedContext";
+import { UnreadMessagesProvider } from "@/contexts/UnreadMessagesContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
 import EvolutionEvent from "@/components/EvolutionEvent";
@@ -95,7 +96,9 @@ function AppContent() {
   return (
     <AppDataProvider>
       <FeedProvider>
-        <AppShell />
+        <UnreadMessagesProvider>
+          <AppShell />
+        </UnreadMessagesProvider>
       </FeedProvider>
     </AppDataProvider>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, ArrowLeft, Pencil, Search, X, Paperclip, Download, FileText, Trash2, Smile } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Pencil, Search, X, Paperclip, Download, FileText, Trash2, Smile, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -166,6 +166,7 @@ export default function InboxPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -198,71 +199,79 @@ export default function InboxPage() {
   // ── Load thread list ─────────────────────────────────────────────────────
   const loadThreads = useCallback(async () => {
     if (!user) return;
-    const { data: rows, error: threadsError } = await (supabase as any)
-      .from("navi_message_threads")
-      .select("*")
-      .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
-      .order("last_message_at", { ascending: false });
+    setError(null);
+    try {
+      const { data: rows, error: threadsError } = await (supabase as any)
+        .from("navi_message_threads")
+        .select("*")
+        .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
+        .order("last_message_at", { ascending: false });
 
-    if (threadsError) {
-      console.error("Failed to load threads:", threadsError.message);
+      if (threadsError) {
+        setError("Failed to load messages. Tap retry.");
+        setLoading(false);
+        return;
+      }
+
+      if (!rows?.length) { setThreads([]); setLoading(false); return; }
+
+      // Filter out threads the current user has soft-deleted
+      const visibleRows = (rows as any[]).filter((t) => {
+        const isSender = t.sender_user_id === user.id;
+        if (isSender && t.deleted_by_sender) return false;
+        if (!isSender && t.deleted_by_recipient) return false;
+        return true;
+      });
+
+      if (!visibleRows.length) { setThreads([]); setLoading(false); return; }
+
+      const otherIds = visibleRows.map((t) =>
+        t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
+      );
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, navi_name")
+        .in("id", otherIds);
+      const profileMap: Record<string, any> = Object.fromEntries(
+        (profiles ?? []).map((p) => [p.id, p])
+      );
+
+      const previews = await Promise.all(
+        visibleRows.map((t) =>
+          (supabase as any)
+            .from("navi_messages")
+            .select("content, sender_navi_name, attachment_name, attachment_type")
+            .eq("thread_id", t.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        )
+      );
+
+      const mapped: Thread[] = visibleRows.map((t, i) => {
+        const otherId = t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id;
+        const other = profileMap[otherId] ?? {};
+        const lastMsg = previews[i].data;
+        const preview = lastMsg?.content || (lastMsg?.attachment_name ? `📎 ${lastMsg.attachment_name}` : null);
+        return {
+          id: t.id,
+          sender_user_id: t.sender_user_id,
+          receiver_user_id: t.receiver_user_id,
+          last_message_at: t.last_message_at,
+          other_user_id: otherId,
+          other_display_name: other.display_name ?? null,
+          other_navi_name: other.navi_name ?? null,
+          last_message_preview: preview,
+          preview_is_mine: lastMsg?.sender_navi_name === profile.navi_name,
+        };
+      });
+
+      setThreads(mapped);
+    } catch (err) {
+      setError("Failed to load messages. Tap retry.");
+    } finally {
+      setLoading(false);
     }
-
-    if (!rows?.length) { setThreads([]); setLoading(false); return; }
-
-    // Filter out threads the current user has deleted (columns may not exist yet)
-    const visibleRows = (rows as any[]).filter((t) => {
-      const isSender = t.sender_user_id === user.id;
-      if (isSender && t.deleted_by_sender) return false;
-      if (!isSender && t.deleted_by_recipient) return false;
-      return true;
-    });
-
-    if (!visibleRows.length) { setThreads([]); setLoading(false); return; }
-
-    const otherIds = visibleRows.map((t) =>
-      t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
-    );
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, navi_name")
-      .in("id", otherIds);
-    const profileMap: Record<string, any> = Object.fromEntries(
-      (profiles ?? []).map((p) => [p.id, p])
-    );
-
-    const previews = await Promise.all(
-      visibleRows.map((t) =>
-        (supabase as any)
-          .from("navi_messages")
-          .select("content, sender_navi_name, attachment_name, attachment_type")
-          .eq("thread_id", t.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      )
-    );
-
-    const mapped: Thread[] = visibleRows.map((t, i) => {
-      const otherId = t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id;
-      const other = profileMap[otherId] ?? {};
-      const lastMsg = previews[i].data;
-      const preview = lastMsg?.content || (lastMsg?.attachment_name ? `📎 ${lastMsg.attachment_name}` : null);
-      return {
-        id: t.id,
-        sender_user_id: t.sender_user_id,
-        receiver_user_id: t.receiver_user_id,
-        last_message_at: t.last_message_at,
-        other_user_id: otherId,
-        other_display_name: other.display_name ?? null,
-        other_navi_name: other.navi_name ?? null,
-        last_message_preview: preview,
-        preview_is_mine: lastMsg?.sender_navi_name === profile.navi_name,
-      };
-    });
-
-    setThreads(mapped);
-    setLoading(false);
   }, [user, profile.navi_name]);
 
   useEffect(() => { if (user) loadThreads(); }, [user, loadThreads]);
@@ -539,14 +548,19 @@ export default function InboxPage() {
       )
       .maybeSingle();
 
-    const row = existing ?? (await (supabase as any)
-      .from("navi_message_threads")
-      .insert({ sender_user_id: user.id, receiver_user_id: target.id })
-      .select()
-      .single()
-    ).data;
+    const { data: inserted, error: insertErr } = existing
+      ? { data: existing, error: null }
+      : await (supabase as any)
+          .from("navi_message_threads")
+          .insert({ sender_user_id: user.id, receiver_user_id: target.id })
+          .select()
+          .single();
 
-    if (!row) return;
+    if (insertErr || !inserted) {
+      toast({ title: "Could not start conversation", description: "Please try again.", variant: "destructive" });
+      return;
+    }
+    const row = inserted;
     setSearchQuery(""); setSearchResults([]);
     openThread({
       id: row.id,
@@ -829,6 +843,16 @@ export default function InboxPage() {
         <div className="flex flex-col items-center justify-center py-16 gap-2">
           <Loader2 className="animate-spin text-primary" size={20} />
           <p className="text-xs font-mono text-muted-foreground">Loading messages...</p>
+        </div>
+      ) : error ? (
+        <div className="text-center py-16">
+          <p className="font-mono text-muted-foreground text-sm mb-4">{error}</p>
+          <button
+            onClick={loadThreads}
+            className="flex items-center gap-2 mx-auto px-4 py-2 rounded border border-primary/30 bg-primary/10 text-primary text-xs font-mono hover:bg-primary/20 transition-colors"
+          >
+            <RefreshCw size={12} /> RETRY
+          </button>
         </div>
       ) : threads.length === 0 ? (
         <div className="text-center py-16">

@@ -1,39 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import webpush from "https://esm.sh/web-push@3.6.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Minimal web push implementation using VAPID
-async function sendWebPush(subscription: any, payload: string, vapidKeys: { publicKey: string; privateKey: string; subject: string }) {
-  // Use the web-push compatible endpoint directly
-  const endpoint = subscription.endpoint;
-  const p256dh = subscription.keys?.p256dh;
-  const auth = subscription.keys?.auth;
-
-  if (!endpoint || !p256dh || !auth) throw new Error("Invalid subscription");
-
-  // For simplicity, use a fetch to a push proxy or the endpoint directly
-  // In production use the web-push npm package via esm.sh
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Content-Length": payload.length.toString(),
-    },
-    body: payload,
-  });
-
-  return response;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { user_id, title, body, url } = await req.json();
+
+    const vapidPublicKey  = Deno.env.get("VAPID_PUBLIC_KEY")  ?? "";
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
+    const vapidSubject    = Deno.env.get("VAPID_SUBJECT")     ?? "mailto:admin@navi.exe";
+
+    if (!vapidPublicKey || !vapidPrivateKey) {
+      return new Response(JSON.stringify({ sent: false, reason: "vapid_not_configured" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    webpush.setVapidDetails(`mailto:${vapidSubject}`, vapidPublicKey, vapidPrivateKey);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -52,19 +42,26 @@ serve(async (req) => {
       });
     }
 
-    const payload = JSON.stringify({ title: `NAVI.EXE — ${title}`, body, url: url ?? "/" });
-
-    await sendWebPush(sub.subscription, payload, {
-      publicKey: Deno.env.get("VAPID_PUBLIC_KEY") ?? "",
-      privateKey: Deno.env.get("VAPID_PRIVATE_KEY") ?? "",
-      subject: `mailto:${Deno.env.get("VAPID_SUBJECT") ?? "admin@navi.exe"}`,
+    const payload = JSON.stringify({
+      title: `NAVI.EXE — ${title}`,
+      body,
+      url: url ?? "/",
     });
+
+    await webpush.sendNotification(sub.subscription, payload);
 
     return new Response(JSON.stringify({ sent: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }), {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    // 410 Gone = subscription expired, silently skip
+    if (msg.includes("410") || msg.includes("Gone")) {
+      return new Response(JSON.stringify({ sent: false, reason: "subscription_expired" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

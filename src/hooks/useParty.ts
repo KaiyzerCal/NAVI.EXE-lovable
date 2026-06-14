@@ -263,25 +263,16 @@ export function useParty() {
 
   const completePartyQuest = useCallback(async (): Promise<boolean> => {
     if (!party || !user) return false;
-    const xpShare = Math.floor(party.xp_pool / Math.max(members.length, 1));
-    for (const m of members) {
-      const { data: profile } = await supabase.from("profiles").select("operator_xp, xp_total").eq("id", m.user_id).single();
-      if (profile) {
-        await supabase.from("profiles").update({
-          operator_xp: (profile.operator_xp ?? 0) + xpShare,
-          xp_total: (profile.xp_total ?? 0) + xpShare,
-        } as any).eq("id", m.user_id);
-      }
+    const { data: xpShare, error } = await supabase.rpc("complete_party_quest" as any, { p_party_id: party.id });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return false;
     }
-    if (party.quest_id) {
-      await supabase.from("quests").update({ completed: true, progress: 1, total: 1 } as any).eq("id", party.quest_id);
-    }
-    await supabase.from("parties").update({ status: "completed" } as any).eq("id", party.id);
-    toast({ title: "Party Quest Complete!", description: `${xpShare} XP awarded to each member.` });
+    toast({ title: "Party Quest Complete!", description: `${xpShare ?? 0} XP awarded to each member.` });
     setParty(null);
     setMembers([]);
     return true;
-  }, [party, user, members]);
+  }, [party, user]);
 
   const myRole = members.find((m) => m.user_id === user?.id)?.role ?? null;
 

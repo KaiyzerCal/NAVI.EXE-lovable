@@ -548,6 +548,15 @@ export default function InboxPage() {
       )
       .maybeSingle();
 
+    // If we're reusing an existing thread, reset any soft-delete flags so both
+    // parties can see the conversation again (either side may have deleted it).
+    if (existing) {
+      await (supabase as any)
+        .from("navi_message_threads")
+        .update({ deleted_by_sender: false, deleted_by_recipient: false })
+        .eq("id", existing.id);
+    }
+
     const { data: inserted, error: insertErr } = existing
       ? { data: existing, error: null }
       : await (supabase as any)

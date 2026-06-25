@@ -267,7 +267,22 @@ export default function AgentPage() {
                     {task.result ? (
                       <div className="p-3 rounded bg-muted/20 border border-border">
                         <p className="text-[10px] font-mono text-muted-foreground mb-1">RESULT</p>
-                        <p className="text-xs font-body text-foreground whitespace-pre-wrap">{typeof task.result === "object" ? (task.result as any).output ?? JSON.stringify(task.result) : String(task.result)}</p>
+                        {typeof task.result === "object" && (task.result as any).summary ? (
+                          <>
+                            <p className="text-xs font-body text-foreground whitespace-pre-wrap">{(task.result as any).summary}</p>
+                            {Array.isArray((task.result as any).actions) && (task.result as any).actions.length > 0 && (
+                              <ul className="mt-2 space-y-0.5">
+                                {((task.result as any).actions as any[]).map((a: any, i: number) => (
+                                  <li key={i} className="text-[10px] font-mono text-muted-foreground">
+                                    {">"} {a.type?.replace(/_/g, " ")}{a.name ? `: ${a.name}` : a.title ? `: ${a.title}` : a.amount ? ` +${a.amount} XP` : ""}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs font-body text-foreground whitespace-pre-wrap">{typeof task.result === "object" ? (task.result as any).output ?? JSON.stringify(task.result) : String(task.result)}</p>
+                        )}
                       </div>
                     ) : (
                       <p className="text-[10px] font-mono text-muted-foreground">

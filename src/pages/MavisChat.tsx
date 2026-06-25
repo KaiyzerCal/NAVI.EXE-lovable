@@ -14,9 +14,10 @@ import { useNavigate } from "react-router-dom";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 
-const CHAT_URL        = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
-const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
-const EMBED_URL       = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-embed-memories`;
+const CHAT_URL            = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
+const NAVI_ACTIONS_URL    = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
+const EMBED_URL           = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-embed-memories`;
+const EXTRACT_MEMORIES_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-extract-memories`;
 
 const CLIENT_FALLBACK_ACTION_TYPES = new Set([
   "create_journal",
@@ -688,28 +689,20 @@ export default function MavisChat() {
       return;
     }
 
-    // Extract memories from last 50 user messages before clearing
-    const userMsgs = messages.filter(m => m.role === "user").slice(-50);
-    const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
-
-    if (allMemories.length > 0) {
-      const memoryRows = allMemories.map(item => ({
-        user_id: user.id,
-        memory_type: item.category,
-        content: item.detail,
-        importance: item.importance,
-      }));
-      await supabase.from("navi_core_memory").insert(memoryRows as any);
-      // Embed the newly saved memories in the background
-      fetch(EMBED_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${session?.access_token ?? ""}`,
-        },
-        body: JSON.stringify({ user_id: user.id }),
-      }).catch(() => {});
+    // Extract memories from last 10 user messages before clearing (AI-based, fire-and-forget)
+    const userMsgs = messages.filter(m => m.role === "user").slice(-10);
+    for (const m of userMsgs) {
+      if (m.content.length > 20) {
+        fetch(EXTRACT_MEMORIES_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({ user_id: user.id, message: m.content }),
+        }).catch(() => {});
+      }
     }
 
     // Delete chat messages from DB (keep conversation shell)
@@ -727,9 +720,22 @@ export default function MavisChat() {
     setIsSyncing(true);
 
     try {
-      // 1. Extract memories from ALL user messages in the thread
+      // 1. Extract memories from user messages via AI (fire-and-forget, batch of 20)
       const userMsgs = messages.filter(m => m.role === "user" && m.id !== "initial");
-      const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
+      for (const m of userMsgs.slice(-20)) {
+        if (m.content.length > 20) {
+          fetch(EXTRACT_MEMORIES_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${session?.access_token ?? ""}`,
+            },
+            body: JSON.stringify({ user_id: user.id, message: m.content }),
+          }).catch(() => {});
+        }
+      }
+      const allMemories: any[] = []; // regex extraction replaced by AI edge function above
 
       // 2. Condense the full conversation into a summary block
       const assistantMsgs = messages.filter(m => m.role === "assistant" && m.id !== "initial" && m.id !== "streaming");
@@ -854,6 +860,19 @@ export default function MavisChat() {
       toast({ title: "Error", description: "Failed to save message", variant: "destructive" });
       setIsLoading(false);
       return;
+    }
+
+    // Fire-and-forget AI memory extraction for this message
+    if (userContent.length > 20) {
+      fetch(EXTRACT_MEMORIES_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Authorization": `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ user_id: user.id, message: userContent }),
+      }).catch(() => {});
     }
 
     const userMsg: DisplayMessage = {

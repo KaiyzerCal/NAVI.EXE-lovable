@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.set-product-tax-codes]
 verify_jwt = false
+
+[functions.navi-personality-drift]
+verify_jwt = false
+
+[functions.navi-extract-memories]
+verify_jwt = true
+
+[functions.navi-agent-runner]
+verify_jwt = true

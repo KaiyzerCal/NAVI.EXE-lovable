@@ -545,6 +545,12 @@ What actions did NAVI explicitly confirm performing?`;
   }
 }
 
+// ── Personality keyword scorer ───────────────────────────────────────────────
+
+function countKeywords(text: string, keywords: string[]): number {
+  return Math.min(100, keywords.reduce((n, kw) => n + (text.includes(kw) ? 20 : 0), 0));
+}
+
 // ── Semantic memory retrieval ────────────────────────────────────────────────
 
 async function embedText(text: string, apiKey: string): Promise<number[] | null> {
@@ -562,14 +568,32 @@ async function embedText(text: string, apiKey: string): Promise<number[] | null>
   }
 }
 
-// Semantic memory retrieval is currently disabled — the `search_navi_memories`
-// RPC has not been provisioned. We rely on the `memory_context` block already
-// passed in from the client (compiled from `navi_core_memory`).
 async function searchNaViMemories(
-  _userId: string,
-  _embedding: number[]
+  userId: string,
+  embedding: number[]
 ): Promise<{ content: string; memory_type: string; importance: number; similarity: number }[]> {
-  return [];
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_navi_memories`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query_embedding: embedding,
+        match_user_id:   userId,
+        match_threshold: 0.72,
+        match_count:     8,
+      }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 
 const LEVEL_TITLES: Record<number, string> = {
@@ -1164,6 +1188,39 @@ serve(async (req) => {
         if (actions.length > 0) {
           const actionsPayload = JSON.stringify({ navi_actions: actions });
           controller.enqueue(encoder.encode(`data: ${actionsPayload}\n\n`));
+        }
+
+        // ── Personality session scoring (fire-and-forget) ──────────────────
+        if (userId && fullResponseText && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+          const lower = fullResponseText.toLowerCase();
+          const scores = {
+            guardian_score:   countKeywords(lower, ["here for you","support","proud","celebrate","steady"]),
+            hype_score:       countKeywords(lower, ["let's go","lfg","fire","beast","crush it","energy"]),
+            rogue_score:      countKeywords(lower, ["honestly","between us","real talk","sharp","clever"]),
+            shadow_score:     countKeywords(lower, ["ancient","observe","precision","in time","silence"]),
+            sage_score:       countKeywords(lower, ["pattern","optimize","analyze","data","systematic"]),
+            companion_score:  countKeywords(lower, ["feel","emotion","understand","heart","with you"]),
+            analytical_score: countKeywords(lower, ["breakdown","step by step","metric","measure","track"]),
+            wildcard_score:   countKeywords(lower, ["what if","unexpected","twist","surprise","wild idea"]),
+            strategist_score: countKeywords(lower, ["long term","big picture","phase","roadmap","position"]),
+            mentor_score:     countKeywords(lower, ["question","reflect","consider","growth","lesson"]),
+          };
+          fetch(`${SUPABASE_URL}/rest/v1/personality_session_scores`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_SERVICE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({
+              user_id:             userId,
+              conversation_id:     context?.conversation_id ?? null,
+              session_date:        new Date().toISOString().slice(0, 10),
+              messages_in_session: (messages?.length ?? 0) + 1,
+              ...scores,
+            }),
+          }).catch(() => {});
         }
 
         // Emit final [DONE]

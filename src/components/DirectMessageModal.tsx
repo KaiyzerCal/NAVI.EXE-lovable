@@ -3,17 +3,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
 
-interface DM {
+interface Message {
   id: string;
-  sender_id: string;
-  recipient_id: string;
+  thread_id: string;
+  sender_navi_name: string;
+  sender_user_id: string | null;
   content: string;
-  read_at: string | null;
+  created_at: string;
   deleted_by_sender: boolean;
   deleted_by_recipient: boolean;
-  created_at: string;
 }
 
 interface DirectMessageModalProps {
@@ -30,106 +31,125 @@ export default function DirectMessageModal({
   recipientName,
 }: DirectMessageModalProps) {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<DM[]>([]);
+  const { profile } = useAppData();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const fetchMessages = useCallback(async () => {
+  const loadThread = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
-      .from("direct_messages")
-      .select("*")
+
+    // Find or create thread (either direction)
+    const { data: existing } = await (supabase as any)
+      .from("navi_message_threads")
+      .select("id")
       .or(
-        `and(sender_id.eq.${user.id},recipient_id.eq.${recipientId}),` +
-        `and(sender_id.eq.${recipientId},recipient_id.eq.${user.id})`
+        `and(sender_user_id.eq.${user.id},receiver_user_id.eq.${recipientId}),` +
+        `and(sender_user_id.eq.${recipientId},receiver_user_id.eq.${user.id})`
       )
+      .maybeSingle();
+
+    let tid: string;
+    if (existing) {
+      tid = existing.id;
+      // Reset soft-delete flags so both parties can see the conversation
+      await (supabase as any)
+        .from("navi_message_threads")
+        .update({ deleted_by_sender: false, deleted_by_recipient: false })
+        .eq("id", tid);
+    } else {
+      const { data: created, error: createErr } = await (supabase as any)
+        .from("navi_message_threads")
+        .insert({ sender_user_id: user.id, receiver_user_id: recipientId })
+        .select("id")
+        .single();
+      if (createErr || !created) {
+        setError("Could not open conversation.");
+        setLoading(false);
+        return;
+      }
+      tid = created.id;
+    }
+
+    setThreadId(tid);
+
+    const { data, error: msgErr } = await (supabase as any)
+      .from("navi_messages")
+      .select("*")
+      .eq("thread_id", tid)
       .order("created_at", { ascending: true });
 
-    if (err) { setError("Failed to load messages."); setLoading(false); return; }
+    if (msgErr) { setError("Failed to load messages."); setLoading(false); return; }
 
-    const visible = (data ?? []).filter((m: DM) =>
-      m.sender_id === user.id ? !m.deleted_by_sender : !m.deleted_by_recipient
+    setMessages(
+      (data ?? []).filter((m: Message) =>
+        m.sender_user_id === user.id ? !m.deleted_by_sender : !m.deleted_by_recipient
+      )
     );
-    setMessages(visible);
     setLoading(false);
-
-    // Mark unread received messages as read
-    const unreadIds = (data ?? [])
-      .filter((m: DM) => m.recipient_id === user.id && !m.read_at)
-      .map((m: DM) => m.id);
-    if (unreadIds.length > 0) {
-      await supabase
-        .from("direct_messages")
-        .update({ read_at: new Date().toISOString() })
-        .in("id", unreadIds);
-    }
   }, [user, recipientId]);
 
   useEffect(() => {
-    if (isOpen && user) fetchMessages();
-  }, [isOpen, fetchMessages]);
+    if (isOpen && user) loadThread();
+  }, [isOpen, loadThread]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Realtime for this DM thread
+  // Realtime for this thread
   useEffect(() => {
-    if (!isOpen || !user) return;
+    if (!isOpen || !user || !threadId) return;
     const channel = supabase
-      .channel(`dm-modal-${user.id}-${recipientId}`)
+      .channel(`dm-modal-thread-${threadId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "direct_messages" },
+        { event: "INSERT", schema: "public", table: "navi_messages", filter: `thread_id=eq.${threadId}` },
         (payload) => {
-          const m = payload.new as DM;
-          const relevant =
-            (m.sender_id === user.id && m.recipient_id === recipientId) ||
-            (m.sender_id === recipientId && m.recipient_id === user.id);
-          if (!relevant) return;
+          const m = payload.new as Message;
           setMessages((prev) => {
             if (prev.find((p) => p.id === m.id)) return prev;
             return [...prev, m];
           });
-          if (m.recipient_id === user.id) {
-            supabase
-              .from("direct_messages")
-              .update({ read_at: new Date().toISOString() })
-              .eq("id", m.id);
-          }
         }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [isOpen, user, recipientId]);
+  }, [isOpen, user, threadId]);
 
   const send = async () => {
-    if (!input.trim() || !user || sending) return;
+    if (!input.trim() || !user || sending || !threadId) return;
     setSending(true);
     const content = input.trim();
     setInput("");
 
     const tempId = `temp-${Date.now()}`;
-    const temp: DM = {
+    const temp: Message = {
       id: tempId,
-      sender_id: user.id,
-      recipient_id: recipientId,
+      thread_id: threadId,
+      sender_navi_name: profile.navi_name ?? "NAVI",
+      sender_user_id: user.id,
       content,
-      read_at: null,
+      created_at: new Date().toISOString(),
       deleted_by_sender: false,
       deleted_by_recipient: false,
-      created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, temp]);
 
-    const { data, error: err } = await supabase
-      .from("direct_messages")
-      .insert({ sender_id: user.id, recipient_id: recipientId, content })
+    const { data, error: err } = await (supabase as any)
+      .from("navi_messages")
+      .insert({
+        thread_id: threadId,
+        sender_navi_name: profile.navi_name ?? "NAVI",
+        sender_user_id: user.id,
+        content,
+      })
       .select()
       .single();
 
@@ -137,7 +157,12 @@ export default function DirectMessageModal({
       toast({ title: "Failed to send message", variant: "destructive" });
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } else if (data) {
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? (data as DM) : m)));
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? (data as Message) : m)));
+      // Keep thread's last_message_at fresh so it sorts to top in inbox
+      await (supabase as any)
+        .from("navi_message_threads")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", threadId);
     }
     setSending(false);
   };
@@ -187,7 +212,7 @@ export default function DirectMessageModal({
               ) : error ? (
                 <div className="text-center py-10">
                   <p className="text-muted-foreground font-mono text-xs mb-2">{error}</p>
-                  <button onClick={fetchMessages} className="text-primary font-mono text-xs hover:underline">RETRY</button>
+                  <button onClick={loadThread} className="text-primary font-mono text-xs hover:underline">RETRY</button>
                 </div>
               ) : messages.length === 0 ? (
                 <p className="text-center text-muted-foreground font-mono text-xs py-10">
@@ -195,7 +220,7 @@ export default function DirectMessageModal({
                 </p>
               ) : (
                 messages.map((msg) => {
-                  const isMine = msg.sender_id === user?.id;
+                  const isMine = msg.sender_user_id === user?.id;
                   return (
                     <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                       <div
@@ -208,7 +233,6 @@ export default function DirectMessageModal({
                         <p className="leading-relaxed">{msg.content}</p>
                         <p className={`text-[9px] font-mono mt-0.5 ${isMine ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          {isMine && msg.read_at && <span className="ml-1">· READ</span>}
                         </p>
                       </div>
                     </div>

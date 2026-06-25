@@ -167,23 +167,22 @@ function AppShell() {
     prevNewPostCountRef.current = newPostCount;
   }, [newPostCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Global DM toast notification
+  // Global DM toast notification — watches navi_messages (the unified message table).
+  // RLS limits delivery to threads the user participates in; we skip messages the
+  // user sent themselves so only incoming messages produce a toast.
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel(`global-dm-toast-${user.id}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "direct_messages", filter: `recipient_id=eq.${user.id}` },
-        async (payload) => {
+        { event: "INSERT", schema: "public", table: "navi_messages" },
+        (payload) => {
           const msg = payload.new as any;
-          const { data: sender } = await supabase
-            .from("profiles")
-            .select("display_name")
-            .eq("id", msg.sender_id)
-            .single();
+          // Only toast for messages from someone else
+          if (!msg.sender_user_id || msg.sender_user_id === user.id) return;
           toast({
-            title: `${sender?.display_name ?? "Operator"} sent you a message`,
+            title: `${msg.sender_navi_name ?? "Operator"} sent you a message`,
             description: msg.content?.slice(0, 60) ?? "",
           });
         }

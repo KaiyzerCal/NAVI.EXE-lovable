@@ -38,27 +38,11 @@ export function UnreadMessagesProvider({ children }: { children: ReactNode }) {
     return total;
   }, [user]);
 
-  const fetchDMUnread = useCallback(async () => {
-    if (!user) return 0;
-    try {
-      const { count, error } = await (supabase as any)
-        .from("direct_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("recipient_id", user.id)
-        .is("read_at", null)
-        .eq("deleted_by_recipient", false);
-      if (error) return 0;
-      return count ?? 0;
-    } catch {
-      return 0;
-    }
-  }, [user]);
-
   const fetchUnread = useCallback(async () => {
-    const [naviTotal, dmTotal] = await Promise.all([fetchNaviUnread(), fetchDMUnread()]);
-    setUnreadDMs(dmTotal);
-    setTotalUnread(naviTotal + dmTotal);
-  }, [fetchNaviUnread, fetchDMUnread]);
+    const naviTotal = await fetchNaviUnread();
+    setUnreadDMs(0);
+    setTotalUnread(naviTotal);
+  }, [fetchNaviUnread]);
 
   useEffect(() => { fetchUnread(); }, [fetchUnread]);
 
@@ -69,8 +53,6 @@ export function UnreadMessagesProvider({ children }: { children: ReactNode }) {
       .channel(`unread-count-watch-${user.id}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "navi_message_threads" }, fetchUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "navi_message_threads" }, fetchUnread)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, fetchUnread)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "direct_messages" }, fetchUnread)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchUnread]);

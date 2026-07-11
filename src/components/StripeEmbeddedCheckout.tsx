@@ -5,8 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 interface Props {
   priceId: string;
   quantity?: number;
-  customerEmail?: string;
-  userId?: string;
   returnUrl?: string;
   extraMetadata?: Record<string, string>;
 }
@@ -14,8 +12,6 @@ interface Props {
 export function StripeEmbeddedCheckout({
   priceId,
   quantity,
-  customerEmail,
-  userId,
   returnUrl,
   extraMetadata,
 }: Props) {
@@ -27,8 +23,7 @@ export function StripeEmbeddedCheckout({
       body: {
         priceId,
         quantity,
-        customerEmail,
-        userId,
+        // userId & customerEmail are derived server-side from the auth token.
         returnUrl: finalReturnUrl,
         environment: getStripeEnvironment(),
         extraMetadata,

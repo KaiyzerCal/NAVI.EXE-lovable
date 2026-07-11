@@ -1,15 +1,25 @@
 project_id = "fjkkcrmhptrzobajjsqg"
 
+# Webhooks are authenticated by Stripe signatures, not Supabase JWTs.
 [functions.payments-webhook]
 verify_jwt = false
 
+[functions.stripe-webhook]
+verify_jwt = false
+
+# These functions perform their own JWT verification internally (so they can
+# return structured 401/403 responses and derive identity from the token).
 [functions.create-checkout]
 verify_jwt = false
 
 [functions.create-portal-session]
 verify_jwt = false
 
+# Owner-gated: verifies the caller's role in the function body.
 [functions.set-product-tax-codes]
+verify_jwt = false
+
+[functions.admin]
 verify_jwt = false
 
 [functions.navi-personality-drift]

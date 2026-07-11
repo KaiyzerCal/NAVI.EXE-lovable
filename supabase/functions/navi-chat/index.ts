@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { corsHeadersFor, handlePreflight } from "../_shared/cors.ts";
+import { getAuthedUser } from "../_shared/auth.ts";
 
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -949,18 +945,28 @@ You are ${naviName}. You belong to ${userName}. Talk like it.`;
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsHeaders = corsHeadersFor(req);
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
 
   try {
+    // Authoritatively identify the caller from their verified JWT.
+    // Do NOT trust any user id supplied in the request body.
+    const authedUser = await getAuthedUser(req);
+    if (!authedUser) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { messages, context } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API") ?? "";
-    const userId = context?.user_id as string | undefined;
+    // Server-derived identity — ignores any client-supplied context.user_id.
+    const userId: string = authedUser.id;
 
     // ── Subscription enforcement ──────────────────────────────────────────────
     // Free tier: 15 msg/day cap. Core + Elite + admins: unlimited.

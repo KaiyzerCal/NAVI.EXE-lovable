@@ -1,12 +1,8 @@
 // One-time bootstrap: assign tax codes to products so managed_payments works.
-// Safe to call repeatedly — idempotent.
+// Safe to call repeatedly — idempotent. Restricted to owner-role callers.
 import { type StripeEnv, createStripeClient } from "../_shared/stripe.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeadersFor, handlePreflight } from "../_shared/cors.ts";
+import { requireOwner } from "../_shared/auth.ts";
 
 // SaaS — Software as a Service
 const SAAS_TAX_CODE = "txcd_10103001";
@@ -25,7 +21,18 @@ async function tagProduct(env: StripeEnv) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsHeaders = corsHeadersFor(req);
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  const owner = await requireOwner(req);
+  if (!owner) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const sandbox = await tagProduct("sandbox");
     let live: any = { skipped: true };

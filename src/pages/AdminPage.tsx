@@ -1,13 +1,10 @@
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState, useCallback } from "react";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { Shield, Users, MessageSquare, Loader2, ToggleLeft, ToggleRight, Flag, Check } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Add your user ID here to gain admin access
-const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
+const ADMIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin`;
 
 interface UserRow {
   id: string;
@@ -39,67 +36,75 @@ interface ReportedContent {
 }
 
 export default function AdminPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [reported, setReported] = useState<ReportedContent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
   const [tab, setTab] = useState<"users" | "feedback" | "reported">("users");
 
-  const isAdmin = user && (ADMIN_USER_IDS.includes(user.id) || user.email?.endsWith("@vantara.exe"));
+  // Authorization is enforced server-side (owner role). The client just calls
+  // the admin function; a 403 means "not an admin".
+  const callAdmin = useCallback(
+    async (action: string, payload?: Record<string, unknown>) => {
+      const token = session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(ADMIN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ action, payload }),
+      });
+      if (res.status === 403) {
+        setForbidden(true);
+        throw new Error("Forbidden");
+      }
+      if (!res.ok) throw new Error((await res.json())?.error ?? "Request failed");
+      return res.json();
+    },
+    [session?.access_token],
+  );
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await callAdmin("list");
+      setUsers((data.users ?? []) as UserRow[]);
+      setFeedback((data.feedback ?? []) as Feedback[]);
+      setReported((data.reported ?? []) as ReportedContent[]);
+    } catch {
+      // forbidden / error already surfaced
+    } finally {
+      setLoading(false);
+    }
+  }, [callAdmin]);
 
   useEffect(() => {
-    if (!isAdmin) return;
-    Promise.all([fetchUsers(), fetchFeedback(), fetchReported()]).finally(() => setLoading(false));
-  }, [isAdmin]);
-
-  async function fetchUsers() {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, display_name, subscription_tier, beta_tester, operator_level, created_at")
-      .order("created_at", { ascending: false });
-    setUsers((data ?? []) as UserRow[]);
-  }
-
-  async function fetchFeedback() {
-    const { data } = await supabase
-      .from("beta_feedback")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    setFeedback((data ?? []) as Feedback[]);
-  }
-
-  async function fetchReported() {
-    const { data } = await (supabase as any)
-      .from("reported_content")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    setReported((data ?? []) as ReportedContent[]);
-  }
+    if (session?.access_token) refresh();
+  }, [session?.access_token, refresh]);
 
   async function markReviewed(id: string, action: string) {
-    await (supabase as any)
-      .from("reported_content")
-      .update({ reviewed: true, action_taken: action })
-      .eq("id", id);
-    setReported((prev) => prev.map((r) => r.id === id ? { ...r, reviewed: true, action_taken: action } : r));
+    await callAdmin("review_report", { id, action });
+    setReported((prev) => prev.map((r) => (r.id === id ? { ...r, reviewed: true, action_taken: action } : r)));
   }
 
   async function toggleBeta(userId: string, current: boolean) {
-    await supabase.from("profiles").update({ beta_tester: !current }).eq("id", userId);
-    setUsers((u) => u.map((p) => p.id === userId ? { ...p, beta_tester: !current } : p));
+    await callAdmin("toggle_beta", { userId, value: !current });
+    setUsers((u) => u.map((p) => (p.id === userId ? { ...p, beta_tester: !current } : p)));
   }
 
   async function banUser(userId: string) {
-    const { error } = await supabase.auth.admin.deleteUser(userId);
-    if (!error) setUsers((u) => u.filter((p) => p.id !== userId));
+    await callAdmin("ban_user", { userId });
+    setUsers((u) => u.filter((p) => p.id !== userId));
   }
 
   if (!user) return null;
 
-  if (!isAdmin) {
+  if (forbidden) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.04)_50%)] bg-[length:100%_4px] opacity-30 pointer-events-none" />

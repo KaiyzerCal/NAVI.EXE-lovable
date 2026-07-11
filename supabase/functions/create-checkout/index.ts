@@ -1,22 +1,21 @@
 import { type StripeEnv, createStripeClient } from "../_shared/stripe.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { corsHeadersFor, handlePreflight } from "../_shared/cors.ts";
+import { getAuthedUser } from "../_shared/auth.ts";
 
 interface CheckoutBody {
   priceId: string;
   quantity?: number;
-  customerEmail?: string;
-  userId?: string;
   returnUrl: string;
   environment: StripeEnv;
   extraMetadata?: Record<string, string>;
+  // Identity fields (userId / customerEmail) are derived server-side from the
+  // caller's JWT and intentionally NOT read from the request body.
 }
 
-async function createCheckoutSession(options: CheckoutBody) {
+async function createCheckoutSession(
+  options: CheckoutBody,
+  identity: { userId: string; customerEmail: string | null },
+) {
   if (!/^[a-zA-Z0-9_-]+$/.test(options.priceId)) throw new Error("Invalid priceId");
   const stripe = createStripeClient(options.environment);
 
@@ -31,22 +30,31 @@ async function createCheckoutSession(options: CheckoutBody) {
     ui_mode: "embedded",
     return_url: options.returnUrl,
     managed_payments: { enabled: true },
-    ...(options.customerEmail && { customer_email: options.customerEmail }),
-    ...(options.userId && {
-      metadata: { userId: options.userId, managed_payments: "true", ...(options.extraMetadata ?? {}) },
-      ...(isRecurring && { subscription_data: { metadata: { userId: options.userId } } }),
-    }),
+    ...(identity.customerEmail && { customer_email: identity.customerEmail }),
+    metadata: { userId: identity.userId, managed_payments: "true", ...(options.extraMetadata ?? {}) },
+    ...(isRecurring && { subscription_data: { metadata: { userId: identity.userId } } }),
   });
 
   return session.client_secret;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsHeaders = corsHeadersFor(req);
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
   try {
+    // Require an authenticated caller; derive identity from the JWT.
+    const user = await getAuthedUser(req);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body = (await req.json()) as CheckoutBody;
     if (!body?.priceId || !body?.returnUrl || !body?.environment) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -54,7 +62,10 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const clientSecret = await createCheckoutSession(body);
+    const clientSecret = await createCheckoutSession(body, {
+      userId: user.id,
+      customerEmail: user.email,
+    });
     return new Response(JSON.stringify({ clientSecret }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

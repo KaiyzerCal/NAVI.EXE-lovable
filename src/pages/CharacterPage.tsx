@@ -35,6 +35,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
+import { useOwner } from "@/hooks/useOwner";
 
 // Skills, Inventory, and Effects are placed up front so they're impossible to miss.
 const tabs = ["CHARACTER INFO", "SKILLS", "INVENTORY", "EFFECTS", "NAVI / SKINS"] as const;
@@ -176,8 +177,8 @@ export default function CharacterPage() {
   const [showLockedSkins, setShowLockedSkins] = useState(true);
   const [skinViewMode, setSkinViewMode] = useNaviRenderMode();
 
-  const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
-  const isAdmin = !!user && (ADMIN_USER_IDS.includes(user.id) || !!user.email?.endsWith("@vantara.exe"));
+  // Owner status is verified server-side via the has_role() RPC.
+  const isAdmin = useOwner();
 
   const [editMode, setEditMode] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");

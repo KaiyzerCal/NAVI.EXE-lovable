@@ -1496,7 +1496,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      award_xp: { Args: { _amount: number }; Returns: number }
+      award_xp: {
+        Args: { _amount: number; _user_id?: string }
+        Returns: number
+      }
+      complete_party_quest: { Args: { p_party_id: string }; Returns: undefined }
+      complete_quest: {
+        Args: { p_quest_id: string; p_user_id?: string }
+        Returns: undefined
+      }
       consume_message_credit: { Args: never; Returns: number }
       delete_account_data: { Args: { p_user_id: string }; Returns: undefined }
       has_active_subscription: {
@@ -1511,6 +1519,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      purchase_shop_item: { Args: { p_item_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "owner" | "user" | "admin"

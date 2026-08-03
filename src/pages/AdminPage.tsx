@@ -6,9 +6,6 @@ import { Shield, Users, MessageSquare, Loader2, ToggleLeft, ToggleRight, Flag, C
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Add your user ID here to gain admin access
-const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
-
 interface UserRow {
   id: string;
   display_name: string | null;
@@ -45,8 +42,15 @@ export default function AdminPage() {
   const [reported, setReported] = useState<ReportedContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"users" | "feedback" | "reported">("users");
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  const isAdmin = user && (ADMIN_USER_IDS.includes(user.id) || user.email?.endsWith("@vantara.exe"));
+  // The real access boundary is server-side (is_admin() gates the RLS
+  // policies on reported_content, etc.) — this check just decides whether
+  // to render the UI at all, it isn't the security mechanism itself.
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return; }
+    supabase.rpc("is_admin", { _user_id: user.id }).then(({ data }) => setIsAdmin(!!data));
+  }, [user]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -93,11 +97,20 @@ export default function AdminPage() {
   }
 
   async function banUser(userId: string) {
-    const { error } = await supabase.auth.admin.deleteUser(userId);
+    // auth.admin.* is a service-role-only API — a browser client can never
+    // call it directly, so this silently did nothing before. Routed through
+    // an edge function that re-verifies admin status server-side and reuses
+    // the same account-deletion path as self-service deletion.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error } = await supabase.functions.invoke("admin-delete-user", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      body: { userId },
+    });
     if (!error) setUsers((u) => u.filter((p) => p.id !== userId));
   }
 
-  if (!user) return null;
+  if (!user || isAdmin === null) return null;
 
   if (!isAdmin) {
     return (

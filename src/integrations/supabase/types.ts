@@ -94,42 +94,39 @@ export type Database = {
           agent_type: string
           completed_at: string | null
           created_at: string
-          description: string | null
+          description: string
           id: string
-          metadata: Json | null
           priority: number
-          result: string | null
-          started_at: string | null
+          result: Json
           status: string
           title: string
+          updated_at: string
           user_id: string
         }
         Insert: {
           agent_type?: string
           completed_at?: string | null
           created_at?: string
-          description?: string | null
+          description?: string
           id?: string
-          metadata?: Json | null
           priority?: number
-          result?: string | null
-          started_at?: string | null
+          result?: Json
           status?: string
           title: string
+          updated_at?: string
           user_id: string
         }
         Update: {
           agent_type?: string
           completed_at?: string | null
           created_at?: string
-          description?: string | null
+          description?: string
           id?: string
-          metadata?: Json | null
           priority?: number
-          result?: string | null
-          started_at?: string | null
+          result?: Json
           status?: string
           title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -137,7 +134,7 @@ export type Database = {
       beta_feedback: {
         Row: {
           app_version: string | null
-          created_at: string | null
+          created_at: string
           description: string
           feedback_type: string
           id: string
@@ -145,7 +142,7 @@ export type Database = {
         }
         Insert: {
           app_version?: string | null
-          created_at?: string | null
+          created_at?: string
           description: string
           feedback_type?: string
           id?: string
@@ -153,7 +150,7 @@ export type Database = {
         }
         Update: {
           app_version?: string | null
-          created_at?: string | null
+          created_at?: string
           description?: string
           feedback_type?: string
           id?: string
@@ -370,7 +367,15 @@ export type Database = {
           operator_id?: string
           post_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feed_replies_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "operator_feed"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       guild_members: {
         Row: {
@@ -415,6 +420,7 @@ export type Database = {
           id: string
           status: string
           title: string
+          updated_at: string
         }
         Insert: {
           completed_at?: string | null
@@ -426,6 +432,7 @@ export type Database = {
           id?: string
           status?: string
           title: string
+          updated_at?: string
         }
         Update: {
           completed_at?: string | null
@@ -437,6 +444,7 @@ export type Database = {
           id?: string
           status?: string
           title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -553,26 +561,26 @@ export type Database = {
       }
       mini_game_scores: {
         Row: {
+          created_at: string
           game_id: string
           id: string
-          metadata: Json | null
-          played_at: string
+          metadata: Json
           score: number
           user_id: string
         }
         Insert: {
+          created_at?: string
           game_id: string
           id?: string
-          metadata?: Json | null
-          played_at?: string
-          score: number
+          metadata?: Json
+          score?: number
           user_id: string
         }
         Update: {
+          created_at?: string
           game_id?: string
           id?: string
-          metadata?: Json | null
-          played_at?: string
+          metadata?: Json
           score?: number
           user_id?: string
         }
@@ -655,7 +663,7 @@ export type Database = {
           deleted_by_sender: boolean
           id: string
           sender_navi_name: string
-          sender_user_id: string | null
+          sender_user_id: string
           thread_id: string
         }
         Insert: {
@@ -667,8 +675,8 @@ export type Database = {
           deleted_by_recipient?: boolean
           deleted_by_sender?: boolean
           id?: string
-          sender_navi_name: string
-          sender_user_id?: string | null
+          sender_navi_name?: string
+          sender_user_id?: string
           thread_id: string
         }
         Update: {
@@ -681,7 +689,7 @@ export type Database = {
           deleted_by_sender?: boolean
           id?: string
           sender_navi_name?: string
-          sender_user_id?: string | null
+          sender_user_id?: string
           thread_id?: string
         }
         Relationships: []
@@ -691,7 +699,7 @@ export type Database = {
           body: string | null
           created_at: string
           id: string
-          metadata: Json | null
+          metadata: Json
           read: boolean
           title: string
           type: string
@@ -701,17 +709,17 @@ export type Database = {
           body?: string | null
           created_at?: string
           id?: string
-          metadata?: Json | null
+          metadata?: Json
           read?: boolean
           title: string
-          type: string
+          type?: string
           user_id: string
         }
         Update: {
           body?: string | null
           created_at?: string
           id?: string
-          metadata?: Json | null
+          metadata?: Json
           read?: boolean
           title?: string
           type?: string
@@ -786,7 +794,22 @@ export type Database = {
           following_id?: string
           id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "operator_follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operator_follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       operator_quest_packs: {
         Row: {
@@ -810,7 +833,15 @@ export type Database = {
           stripe_payment_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "operator_quest_packs_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "quest_packs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       parties: {
         Row: {
@@ -885,6 +916,30 @@ export type Database = {
           },
         ]
       }
+      post_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           beta_tester: boolean
@@ -912,11 +967,13 @@ export type Database = {
           navi_level: number
           navi_name: string
           navi_personality: string
+          navi_render_mode: string
           notification_settings: Json
           onboarding_done: boolean
           operator_level: number
           operator_xp: number
           perception: number
+          personality_engagement_score: number
           quests_completed: number
           streak_freeze_count: number
           subclass: string | null
@@ -952,11 +1009,13 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          navi_render_mode?: string
           notification_settings?: Json
           onboarding_done?: boolean
           operator_level?: number
           operator_xp?: number
           perception?: number
+          personality_engagement_score?: number
           quests_completed?: number
           streak_freeze_count?: number
           subclass?: string | null
@@ -992,11 +1051,13 @@ export type Database = {
           navi_level?: number
           navi_name?: string
           navi_personality?: string
+          navi_render_mode?: string
           notification_settings?: Json
           onboarding_done?: boolean
           operator_level?: number
           operator_xp?: number
           perception?: number
+          personality_engagement_score?: number
           quests_completed?: number
           streak_freeze_count?: number
           subclass?: string | null
@@ -1012,6 +1073,35 @@ export type Database = {
             columns: ["guild_id"]
             isOneToOne: false
             referencedRelation: "guilds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          created_at: string | null
+          id: string
+          subscription: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          subscription: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          subscription?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1147,27 +1237,6 @@ export type Database = {
           },
         ]
       }
-      push_subscriptions: {
-        Row: {
-          created_at: string | null
-          id: string
-          subscription: Json
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          subscription: Json
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          subscription?: Json
-          user_id?: string
-        }
-        Relationships: []
-      }
       reported_content: {
         Row: {
           action_taken: string | null
@@ -1261,6 +1330,36 @@ export type Database = {
           skin_name?: string
           unlock_type?: string
           unlock_value?: number
+        }
+        Relationships: []
+      }
+      social_posts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          post_type: string
+          reaction_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          post_type?: string
+          reaction_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          post_type?: string
+          reaction_count?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1399,6 +1498,7 @@ export type Database = {
     Functions: {
       award_xp: { Args: { _amount: number }; Returns: number }
       consume_message_credit: { Args: never; Returns: number }
+      delete_account_data: { Args: { p_user_id: string }; Returns: undefined }
       has_active_subscription: {
         Args: { check_env?: string; user_uuid: string }
         Returns: boolean
@@ -1410,9 +1510,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "owner" | "user"
+      app_role: "owner" | "user" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1540,7 +1641,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["owner", "user"],
+      app_role: ["owner", "user", "admin"],
     },
   },
 } as const

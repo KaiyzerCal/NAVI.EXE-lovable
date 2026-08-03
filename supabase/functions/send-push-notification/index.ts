@@ -1,23 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import webpush from "npm:web-push@3.6.7";
+import webpush from "https://esm.sh/web-push@3.6.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-webpush.setVapidDetails(
-  `mailto:${Deno.env.get("VAPID_SUBJECT") ?? "admin@navi.exe"}`,
-  Deno.env.get("VAPID_PUBLIC_KEY") ?? "",
-  Deno.env.get("VAPID_PRIVATE_KEY") ?? ""
-);
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { user_id, title, body, url } = await req.json();
+
+    const vapidPublicKey  = Deno.env.get("VAPID_PUBLIC_KEY")  ?? "";
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
+    const vapidSubject    = Deno.env.get("VAPID_SUBJECT")     ?? "mailto:admin@navi.exe";
+
+    if (!vapidPublicKey || !vapidPrivateKey) {
+      return new Response(JSON.stringify({ sent: false, reason: "vapid_not_configured" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    webpush.setVapidDetails(`mailto:${vapidSubject}`, vapidPublicKey, vapidPrivateKey);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -36,27 +42,26 @@ serve(async (req) => {
       });
     }
 
-    const payload = JSON.stringify({ title: `NAVI.EXE — ${title}`, body, url: url ?? "/" });
+    const payload = JSON.stringify({
+      title: `NAVI.EXE — ${title}`,
+      body,
+      url: url ?? "/",
+    });
 
-    try {
-      await webpush.sendNotification(sub.subscription, payload);
-    } catch (pushError: any) {
-      // 404/410 = the browser revoked/expired this endpoint — clear it so
-      // future reminders stop retrying a dead subscription.
-      if (pushError?.statusCode === 404 || pushError?.statusCode === 410) {
-        await supabase.from("push_subscriptions").delete().eq("user_id", user_id);
-        return new Response(JSON.stringify({ sent: false, reason: "subscription_expired" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw pushError;
-    }
+    await webpush.sendNotification(sub.subscription, payload);
 
     return new Response(JSON.stringify({ sent: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }), {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    // 410 Gone = subscription expired, silently skip
+    if (msg.includes("410") || msg.includes("Gone")) {
+      return new Response(JSON.stringify({ sent: false, reason: "subscription_expired" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

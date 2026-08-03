@@ -89,6 +89,78 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_tasks: {
+        Row: {
+          agent_type: string
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          priority: number
+          result: string | null
+          started_at: string | null
+          status: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          agent_type?: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: number
+          result?: string | null
+          started_at?: string | null
+          status?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          agent_type?: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: number
+          result?: string | null
+          started_at?: string | null
+          status?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      beta_feedback: {
+        Row: {
+          app_version: string | null
+          created_at: string | null
+          description: string
+          feedback_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string | null
+          description: string
+          feedback_type?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string | null
+          description?: string
+          feedback_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       buffs: {
         Row: {
           created_at: string
@@ -190,6 +262,39 @@ export type Database = {
           },
         ]
       }
+      direct_messages: {
+        Row: {
+          content: string
+          created_at: string
+          deleted_by_recipient: boolean
+          deleted_by_sender: boolean
+          id: string
+          read_at: string | null
+          recipient_id: string
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          read_at?: string | null
+          recipient_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          read_at?: string | null
+          recipient_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
       equipment: {
         Row: {
           buff_id: string | null
@@ -240,6 +345,33 @@ export type Database = {
           },
         ]
       }
+      feed_replies: {
+        Row: {
+          content: string
+          created_at: string
+          display_name: string | null
+          id: string
+          operator_id: string
+          post_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          operator_id: string
+          post_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          operator_id?: string
+          post_id?: string
+        }
+        Relationships: []
+      }
       guild_members: {
         Row: {
           guild_id: string
@@ -271,6 +403,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      guild_quests: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          guild_id: string
+          id: string
+          status: string
+          title: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          guild_id: string
+          id?: string
+          status?: string
+          title: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          guild_id?: string
+          id?: string
+          status?: string
+          title?: string
+        }
+        Relationships: []
       }
       guilds: {
         Row: {
@@ -383,6 +551,33 @@ export type Database = {
         }
         Relationships: []
       }
+      mini_game_scores: {
+        Row: {
+          game_id: string
+          id: string
+          metadata: Json | null
+          played_at: string
+          score: number
+          user_id: string
+        }
+        Insert: {
+          game_id: string
+          id?: string
+          metadata?: Json | null
+          played_at?: string
+          score: number
+          user_id: string
+        }
+        Update: {
+          game_id?: string
+          id?: string
+          metadata?: Json | null
+          played_at?: string
+          score?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       navi_core_memory: {
         Row: {
           content: string
@@ -409,6 +604,210 @@ export type Database = {
           importance?: number
           memory_type?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      navi_message_threads: {
+        Row: {
+          created_at: string
+          deleted_by_recipient: boolean
+          deleted_by_sender: boolean
+          id: string
+          last_message_at: string
+          receiver_unread: number
+          receiver_user_id: string
+          sender_unread: number
+          sender_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          last_message_at?: string
+          receiver_unread?: number
+          receiver_user_id: string
+          sender_unread?: number
+          sender_user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          last_message_at?: string
+          receiver_unread?: number
+          receiver_user_id?: string
+          sender_unread?: number
+          sender_user_id?: string
+        }
+        Relationships: []
+      }
+      navi_messages: {
+        Row: {
+          attachment_name: string | null
+          attachment_type: string | null
+          attachment_url: string | null
+          content: string
+          created_at: string
+          deleted_by_recipient: boolean
+          deleted_by_sender: boolean
+          id: string
+          sender_navi_name: string
+          sender_user_id: string | null
+          thread_id: string
+        }
+        Insert: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
+          content: string
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          sender_navi_name: string
+          sender_user_id?: string | null
+          thread_id: string
+        }
+        Update: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
+          content?: string
+          created_at?: string
+          deleted_by_recipient?: boolean
+          deleted_by_sender?: boolean
+          id?: string
+          sender_navi_name?: string
+          sender_user_id?: string | null
+          thread_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          read?: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      operator_feed: {
+        Row: {
+          character_class: string | null
+          content: string
+          content_type: string
+          created_at: string
+          display_name: string | null
+          id: string
+          is_public: boolean
+          likes: Json
+          mbti_type: string | null
+          metadata: Json
+          navi_name: string | null
+          operator_id: string
+          operator_level: number | null
+        }
+        Insert: {
+          character_class?: string | null
+          content: string
+          content_type: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_public?: boolean
+          likes?: Json
+          mbti_type?: string | null
+          metadata?: Json
+          navi_name?: string | null
+          operator_id: string
+          operator_level?: number | null
+        }
+        Update: {
+          character_class?: string | null
+          content?: string
+          content_type?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_public?: boolean
+          likes?: Json
+          mbti_type?: string | null
+          metadata?: Json
+          navi_name?: string | null
+          operator_id?: string
+          operator_level?: number | null
+        }
+        Relationships: []
+      }
+      operator_follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      operator_quest_packs: {
+        Row: {
+          id: string
+          pack_id: string
+          purchased_at: string
+          stripe_payment_id: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          pack_id: string
+          purchased_at?: string
+          stripe_payment_id?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          pack_id?: string
+          purchased_at?: string
+          stripe_payment_id?: string | null
           user_id?: string
         }
         Relationships: []
@@ -488,6 +887,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          beta_tester: boolean
           bond_affection: number
           bond_loyalty: number
           bond_trust: number
@@ -515,6 +915,7 @@ export type Database = {
           operator_level: number
           operator_xp: number
           perception: number
+          quests_completed: number
           subclass: string | null
           subscription_tier: string
           updated_at: string
@@ -522,6 +923,7 @@ export type Database = {
           xp_total: number
         }
         Insert: {
+          beta_tester?: boolean
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
@@ -549,6 +951,7 @@ export type Database = {
           operator_level?: number
           operator_xp?: number
           perception?: number
+          quests_completed?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string
@@ -556,6 +959,7 @@ export type Database = {
           xp_total?: number
         }
         Update: {
+          beta_tester?: boolean
           bond_affection?: number
           bond_loyalty?: number
           bond_trust?: number
@@ -583,6 +987,7 @@ export type Database = {
           operator_level?: number
           operator_xp?: number
           perception?: number
+          quests_completed?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string
@@ -598,6 +1003,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      quest_packs: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          duration_days: number
+          forge_price: number
+          id: string
+          is_active: boolean
+          name: string
+          quest_count: number
+          quest_templates: Json
+          slug: string
+          stripe_price_id: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          duration_days?: number
+          forge_price?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          quest_count?: number
+          quest_templates?: Json
+          slug: string
+          stripe_price_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          duration_days?: number
+          forge_price?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          quest_count?: number
+          quest_templates?: Json
+          slug?: string
+          stripe_price_id?: string | null
+        }
+        Relationships: []
       }
       quests: {
         Row: {
@@ -684,6 +1134,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      reported_content: {
+        Row: {
+          action_taken: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          reason: string | null
+          reporter_id: string
+          reviewed: boolean
+        }
+        Insert: {
+          action_taken?: string | null
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reporter_id: string
+          reviewed?: boolean
+        }
+        Update: {
+          action_taken?: string | null
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reporter_id?: string
+          reviewed?: boolean
+        }
+        Relationships: []
       }
       skills: {
         Row: {

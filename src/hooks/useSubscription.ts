@@ -2,10 +2,18 @@ import { useAppData } from "@/contexts/AppDataContext";
 import { supabase } from "@/integrations/supabase/client";
 
 export function useSubscription() {
-  const { profile, updateProfile } = useAppData();
+  const { profile, profileLoading, updateProfile, refetchProfile } = useAppData();
   const tier = (profile as any).subscription_tier ?? "free";
   const isPro = tier === "core" || tier === "power";
   const isFree = !isPro;
+  // isActive/loading/refetch: subscription status lives on the profile row
+  // (subscription_tier), so "is the subscription active" is just isPro, and
+  // "refetch" means re-fetching that profile — there's no separate
+  // subscription fetch of its own. CheckoutReturn.tsx polls refetch() after
+  // a Stripe checkout to detect the webhook landing.
+  const isActive = isPro;
+  const loading = profileLoading;
+  const refetch = refetchProfile;
   const messageLimit = isFree ? 15 : Infinity;
   const questLimit = isFree ? 3 : Infinity;
 
@@ -41,5 +49,5 @@ export function useSubscription() {
     if (data?.url) window.location.href = data.url;
   }
 
-  return { tier, isPro, isFree, messageLimit, questLimit, checkMessageAllowed, incrementMessageCount, startCheckout };
+  return { tier, isPro, isFree, isActive, loading, refetch, messageLimit, questLimit, checkMessageAllowed, incrementMessageCount, startCheckout };
 }

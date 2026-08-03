@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
+import { getStripeEnvironment } from "@/lib/stripe";
 
 const FREE_FEATURES  = ["3 active quests", "15 AI messages/day", "2 starter skins", "Basic NAVI personality"];
 const CORE_FEATURES  = ["Unlimited quests", "Unlimited AI messages", "All 64 skins", "All personality modes", "Push notifications", "Party system", "Full stats dashboard", "Guild access"];
@@ -45,11 +46,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function UpgradePage() {
   const [params] = useSearchParams();
-  const { tier, startCheckout } = useSubscription();
+  const { tier, subscription, startCheckout } = useSubscription();
   const { user, session } = useAuth();
   const { profile } = useAppData();
   const [loading, setLoading] = useState(false);
   const [eliteLoading, setEliteLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [packs, setPacks] = useState<QuestPack[]>([]);
   const [ownedPackIds, setOwnedPackIds] = useState<Set<string>>(new Set());
@@ -78,6 +80,24 @@ export default function UpgradePage() {
   async function handleUpgrade() {
     setLoading(true);
     try { await startCheckout(); } finally { setLoading(false); }
+  }
+
+  async function handleManageSubscription() {
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-portal-session", {
+        body: {
+          returnUrl: `${window.location.origin}/upgrade`,
+          environment: getStripeEnvironment(),
+        },
+      });
+      if (error || !data?.url) throw new Error(error?.message || "Failed");
+      window.open(data.url as string, "_blank");
+    } catch (e: any) {
+      toast({ title: "Could not open billing portal", description: e.message, variant: "destructive" });
+    } finally {
+      setPortalLoading(false);
+    }
   }
 
   async function handleEliteCheckout() {
@@ -144,9 +164,27 @@ export default function UpgradePage() {
       )}
 
       {/* Current tier */}
-      <div className="flex items-center gap-3 mb-6 p-4 rounded border border-border bg-muted/20">
+      <div className="flex items-center gap-3 mb-6 p-4 rounded border border-border bg-muted/20 flex-wrap">
         <span className="text-xs font-mono text-muted-foreground">YOUR CURRENT TIER:</span>
         <SubscriptionBadge tier={tier} />
+        {subscription && (
+          <span className="text-[10px] font-mono text-muted-foreground">
+            {subscription.current_period_end && (
+              <>Renews {new Date(subscription.current_period_end).toLocaleDateString()}</>
+            )}
+            {subscription.cancel_at_period_end && " — cancels at period end"}
+          </span>
+        )}
+        {tier !== "free" && subscription && (
+          <button
+            onClick={handleManageSubscription}
+            disabled={portalLoading}
+            className="ml-auto px-3 py-1.5 rounded border border-border text-muted-foreground text-[10px] font-mono hover:border-primary/30 hover:text-foreground transition-colors flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {portalLoading ? <Loader2 size={11} className="animate-spin" /> : null}
+            MANAGE SUBSCRIPTION
+          </button>
+        )}
       </div>
 
       {/* Tier comparison */}

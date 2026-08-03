@@ -32,6 +32,7 @@ import GamesPage from "./pages/GamesPage";
 import GuildPage from "./pages/GuildPage";
 import SocialPage from "./pages/SocialPage";
 import InboxPage from "./pages/InboxPage";
+import ShopPage from "./pages/ShopPage";
 import AgentPage from "./pages/AgentPage";
 import SearchPage from "./pages/SearchPage";
 import NotificationsPage from "./pages/NotificationsPage";
@@ -214,6 +215,7 @@ function AppShell() {
           <Route path="/social" element={<SocialPage />} />
           <Route path="/inbox" element={<InboxPage />} />
           <Route path="/upgrade" element={<UpgradePage />} />
+          <Route path="/shop" element={<ShopPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/agents" element={<AgentPage />} />
           <Route path="/search" element={<SearchPage />} />

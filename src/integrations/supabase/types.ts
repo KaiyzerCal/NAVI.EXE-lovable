@@ -896,10 +896,12 @@ export type Database = {
           codex_points: number
           created_at: string
           current_streak: number
+          custom_title: string | null
           daily_message_count: number
           display_name: string | null
           equipped_skin: string
           guild_id: string | null
+          has_premium_frame: boolean
           id: string
           last_active: string | null
           last_evolution_tier: number
@@ -916,6 +918,7 @@ export type Database = {
           operator_xp: number
           perception: number
           quests_completed: number
+          streak_freeze_count: number
           subclass: string | null
           subscription_tier: string
           updated_at: string
@@ -933,10 +936,12 @@ export type Database = {
           codex_points?: number
           created_at?: string
           current_streak?: number
+          custom_title?: string | null
           daily_message_count?: number
           display_name?: string | null
           equipped_skin?: string
           guild_id?: string | null
+          has_premium_frame?: boolean
           id: string
           last_active?: string | null
           last_evolution_tier?: number
@@ -953,6 +958,7 @@ export type Database = {
           operator_xp?: number
           perception?: number
           quests_completed?: number
+          streak_freeze_count?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string
@@ -970,10 +976,12 @@ export type Database = {
           codex_points?: number
           created_at?: string
           current_streak?: number
+          custom_title?: string | null
           daily_message_count?: number
           display_name?: string | null
           equipped_skin?: string
           guild_id?: string | null
+          has_premium_frame?: boolean
           id?: string
           last_active?: string | null
           last_evolution_tier?: number
@@ -990,6 +998,7 @@ export type Database = {
           operator_xp?: number
           perception?: number
           quests_completed?: number
+          streak_freeze_count?: number
           subclass?: string | null
           subscription_tier?: string
           updated_at?: string

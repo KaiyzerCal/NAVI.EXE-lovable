@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { removeStaleChannel } from "@/lib/realtimeChannel";
 
 export interface Party {
   id: string;
@@ -134,6 +135,7 @@ export function useParty() {
 
   // Realtime: watch open parties list (any party INSERT/UPDATE/DELETE)
   useEffect(() => {
+    removeStaleChannel("open-parties-watch");
     const channel = supabase
       .channel("open-parties-watch")
       .on(
@@ -154,8 +156,10 @@ export function useParty() {
   useEffect(() => {
     if (!party) return;
 
+    const channelName = `party-members-${party.id}`;
+    removeStaleChannel(channelName);
     const channel = supabase
-      .channel(`party-members-${party.id}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {

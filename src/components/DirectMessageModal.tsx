@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { removeStaleChannel } from "@/lib/realtimeChannel";
 import { toast } from "@/hooks/use-toast";
 
 interface DM {
@@ -81,8 +82,10 @@ export default function DirectMessageModal({
   // Realtime for this DM thread
   useEffect(() => {
     if (!isOpen || !user) return;
+    const channelName = `dm-modal-${user.id}-${recipientId}`;
+    removeStaleChannel(channelName);
     const channel = supabase
-      .channel(`dm-modal-${user.id}-${recipientId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "direct_messages" },

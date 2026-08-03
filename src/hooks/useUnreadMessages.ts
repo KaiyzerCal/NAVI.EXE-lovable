@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { removeStaleChannel } from "@/lib/realtimeChannel";
 
 export function useUnreadMessages() {
   const { user } = useAuth();
@@ -50,8 +51,10 @@ export function useUnreadMessages() {
   // Realtime: re-fetch when navi thread counts or DM read_at changes
   useEffect(() => {
     if (!user) return;
+    const channelName = `unread-count-watch-${user.id}`;
+    removeStaleChannel(channelName);
     const channel = supabase
-      .channel(`unread-count-watch-${user.id}`)
+      .channel(channelName)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "navi_message_threads" }, fetchUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "navi_message_threads" }, fetchUnread)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, fetchUnread)

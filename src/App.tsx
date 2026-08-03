@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { supabase } from "@/integrations/supabase/client";
+import { removeStaleChannel } from "@/lib/realtimeChannel";
 import { FeedProvider } from "@/contexts/FeedContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
@@ -126,8 +127,10 @@ function AppShell() {
   // Global DM toast notification
   useEffect(() => {
     if (!user) return;
+    const channelName = `global-dm-toast-${user.id}`;
+    removeStaleChannel(channelName);
     const channel = supabase
-      .channel(`global-dm-toast-${user.id}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "direct_messages", filter: `recipient_id=eq.${user.id}` },

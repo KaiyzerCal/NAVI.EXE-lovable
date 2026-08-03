@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { removeStaleChannel } from "@/lib/realtimeChannel";
 import { toast } from "@/hooks/use-toast";
 import OperatorProfileSheet from "@/components/OperatorProfileSheet";
 
@@ -188,8 +189,10 @@ export default function InboxPage() {
   // ── Realtime: live messages in open thread ───────────────────────────────
   useEffect(() => {
     if (!activeThread) return;
+    const channelName = `inbox-msg-${activeThread.id}`;
+    removeStaleChannel(channelName);
     const channel = supabase
-      .channel(`inbox-msg-${activeThread.id}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "navi_messages", filter: `thread_id=eq.${activeThread.id}` },
@@ -208,6 +211,7 @@ export default function InboxPage() {
   // ── Realtime: thread list refresh ────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
+    removeStaleChannel("inbox-threads-list");
     const channel = supabase
       .channel("inbox-threads-list")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "navi_message_threads" }, loadThreads)

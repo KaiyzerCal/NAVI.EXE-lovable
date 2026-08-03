@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { removeStaleChannel } from "@/lib/realtimeChannel";
 
 export interface FeedPost {
   id: string;
@@ -136,6 +137,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
   // Realtime subscription at app level
   useEffect(() => {
     if (!user) return;
+    removeStaleChannel("operator-feed-rt");
     const channel = supabase
       .channel("operator-feed-rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "operator_feed" }, (payload) => {

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { removeStaleChannel } from "@/lib/realtimeChannel";
 import PageHeader from "@/components/PageHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -203,8 +204,10 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!user) return;
 
+    const channelName = `notifications-user-${user.id}`;
+    removeStaleChannel(channelName);
     const channel = supabase
-      .channel(`notifications-user-${user.id}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -381,8 +384,10 @@ export function useNotificationCount(): number {
       });
 
     // Realtime: watch for inserts (new unread) and updates (read=true)
+    const notifCountChannelName = `notif-count-${user.id}`;
+    removeStaleChannel(notifCountChannelName);
     const channel = supabase
-      .channel(`notif-count-${user.id}`)
+      .channel(notifCountChannelName)
       .on(
         "postgres_changes",
         {

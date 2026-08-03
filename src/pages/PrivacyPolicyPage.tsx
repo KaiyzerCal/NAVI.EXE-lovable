@@ -59,7 +59,8 @@ export default function PrivacyPolicyPage() {
             <p>We rely on the following processors to run NAVI.EXE. Each only receives the data necessary to perform its function:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
               <li><strong>Supabase</strong> — database, authentication, file storage, and backend functions</li>
-              <li><strong>OpenAI</strong> — processes your messages to generate your NAVI companion's AI responses</li>
+              <li><strong>Lovable AI Gateway</strong> — routes your messages to the AI model that generates your NAVI companion's responses</li>
+              <li><strong>OpenAI</strong> — generates the embeddings that power your NAVI's long-term memory search, and helps identify which in-app actions NAVI confirmed during a conversation</li>
               <li><strong>Tavily</strong> — provides web search results used by certain AI features</li>
               <li><strong>Stripe</strong> — payment processing for subscriptions</li>
               <li><strong>Sentry</strong> — crash and error reporting</li>

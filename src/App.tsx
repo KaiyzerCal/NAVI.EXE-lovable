@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import ErrorFallback from "@/components/ErrorFallback";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -82,6 +84,7 @@ function AppShell() {
   const { profile, updateProfile } = useAppData();
   const { autoPost } = useFeed();
   const { user } = useAuth();
+  const location = useLocation();
   const operatorLevel = profile.operator_level ?? 1;
   const lastTier = (profile as any).last_evolution_tier ?? 1;
   const newTier = tierFromLevel(operatorLevel);
@@ -190,6 +193,13 @@ function AppShell() {
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">
+          {/* Per-route boundary: a crash on one page (like the realtime-
+              channel bug that just shipped) no longer takes the sidebar/nav
+              down with it — the user can still navigate elsewhere. */}
+          <Sentry.ErrorBoundary
+            key={location.pathname}
+            fallback={({ resetError }) => <ErrorFallback resetError={resetError} />}
+          >
           <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/navi" element={<NaviPage />} />
@@ -211,6 +221,7 @@ function AppShell() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
+          </Sentry.ErrorBoundary>
         </main>
       </div>
     </>

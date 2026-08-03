@@ -1,13 +1,14 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion } from "framer-motion";
-import { User, Bell, Database, Shield, Check, Sun, Moon } from "lucide-react";
+import { User, Bell, Database, Shield, Check, Sun, Moon, BellRing, BellOff } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const ENCOURAGEMENT_OPTIONS = ["Low", "Moderate", "High"] as const;
 const STYLE_OPTIONS = ["Casual", "Direct", "Poetic", "Technical"] as const;
@@ -80,6 +81,7 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState({
     questReminders: true, streakWarnings: true, xpMilestones: false, dailySummary: true,
   });
+  const push = usePushNotifications();
 
   // Sync local state FROM profile once it loads from Supabase
   useEffect(() => {
@@ -88,6 +90,7 @@ export default function SettingsPage() {
     setNaviName(profile.navi_name ?? "NAVI");
     setUsername((profile as any).username ?? "");
     setPersonality(parsePersonality(profile.navi_personality));
+    if (profile.notification_settings) setNotifications((prev) => ({ ...prev, ...profile.notification_settings }));
   }, [loading, profile.display_name]); // re-sync when profile loads
 
   // Validate username uniqueness with debounce
@@ -138,8 +141,13 @@ export default function SettingsPage() {
     }
   };
 
-  const toggleNotif = (key: keyof typeof notifications) =>
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleNotif = (key: keyof typeof notifications) => {
+    setNotifications((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      updateProfile({ notification_settings: { ...profile.notification_settings, ...next } });
+      return next;
+    });
+  };
 
   return (
     <div>
@@ -226,6 +234,30 @@ export default function SettingsPage() {
 
         {/* Notifications */}
         <HudCard title="NOTIFICATIONS" icon={<Bell size={14} />}>
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
+            <div>
+              <p className="text-sm font-body">Push Notifications</p>
+              <p className="text-[10px] font-mono text-muted-foreground max-w-xs">
+                {push.supported
+                  ? "Get streak alerts, quest reminders, and nudges from your Navi even when the app is closed."
+                  : "Not supported in this browser."}
+              </p>
+              {push.error && <p className="text-[10px] font-mono text-destructive mt-1">{push.error}</p>}
+            </div>
+            {push.supported && (
+              <button
+                disabled={push.checking}
+                onClick={() => (push.subscribed ? push.unsubscribe() : push.subscribe())}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded text-xs font-mono transition-colors disabled:opacity-50 ${
+                  push.subscribed
+                    ? "bg-muted border border-border text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+                    : "bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+                }`}
+              >
+                {push.subscribed ? <><BellOff size={12} /> DISABLE</> : <><BellRing size={12} /> ENABLE</>}
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
             {(Object.entries(notifications) as [keyof typeof notifications, boolean][]).map(([key, enabled]) => {
               const labels: Record<keyof typeof notifications, string> = { questReminders: "Quest Reminders", streakWarnings: "Streak Warnings", xpMilestones: "XP Milestones", dailySummary: "Daily Summary" };

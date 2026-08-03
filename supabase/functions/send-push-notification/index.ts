@@ -1,33 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import webpush from "npm:web-push@3.6.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Minimal web push implementation using VAPID
-async function sendWebPush(subscription: any, payload: string, vapidKeys: { publicKey: string; privateKey: string; subject: string }) {
-  // Use the web-push compatible endpoint directly
-  const endpoint = subscription.endpoint;
-  const p256dh = subscription.keys?.p256dh;
-  const auth = subscription.keys?.auth;
-
-  if (!endpoint || !p256dh || !auth) throw new Error("Invalid subscription");
-
-  // For simplicity, use a fetch to a push proxy or the endpoint directly
-  // In production use the web-push npm package via esm.sh
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Content-Length": payload.length.toString(),
-    },
-    body: payload,
-  });
-
-  return response;
-}
+webpush.setVapidDetails(
+  `mailto:${Deno.env.get("VAPID_SUBJECT") ?? "admin@navi.exe"}`,
+  Deno.env.get("VAPID_PUBLIC_KEY") ?? "",
+  Deno.env.get("VAPID_PRIVATE_KEY") ?? ""
+);
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -54,11 +38,19 @@ serve(async (req) => {
 
     const payload = JSON.stringify({ title: `NAVI.EXE — ${title}`, body, url: url ?? "/" });
 
-    await sendWebPush(sub.subscription, payload, {
-      publicKey: Deno.env.get("VAPID_PUBLIC_KEY") ?? "",
-      privateKey: Deno.env.get("VAPID_PRIVATE_KEY") ?? "",
-      subject: `mailto:${Deno.env.get("VAPID_SUBJECT") ?? "admin@navi.exe"}`,
-    });
+    try {
+      await webpush.sendNotification(sub.subscription, payload);
+    } catch (pushError: any) {
+      // 404/410 = the browser revoked/expired this endpoint — clear it so
+      // future reminders stop retrying a dead subscription.
+      if (pushError?.statusCode === 404 || pushError?.statusCode === 410) {
+        await supabase.from("push_subscriptions").delete().eq("user_id", user_id);
+        return new Response(JSON.stringify({ sent: false, reason: "subscription_expired" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw pushError;
+    }
 
     return new Response(JSON.stringify({ sent: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

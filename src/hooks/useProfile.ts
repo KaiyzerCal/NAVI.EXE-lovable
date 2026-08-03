@@ -31,6 +31,7 @@ export interface ProfileData {
     streakWarnings: boolean;
     xpMilestones: boolean;
     dailySummary: boolean;
+    push?: boolean;
   };
   subscription_tier: string;
   daily_message_count: number;

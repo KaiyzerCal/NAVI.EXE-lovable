@@ -17,6 +17,10 @@ Sentry.init({
   ],
 });
 
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
 // Last-resort boundary: catches anything that crashes outside the routed
 // page content itself (auth, providers, app shell) — the per-route
 // boundary in App.tsx handles the common case of one page misbehaving.

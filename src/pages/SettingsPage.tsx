@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { motion } from "framer-motion";
-import { User, Bell, Database, Shield, Check, Sun, Moon, BellRing, BellOff } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { User, Bell, Database, Shield, Check, Sun, Moon, BellRing, BellOff, AlertTriangle, Loader2, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
@@ -68,7 +68,10 @@ function OptionRow<T extends string>({
 
 export default function SettingsPage() {
   const { profile, updateProfile, profileLoading: loading } = useAppData();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const { theme, setTheme } = useTheme();
   const [personality, setPersonality] = useState<NaviPersonalitySettings>(DEFAULT_PERSONALITY);
   const [saving, setSaving] = useState(false);
@@ -147,6 +150,24 @@ export default function SettingsPage() {
       updateProfile({ notification_settings: { ...profile.notification_settings, ...next } });
       return next;
     });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") return;
+    setDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not logged in");
+      const { error } = await supabase.functions.invoke("delete-account", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) throw error;
+      toast({ title: "Account deleted", description: "Your account and data have been permanently removed." });
+      await signOut();
+    } catch (e: any) {
+      toast({ title: "Deletion failed", description: e.message || "Please try again or contact support.", variant: "destructive" });
+      setDeleting(false);
+    }
   };
 
   return (
@@ -284,7 +305,85 @@ export default function SettingsPage() {
             <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors">PRIVACY POLICY</a>
           </div>
         </HudCard>
+
+        {/* Danger Zone */}
+        <HudCard title="DANGER ZONE" icon={<AlertTriangle size={14} />}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-body">Delete Account</p>
+              <p className="text-[10px] font-mono text-muted-foreground max-w-sm">
+                Permanently deletes your account and all associated data — quests, journal entries,
+                chat history, messages, guild/party memberships, and uploaded media. This cannot be undone.
+              </p>
+            </div>
+            <button
+              onClick={() => setDeleteModalOpen(true)}
+              className="shrink-0 px-3 py-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-xs font-mono hover:bg-destructive/20 transition-colors"
+            >
+              DELETE ACCOUNT
+            </button>
+          </div>
+        </HudCard>
       </div>
+
+      {/* Delete account confirmation modal */}
+      <AnimatePresence>
+        {deleteModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !deleting && setDeleteModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-card border border-destructive/40 rounded-lg p-5"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-destructive" />
+                  <h3 className="font-display font-bold text-sm text-destructive tracking-wider">DELETE ACCOUNT</h3>
+                </div>
+                <button onClick={() => !deleting && setDeleteModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-4 leading-relaxed">
+                This permanently deletes your account, profile, quests, journal entries, chat and message
+                history, guild/party memberships, and uploaded files. There is no way to recover this
+                data afterward.
+              </p>
+              <label className="text-[10px] font-mono text-muted-foreground block mb-1">
+                Type <span className="text-destructive font-bold">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                disabled={deleting}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-mono text-foreground outline-none focus:border-destructive/50 transition-colors mb-4 disabled:opacity-50"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  disabled={deleting}
+                  className="flex-1 py-2 rounded border border-border text-muted-foreground text-xs font-mono hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  CANCEL
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText !== "DELETE" || deleting}
+                  className="flex-1 py-2 rounded bg-destructive/20 border border-destructive/50 text-destructive text-xs font-mono hover:bg-destructive/30 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5"
+                >
+                  {deleting ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {deleting ? "DELETING..." : "PERMANENTLY DELETE"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

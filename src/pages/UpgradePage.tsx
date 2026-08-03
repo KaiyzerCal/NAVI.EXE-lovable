@@ -10,7 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
-import { getStripeEnvironment } from "@/lib/stripe";
 
 const FREE_FEATURES  = ["3 active quests", "15 AI messages/day", "2 starter skins", "Basic NAVI personality"];
 const CORE_FEATURES  = ["Unlimited quests", "Unlimited AI messages", "All 64 skins", "All personality modes", "Push notifications", "Party system", "Full stats dashboard", "Guild access"];
@@ -86,10 +85,7 @@ export default function UpgradePage() {
     setPortalLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("create-portal-session", {
-        body: {
-          returnUrl: `${window.location.origin}/upgrade`,
-          environment: getStripeEnvironment(),
-        },
+        body: { returnUrl: `${window.location.origin}/upgrade` },
       });
       if (error || !data?.url) throw new Error(error?.message || "Failed");
       window.open(data.url as string, "_blank");

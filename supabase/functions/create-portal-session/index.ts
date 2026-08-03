@@ -1,5 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { type StripeEnv, createStripeClient } from "../_shared/stripe.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@14";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,10 +19,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { returnUrl, environment } = (await req.json()) as {
-      returnUrl?: string;
-      environment: StripeEnv;
-    };
+    const { returnUrl } = (await req.json().catch(() => ({}))) as { returnUrl?: string };
     const authHeader = req.headers.get("Authorization");
     const token = authHeader?.replace("Bearer ", "");
     if (!token) {
@@ -43,7 +40,6 @@ Deno.serve(async (req) => {
       .from("subscriptions")
       .select("stripe_customer_id")
       .eq("user_id", userData.user.id)
-      .eq("environment", environment)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -55,7 +51,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const stripe = createStripeClient(environment);
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
     const portal = await stripe.billingPortal.sessions.create({
       customer: sub.stripe_customer_id as string,
       ...(returnUrl && { return_url: returnUrl }),

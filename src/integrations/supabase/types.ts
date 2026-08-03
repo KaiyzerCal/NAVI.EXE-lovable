@@ -920,6 +920,7 @@ export type Database = {
           subscription_tier: string
           updated_at: string
           user_navi_description: string | null
+          username: string | null
           xp_total: number
         }
         Insert: {
@@ -956,6 +957,7 @@ export type Database = {
           subscription_tier?: string
           updated_at?: string
           user_navi_description?: string | null
+          username?: string | null
           xp_total?: number
         }
         Update: {
@@ -992,6 +994,7 @@ export type Database = {
           subscription_tier?: string
           updated_at?: string
           user_navi_description?: string | null
+          username?: string | null
           xp_total?: number
         }
         Relationships: [

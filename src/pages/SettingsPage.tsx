@@ -88,7 +88,7 @@ export default function SettingsPage() {
     if (loading) return;
     setDisplayName(profile.display_name ?? "");
     setNaviName(profile.navi_name ?? "NAVI");
-    setUsername((profile as any).username ?? "");
+    setUsername(profile.username ?? "");
     setPersonality(parsePersonality(profile.navi_personality));
     if (profile.notification_settings) setNotifications((prev) => ({ ...prev, ...profile.notification_settings }));
   }, [loading, profile.display_name]); // re-sync when profile loads
@@ -97,7 +97,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (usernameDebounce.current) clearTimeout(usernameDebounce.current);
     const trimmed = username.trim();
-    if (!trimmed || trimmed === ((profile as any).username ?? "")) {
+    if (!trimmed || trimmed === (profile.username ?? "")) {
       setUsernameError(null);
       return;
     }
@@ -177,7 +177,7 @@ export default function SettingsPage() {
               </div>
               {usernameError && <p className="text-[10px] font-mono text-destructive mt-1">{usernameError}</p>}
               {checkingUsername && <p className="text-[10px] font-mono text-muted-foreground mt-1">Checking availability...</p>}
-              {!usernameError && !checkingUsername && username.trim() && username.trim() !== ((profile as any).username ?? "") && (
+              {!usernameError && !checkingUsername && username.trim() && username.trim() !== (profile.username ?? "") && (
                 <p className="text-[10px] font-mono text-green-400 mt-1">@{username.trim()} is available</p>
               )}
             </div>

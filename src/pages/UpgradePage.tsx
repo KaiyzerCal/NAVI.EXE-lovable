@@ -401,8 +401,6 @@ export default function UpgradePage() {
               </div>
               <StripeEmbeddedCheckout
                 priceId={bundleCheckout.priceKey}
-                userId={user?.id}
-                customerEmail={user?.email}
                 returnUrl={`${window.location.origin}/upgrade?success=1&tier=bundle`}
                 extraMetadata={{
                   currency_type: bundleCheckout.currencyType,

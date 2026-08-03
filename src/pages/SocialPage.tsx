@@ -362,15 +362,21 @@ export default function SocialPage() {
       mentionSearchRef.current = setTimeout(async () => {
         const { data } = await supabase
           .from("profiles")
-          .select("id, display_name, username")
+          .select("id, display_name")
           .or(
             query
-              ? `display_name.ilike.%${query}%,username.ilike.%${query}%`
+              ? `display_name.ilike.%${query}%`
               : `display_name.neq.`
           )
           .neq("id", user?.id ?? "")
           .limit(5);
-        setMentionResults((data as MentionResult[]) ?? []);
+        setMentionResults(
+          (data ?? []).map((p) => ({
+            id: p.id,
+            display_name: p.display_name,
+            username: null,
+          })) as MentionResult[]
+        );
       }, 150);
     } else {
       setMentionQuery("");

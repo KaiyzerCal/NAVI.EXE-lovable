@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -123,6 +124,13 @@ export default function AuthPage() {
             </button>
           </form>
         </div>
+
+        <p className="text-center text-[10px] font-mono text-muted-foreground mt-4">
+          By continuing, you agree to our{" "}
+          <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link>
+          {" "}and{" "}
+          <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+        </p>
       </motion.div>
     </div>
   );

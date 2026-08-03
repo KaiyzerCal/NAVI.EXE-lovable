@@ -279,6 +279,10 @@ export default function SettingsPage() {
             <button className="px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors">EXPORT DATA</button>
             <button className="px-3 py-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-xs font-mono hover:bg-destructive/20 transition-colors">RESET PROGRESS</button>
           </div>
+          <div className="flex gap-3 mt-3 pt-3 border-t border-border">
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors">TERMS OF SERVICE</a>
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors">PRIVACY POLICY</a>
+          </div>
         </HudCard>
       </div>
     </div>

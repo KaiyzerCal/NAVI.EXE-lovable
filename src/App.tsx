@@ -36,6 +36,8 @@ import ShopPage from "./pages/ShopPage";
 import AgentPage from "./pages/AgentPage";
 import SearchPage from "./pages/SearchPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import TermsOfServicePage from "./pages/TermsOfServicePage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -238,7 +240,13 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <AppContent />
+            {/* Privacy/Terms must be reachable without an account — app store
+                reviewers and prospective users need to view them pre-login. */}
+            <Routes>
+              <Route path="/privacy" element={<PrivacyPolicyPage />} />
+              <Route path="/terms" element={<TermsOfServicePage />} />
+              <Route path="/*" element={<AppContent />} />
+            </Routes>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

@@ -14,7 +14,8 @@ interface ShopItem {
   cost: number;
   currency: "codex" | "cali";
   icon: React.ReactNode;
-  action: () => Promise<void>;
+  successTitle: string;
+  successDescription?: string;
 }
 
 export default function ShopPage() {
@@ -35,115 +36,38 @@ export default function ShopPage() {
       });
   }, [user]);
 
-  const deduct = async (currency: "codex" | "cali", amount: number) => {
-    if (!user) return false;
-    const current = currency === "codex" ? codexPoints : caliCoins;
-    if (current < amount) { toast({ title: "Insufficient funds", variant: "destructive" }); return false; }
-    const patch =
-      currency === "codex"
-        ? { codex_points: current - amount }
-        : { cali_coins: current - amount };
-    const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
-    if (error) { toast({ title: "Purchase failed", variant: "destructive" }); return false; }
-    if (currency === "codex") setCodexPoints(current - amount);
-    else setCaliCoins(current - amount);
-    return true;
-  };
-
-  const buyStreakShield = async () => {
-    if (!user || !await deduct("codex", 150)) return;
-    const { data: p } = await supabase.from("profiles").select("streak_freeze_count").eq("id", user.id).single();
-    await supabase.from("profiles").update({ streak_freeze_count: ((p as any)?.streak_freeze_count ?? 0) + 1 }).eq("id", user.id);
-    toast({ title: "Streak Shield activated!", description: "Your streak is protected for an extra day." });
-  };
-
-  const grantBuff = async (buff: {
-    name: string;
-    description: string;
-    effect_type: string;
-    stat_affected: string;
-    modifier_value: number;
-    duration_hours: number;
-  }) => {
-    if (!user) return;
-    try {
-      await supabase.from("buffs").insert({
-        user_id: user.id,
-        name: buff.name,
-        description: buff.description,
-        effect_type: buff.effect_type,
-        stat_affected: buff.stat_affected,
-        modifier_value: buff.modifier_value,
-        duration_hours: buff.duration_hours,
-        source: "shop",
-        expires_at: new Date(Date.now() + buff.duration_hours * 3600000).toISOString(),
-      });
-    } catch {
-      /* non-blocking */
-    }
-  };
-
-  const buyXPBoost = async () => {
-    if (!user || !await deduct("codex", 200)) return;
-    await grantBuff({ name: "XP Boost", description: "1.5× XP for 24 hours", effect_type: "buff", stat_affected: "xp_multiplier", modifier_value: 150, duration_hours: 24 });
-    toast({ title: "XP Boost active!", description: "Earn 1.5× XP for the next 24 hours." });
-  };
-
-  const buyQuestSlot = async () => {
-    if (!user || !await deduct("codex", 300)) return;
-    await grantBuff({ name: "Quest Slot", description: "Extra quest slot for 7 days", effect_type: "buff", stat_affected: "quest_slots", modifier_value: 1, duration_hours: 168 });
-    toast({ title: "Quest slot unlocked!", description: "+1 active quest for 7 days." });
-  };
-
-  const buyMemoryReset = async () => {
-    if (!user || !await deduct("codex", 100)) return;
-    await supabase.from("navi_core_memory").delete().eq("user_id", user.id);
-    toast({ title: "NAVI memory wiped", description: "Starting fresh with a clean slate." });
-  };
-
-  const buyTitle = async () => {
-    if (!user || !await deduct("codex", 500)) return;
-    await supabase.from("profiles").update({ custom_title: "Shadow Operative" } as any).eq("id", user.id);
-    toast({ title: "Title unlocked: Shadow Operative" });
-  };
-
-  const buyPremiumFrame = async () => {
-    if (!user || !await deduct("cali", 10)) return;
-    await supabase.from("profiles").update({ has_premium_frame: true } as any).eq("id", user.id);
-    toast({ title: "Premium frame unlocked!", description: "Your profile now has a premium border." });
-  };
-
-  const buyDoubleXP = async () => {
-    if (!user || !await deduct("cali", 25)) return;
-    await grantBuff({ name: "Double XP", description: "2× XP for 48 hours", effect_type: "buff", stat_affected: "xp_multiplier", modifier_value: 200, duration_hours: 48 });
-    toast({ title: "Double XP active!", description: "Earn 2× XP for the next 48 hours." });
-  };
-
-  const buyEliteSkinTrial = async () => {
-    if (!user || !await deduct("cali", 15)) return;
-    await grantBuff({ name: "Elite Skin Trial", description: "7-day access to Elite skins", effect_type: "buff", stat_affected: "skin_trial", modifier_value: 7, duration_hours: 168 });
-    toast({ title: "Elite Skin Trial activated!", description: "Access all elite skins for 7 days." });
-  };
-
   const CODEX_ITEMS: ShopItem[] = [
-    { id: "streak_shield", name: "Streak Shield", description: "Protects your streak if you miss a day.", cost: 150, currency: "codex", icon: <Shield size={18} className="text-blue-400" />, action: buyStreakShield },
-    { id: "xp_boost", name: "XP Boost ×1.5", description: "Earn 1.5× XP for 24 hours.", cost: 200, currency: "codex", icon: <Zap size={18} className="text-primary" />, action: buyXPBoost },
-    { id: "quest_slot", name: "Quest Slot +1", description: "Unlock one extra active quest for 7 days.", cost: 300, currency: "codex", icon: <Star size={18} className="text-neon-amber" />, action: buyQuestSlot },
-    { id: "memory_reset", name: "Memory Wipe", description: "Clear all NAVI memories and start fresh.", cost: 100, currency: "codex", icon: <Clock size={18} className="text-destructive" />, action: buyMemoryReset },
-    { id: "title_shadow", name: "Title: Shadow Operative", description: "A rare cosmetic title displayed on your profile.", cost: 500, currency: "codex", icon: <Star size={18} className="text-neon-purple" />, action: buyTitle },
+    { id: "streak_shield", name: "Streak Shield", description: "Protects your streak if you miss a day.", cost: 150, currency: "codex", icon: <Shield size={18} className="text-blue-400" />, successTitle: "Streak Shield activated!", successDescription: "Your streak is protected for an extra day." },
+    { id: "xp_boost", name: "XP Boost ×1.5", description: "Earn 1.5× XP for 24 hours.", cost: 200, currency: "codex", icon: <Zap size={18} className="text-primary" />, successTitle: "XP Boost active!", successDescription: "Earn 1.5× XP for the next 24 hours." },
+    { id: "quest_slot", name: "Quest Slot +1", description: "Unlock one extra active quest for 7 days.", cost: 300, currency: "codex", icon: <Star size={18} className="text-neon-amber" />, successTitle: "Quest slot unlocked!", successDescription: "+1 active quest for 7 days." },
+    { id: "memory_reset", name: "Memory Wipe", description: "Clear all NAVI memories and start fresh.", cost: 100, currency: "codex", icon: <Clock size={18} className="text-destructive" />, successTitle: "NAVI memory wiped", successDescription: "Starting fresh with a clean slate." },
+    { id: "title_shadow", name: "Title: Shadow Operative", description: "A rare cosmetic title displayed on your profile.", cost: 500, currency: "codex", icon: <Star size={18} className="text-neon-purple" />, successTitle: "Title unlocked: Shadow Operative" },
   ];
 
   const CALI_ITEMS: ShopItem[] = [
-    { id: "premium_frame", name: "Premium Profile Frame", description: "Exclusive animated border on your profile.", cost: 10, currency: "cali", icon: <Star size={18} className="text-accent" />, action: buyPremiumFrame },
-    { id: "double_xp", name: "Double XP Weekend", description: "Earn 2× XP for 48 hours.", cost: 25, currency: "cali", icon: <Zap size={18} className="text-neon-green" />, action: buyDoubleXP },
-    { id: "elite_trial", name: "Elite Skin Trial", description: "7-day access to all Elite exclusive skins.", cost: 15, currency: "cali", icon: <Shield size={18} className="text-secondary" />, action: buyEliteSkinTrial },
+    { id: "premium_frame", name: "Premium Profile Frame", description: "Exclusive animated border on your profile.", cost: 10, currency: "cali", icon: <Star size={18} className="text-accent" />, successTitle: "Premium frame unlocked!", successDescription: "Your profile now has a premium border." },
+    { id: "double_xp", name: "Double XP Weekend", description: "Earn 2× XP for 48 hours.", cost: 25, currency: "cali", icon: <Zap size={18} className="text-neon-green" />, successTitle: "Double XP active!", successDescription: "Earn 2× XP for the next 48 hours." },
+    { id: "elite_trial", name: "Elite Skin Trial", description: "7-day access to all Elite exclusive skins.", cost: 15, currency: "cali", icon: <Shield size={18} className="text-secondary" />, successTitle: "Elite Skin Trial activated!", successDescription: "Access all elite skins for 7 days." },
   ];
 
   const handlePurchase = async (item: ShopItem) => {
+    if (!user) return;
     setPurchasing(item.id);
     try {
-      await item.action();
+      // Server validates the real balance and applies the item's effect
+      // atomically — the client never computes or trusts its own balance.
+      const { error } = await supabase.rpc("purchase_shop_item", { p_item_id: item.id });
+      if (error) {
+        toast({ title: "Purchase failed", description: error.message.includes("Insufficient") ? "Insufficient funds" : error.message, variant: "destructive" });
+        return;
+      }
+      const { data } = await supabase.from("profiles").select("codex_points, cali_coins").eq("id", user.id).single();
+      if (data) {
+        setCodexPoints(Number((data as any).codex_points ?? 0));
+        setCaliCoins(Number((data as any).cali_coins ?? 0));
+      }
       setPurchased(prev => new Set(prev).add(item.id));
+      toast({ title: item.successTitle, description: item.successDescription });
     } finally {
       setPurchasing(null);
     }

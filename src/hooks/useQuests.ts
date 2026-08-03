@@ -118,27 +118,25 @@ export function useQuests() {
   const toggleQuest = useCallback(
     async (id: string): Promise<void> => {
       const quest = quests.find((q) => q.id === id);
-      if (!quest) return;
-      const nowCompleted = !quest.completed;
-      await updateQuest(id, {
-        completed: nowCompleted,
-        progress: nowCompleted ? quest.total : quest.progress,
-      });
+      if (!quest || !user) return;
 
-      // Award XP to profile when completing
-      if (nowCompleted && user) {
-        // Atomic XP award via RPC — no race condition
-        const { error: xpErr } = await supabase.rpc("award_xp", {
-          _amount: quest.xp_reward,
-        });
-        if (xpErr) {
-          console.error("[useQuests] XP award failed:", xpErr);
-          toast({
-            title: "XP not awarded",
-            description: `Quest completed but ${quest.xp_reward} XP failed to save.`,
-            variant: "destructive",
-          });
-        }
+      if (quest.completed) {
+        // Un-completing isn't a reward path — no server validation needed.
+        await updateQuest(id, { completed: false });
+        return;
+      }
+
+      // Completing is: server computes and awards XP/codex/cali/quests_completed
+      // atomically from the quest's own stored reward, not a client-supplied
+      // amount, and can't be re-triggered by toggling off and back on.
+      setQuests((prev) =>
+        prev.map((q) => (q.id === id ? { ...q, completed: true, progress: q.total } : q))
+      );
+      const { error } = await supabase.rpc("complete_quest", { p_quest_id: id });
+      if (error) {
+        console.error("[useQuests] complete_quest failed:", error);
+        setQuests((prev) => prev.map((q) => (q.id === id ? quest : q)));
+        toast({ title: "Error", description: "Failed to complete quest.", variant: "destructive" });
       }
     },
     [quests, updateQuest, user]

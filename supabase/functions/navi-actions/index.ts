@@ -13,15 +13,20 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400", // Tell the browser to remember this for 24 hours
 };
 
-const xpForLevel = (lv: number) => lv * 500;
-
+// Deliberately excludes xp_total/operator_xp/operator_level/codex_points/
+// cali_coins/streak_freeze_count — those are the exact fields award_xp/
+// complete_quest/purchase_shop_item validate and award. update_profile runs
+// via service_role (bypasses the DB trigger that blocks direct writes to
+// those columns for normal users), and this action list is whatever the
+// request body says, with no check that it came from a real AI decision —
+// so any authenticated user could previously set their own balance/level to
+// anything by calling navi-actions directly with a crafted update_profile
+// action. Verified live before this fix landed.
 const profileAllowedKeys = [
-  "display_name", "character_class", "mbti_type", "xp_total", "navi_level",
+  "display_name", "character_class", "mbti_type", "navi_level",
   "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust",
   "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception",
-  "luck", "codex_points", "cali_coins", "operator_level", "operator_xp",
-  "onboarding_done", "notification_settings", "user_navi_description", "last_active",
-  "streak_freeze_count",
+  "luck", "onboarding_done", "notification_settings", "user_navi_description", "last_active",
 ] as const;
 
 function asStringArray(value: unknown): string[] {
@@ -38,17 +43,11 @@ async function logActivity(sb: ReturnType<typeof createClient>, userId: string, 
 }
 
 async function awardXP(sb: ReturnType<typeof createClient>, userId: string, amount: number) {
-  const { data: profile, error } = await sb
-    .from("profiles").select("xp_total, operator_xp, operator_level").eq("id", userId).single();
-  if (error || !profile) { console.error("[navi-actions] awardXP read error:", error); return; }
-  const newXpTotal = (Number(profile.xp_total) || 0) + amount;
-  let opXp = (Number(profile.operator_xp) || 0) + amount;
-  let opLevel = Number(profile.operator_level) || 1;
-  while (opXp >= xpForLevel(opLevel + 1)) { opXp -= xpForLevel(opLevel + 1); opLevel++; }
-  const { error: updateError } = await sb.from("profiles").update({
-    xp_total: newXpTotal, operator_xp: opXp, operator_level: opLevel,
-  }).eq("id", userId);
-  if (updateError) console.error("[navi-actions] awardXP update error:", updateError);
+  // Delegates to the award_xp RPC — same validated, capped (0-200), atomic
+  // path the client uses, instead of a separate uncapped inline update.
+  // _user_id is only honored because this runs as service_role.
+  const { error } = await sb.rpc("award_xp", { _amount: amount, _user_id: userId });
+  if (error) console.error("[navi-actions] awardXP error:", error);
 }
 
 async function executeAction(sb: ReturnType<typeof createClient>, userId: string, action: NaviAction) {
@@ -92,81 +91,13 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
 
     case "complete_quest": {
       if (!params.quest_id) throw new Error("Missing quest_id");
-      const { data: quest, error } = await sb.from("quests")
-        .select("xp_reward, name, total, type, linked_skill_id")
-        .eq("id", String(params.quest_id)).eq("user_id", userId).single();
+      // Same validated RPC the "mark complete" button uses — marks
+      // completed, awards XP/codex/cali/quests_completed/skill XP, logs
+      // activity, and posts to the feed, all in one transaction. Passing
+      // userId explicitly is only honored because this call runs as
+      // service_role (see award_xp/complete_quest's _user_id handling).
+      const { error } = await sb.rpc("complete_quest", { p_quest_id: String(params.quest_id), p_user_id: userId });
       if (error) throw error;
-      if (!quest) throw new Error("Quest not found");
-      const { error: qErr } = await sb.from("quests")
-        .update({ completed: true, progress: quest.total })
-        .eq("id", String(params.quest_id)).eq("user_id", userId);
-      if (qErr) throw qErr;
-      await awardXP(sb, userId, Number(quest.xp_reward || 0));
-
-      // Award Codex Points + Cali Coins by quest type (replaces former Forge economy)
-      const codexMap: Record<string, number> = { Daily: 10, Weekly: 30, Main: 50, Side: 20, Minor: 5, Epic: 100 };
-      const caliMap:  Record<string, number> = { Daily: 2,  Weekly: 8,  Main: 12, Side: 5,  Minor: 1, Epic: 25  };
-      const qType = String((quest as any).type || "Daily");
-      const codexReward = codexMap[qType] ?? 10;
-      const caliReward  = caliMap[qType] ?? 2;
-      const { data: prof } = await sb.from("profiles").select("codex_points, cali_coins").eq("id", userId).single();
-      if (prof) {
-        await sb.from("profiles").update({
-          codex_points: Number((prof as any).codex_points || 0) + codexReward,
-          cali_coins:   Number((prof as any).cali_coins   || 0) + caliReward,
-        }).eq("id", userId);
-      }
-
-      // Award Forge coins on quest completion
-      const forgeMap: Record<string, number> = { Daily: 20, Weekly: 60, Main: 100, Side: 40, Minor: 10, Epic: 200 };
-      const forgeReward = forgeMap[qType] ?? 20;
-      // Upsert forge_balances
-      const { data: fb } = await sb.from("forge_balances" as any).select("balance").eq("user_id", userId).maybeSingle();
-      const newBal = Number((fb as any)?.balance ?? 0) + forgeReward;
-      await sb.from("forge_balances" as any).upsert({ user_id: userId, balance: newBal, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-      // Insert forge_transaction
-      await sb.from("forge_transactions" as any).insert({ user_id: userId, amount: forgeReward, reason: `Quest completed: ${quest.name}`, source: "quest" });
-
-      if (quest.linked_skill_id) {
-        const { data: skill } = await sb.from("skills")
-          .select("id, name, level, max_level, xp")
-          .eq("id", quest.linked_skill_id).eq("user_id", userId).single();
-        if (skill) {
-          const currentXp = Number(skill.xp || 0) + Number(params.skill_xp || 25);
-          let nextLevel = Number(skill.level || 1);
-          let remainingXp = currentXp;
-          const maxLevel = Number(skill.max_level || 10);
-          while (nextLevel < maxLevel && remainingXp >= nextLevel * 100) {
-            remainingXp -= nextLevel * 100; nextLevel += 1;
-          }
-          await sb.from("skills").update({ level: nextLevel, xp: remainingXp })
-            .eq("id", quest.linked_skill_id).eq("user_id", userId);
-        }
-      }
-      await logActivity(sb, userId, "quest_completed", `Quest completed: ${quest.name}`, Number(quest.xp_reward || 0));
-
-      // Auto-post to operator feed (fire-and-forget)
-      sb.from("profiles")
-        .select("display_name, navi_name, character_class, mbti_type, operator_level")
-        .eq("id", userId)
-        .single()
-        .then(({ data: prof }) => {
-          if (!prof) return;
-          sb.from("operator_feed").insert({
-            operator_id: userId,
-            display_name: prof.display_name ?? "Operator",
-            navi_name: prof.navi_name ?? "NAVI",
-            character_class: prof.character_class ?? null,
-            mbti_type: prof.mbti_type ?? null,
-            operator_level: prof.operator_level ?? 1,
-            content_type: "QUEST_COMPLETE",
-            content: `${prof.display_name ?? "Operator"} completed the quest: ${quest.name}`,
-            metadata: { quest_name: quest.name, quest_type: quest.type, xp_earned: Number(quest.xp_reward || 0) },
-            likes: [],
-            is_public: true,
-          }).then(() => {});
-        });
-
       return;
     }
 

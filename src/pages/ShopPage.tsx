@@ -37,13 +37,13 @@ export default function ShopPage() {
 
   const deduct = async (currency: "codex" | "cali", amount: number) => {
     if (!user) return false;
-    const col = currency === "codex" ? "codex_points" : "cali_coins";
     const current = currency === "codex" ? codexPoints : caliCoins;
     if (current < amount) { toast({ title: "Insufficient funds", variant: "destructive" }); return false; }
-    const { error } = await supabase
-      .from("profiles")
-      .update({ [col]: current - amount } as Record<string, number>)
-      .eq("id", user.id);
+    const patch =
+      currency === "codex"
+        ? { codex_points: current - amount }
+        : { cali_coins: current - amount };
+    const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
     if (error) { toast({ title: "Purchase failed", variant: "destructive" }); return false; }
     if (currency === "codex") setCodexPoints(current - amount);
     else setCaliCoins(current - amount);
@@ -81,13 +81,6 @@ export default function ShopPage() {
     } catch {
       /* non-blocking */
     }
-  };
-
-  const unusedStreakShield = async () => {
-    if (!user || !await deduct("codex", 150)) return;
-    const { data: p } = await supabase.from("profiles").select("streak_freeze_count").eq("id", user.id).single();
-    await supabase.from("profiles").update({ streak_freeze_count: ((p as any)?.streak_freeze_count ?? 0) + 1 }).eq("id", user.id);
-    toast({ title: "Streak Shield activated!", description: "Your streak is protected for an extra day." });
   };
 
   const buyXPBoost = async () => {

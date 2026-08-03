@@ -775,6 +775,74 @@ export type Database = {
         }
         Relationships: []
       }
+      operator_follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operator_follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operator_quest_packs: {
+        Row: {
+          id: string
+          pack_id: string
+          purchased_at: string
+          stripe_payment_id: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          pack_id: string
+          purchased_at?: string
+          stripe_payment_id?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          pack_id?: string
+          purchased_at?: string
+          stripe_payment_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_quest_packs_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "quest_packs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parties: {
         Row: {
           created_at: string
@@ -1000,6 +1068,51 @@ export type Database = {
           },
         ]
       }
+      quest_packs: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          duration_days: number
+          forge_price: number
+          id: string
+          is_active: boolean
+          name: string
+          quest_count: number
+          quest_templates: Json
+          slug: string
+          stripe_price_id: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          duration_days?: number
+          forge_price?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          quest_count?: number
+          quest_templates?: Json
+          slug: string
+          stripe_price_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          duration_days?: number
+          forge_price?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          quest_count?: number
+          quest_templates?: Json
+          slug?: string
+          stripe_price_id?: string | null
+        }
+        Relationships: []
+      }
       quests: {
         Row: {
           buff_reward_id: string | null
@@ -1085,6 +1198,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      reported_content: {
+        Row: {
+          action_taken: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          reason: string | null
+          reporter_id: string
+          reviewed: boolean
+        }
+        Insert: {
+          action_taken?: string | null
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reporter_id: string
+          reviewed?: boolean
+        }
+        Update: {
+          action_taken?: string | null
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reporter_id?: string
+          reviewed?: boolean
+        }
+        Relationships: []
       }
       skills: {
         Row: {

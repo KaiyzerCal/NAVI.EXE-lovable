@@ -803,10 +803,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "operator_follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "operator_follows_following_id_fkey"
             columns: ["following_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operator_follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1105,6 +1119,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1496,7 +1517,101 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_profiles: {
+        Row: {
+          bond_affection: number | null
+          bond_loyalty: number | null
+          bond_trust: number | null
+          character_class: string | null
+          created_at: string | null
+          current_streak: number | null
+          custom_title: string | null
+          display_name: string | null
+          equipped_skin: string | null
+          guild_id: string | null
+          has_premium_frame: boolean | null
+          id: string | null
+          last_evolution_tier: number | null
+          longest_streak: number | null
+          luck: number | null
+          mbti_type: string | null
+          navi_level: number | null
+          navi_name: string | null
+          operator_level: number | null
+          perception: number | null
+          quests_completed: number | null
+          subclass: string | null
+          subscription_tier: string | null
+          updated_at: string | null
+          username: string | null
+          xp_total: number | null
+        }
+        Insert: {
+          bond_affection?: number | null
+          bond_loyalty?: number | null
+          bond_trust?: number | null
+          character_class?: string | null
+          created_at?: string | null
+          current_streak?: number | null
+          custom_title?: string | null
+          display_name?: string | null
+          equipped_skin?: string | null
+          guild_id?: string | null
+          has_premium_frame?: boolean | null
+          id?: string | null
+          last_evolution_tier?: number | null
+          longest_streak?: number | null
+          luck?: number | null
+          mbti_type?: string | null
+          navi_level?: number | null
+          navi_name?: string | null
+          operator_level?: number | null
+          perception?: number | null
+          quests_completed?: number | null
+          subclass?: string | null
+          subscription_tier?: string | null
+          updated_at?: string | null
+          username?: string | null
+          xp_total?: number | null
+        }
+        Update: {
+          bond_affection?: number | null
+          bond_loyalty?: number | null
+          bond_trust?: number | null
+          character_class?: string | null
+          created_at?: string | null
+          current_streak?: number | null
+          custom_title?: string | null
+          display_name?: string | null
+          equipped_skin?: string | null
+          guild_id?: string | null
+          has_premium_frame?: boolean | null
+          id?: string | null
+          last_evolution_tier?: number | null
+          longest_streak?: number | null
+          luck?: number | null
+          mbti_type?: string | null
+          navi_level?: number | null
+          navi_name?: string | null
+          operator_level?: number | null
+          perception?: number | null
+          quests_completed?: number | null
+          subclass?: string | null
+          subscription_tier?: string | null
+          updated_at?: string | null
+          username?: string | null
+          xp_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_guild_id_fkey"
+            columns: ["guild_id"]
+            isOneToOne: false
+            referencedRelation: "guilds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       award_streak_freeze_if_eligible: {
@@ -1531,6 +1646,22 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_guild_member: {
+        Args: { _guild_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_party_member: {
+        Args: { _party_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_party_visible: {
+        Args: { _party_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_thread_participant: {
+        Args: { _thread_id: string; _user_id: string }
+        Returns: boolean
+      }
       kick_party_member: { Args: { p_member_id: string }; Returns: undefined }
       purchase_shop_item: { Args: { p_item_id: string }; Returns: undefined }
     }

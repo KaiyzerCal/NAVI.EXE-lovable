@@ -33,8 +33,8 @@ export interface CreatePartyInput {
 }
 
 async function enrichMember(m: PartyMember): Promise<PartyMember> {
-  const { data: profile } = await supabase
-    .from("profiles")
+  const { data: profile } = await (supabase as any)
+    .from("public_profiles")
     .select("display_name, navi_name, operator_level")
     .eq("id", m.user_id)
     .single();
@@ -76,7 +76,7 @@ export function useParty() {
 
     const [{ data: memberRows }, { data: leaders }] = await Promise.all([
       supabase.from("party_members").select("party_id").in("party_id", partyIds),
-      supabase.from("profiles").select("id, display_name").in("id", leaderIds),
+      (supabase as any).from("public_profiles").select("id, display_name").in("id", leaderIds),
     ]);
 
     const memberCounts = new Map<string, number>();

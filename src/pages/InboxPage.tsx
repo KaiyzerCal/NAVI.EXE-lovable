@@ -52,9 +52,30 @@ function initials(name: string | null) {
   return (name ?? "?")[0].toUpperCase();
 }
 
-function AttachmentView({ url, type, name }: { url: string; type: string | null; name: string | null }) {
+/** Attachments live in a private bucket — resolve a short-lived signed URL. */
+function useSignedAttachmentUrl(raw: string) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    const marker = "/message-attachments/";
+    const path = raw.includes(marker) ? raw.slice(raw.indexOf(marker) + marker.length) : raw;
+    supabase.storage
+      .from("message-attachments")
+      .createSignedUrl(decodeURIComponent(path), 3600)
+      .then(({ data }) => { if (active) setUrl(data?.signedUrl ?? null); });
+    return () => { active = false; };
+  }, [raw]);
+  return url;
+}
+
+function AttachmentView({ url: rawUrl, type, name }: { url: string; type: string | null; name: string | null }) {
+  const url = useSignedAttachmentUrl(rawUrl);
   const isImage = type?.startsWith("image/");
   const isVideo = type?.startsWith("video/");
+
+  if (!url) {
+    return <div className="mt-1 text-[10px] font-mono text-muted-foreground">Loading attachment…</div>;
+  }
 
   if (isImage) {
     return (
@@ -138,8 +159,8 @@ export default function InboxPage() {
     const otherIds = visibleRows.map((t) =>
       t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
     );
-    const { data: profiles } = await supabase
-      .from("profiles")
+    const { data: profiles } = await (supabase as any)
+      .from("public_profiles")
       .select("id, display_name, navi_name")
       .in("id", otherIds);
     const profileMap: Record<string, any> = Object.fromEntries(
@@ -364,8 +385,8 @@ export default function InboxPage() {
     setSearchQuery(query);
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
-    const { data } = await supabase
-      .from("profiles")
+    const { data } = await (supabase as any)
+      .from("public_profiles")
       .select("id, display_name, navi_name, operator_level")
       .ilike("display_name", `%${query}%`)
       .neq("id", user!.id)

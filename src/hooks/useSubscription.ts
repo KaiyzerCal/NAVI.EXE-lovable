@@ -76,6 +76,7 @@ export function useSubscription() {
 
   return {
     tier,
+    subscription: null as { current_period_end?: string | null; cancel_at_period_end?: boolean | null } | null,
     isElite,
     isCore,
     isPro,

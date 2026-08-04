@@ -54,7 +54,7 @@ export function usePushNotifications() {
       const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToUint8Array(vapidKey).slice().buffer as ArrayBuffer,
       });
       await (supabase as any)
         .from("push_subscriptions")

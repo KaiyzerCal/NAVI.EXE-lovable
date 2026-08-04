@@ -360,8 +360,8 @@ export default function SocialPage() {
       setMentionQuery(query);
       if (mentionSearchRef.current) clearTimeout(mentionSearchRef.current);
       mentionSearchRef.current = setTimeout(async () => {
-        const { data } = await supabase
-          .from("profiles")
+        const { data } = await (supabase as any)
+          .from("public_profiles")
           .select("id, display_name, username")
           .or(
             query

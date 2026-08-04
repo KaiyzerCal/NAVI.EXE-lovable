@@ -39,8 +39,8 @@ async function fetchLeaderboard(
   scopeStart: string | null,
   guildId: string | null | undefined
 ): Promise<LeaderboardEntry[]> {
-  let query = supabase
-    .from("profiles")
+  let query = (supabase as any)
+    .from("public_profiles")
     .select(QUERY_FIELDS)
     .order(orderBy, { ascending: false });
 

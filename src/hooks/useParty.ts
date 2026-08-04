@@ -65,24 +65,37 @@ export function useParty() {
       .limit(20);
 
     if (!data) return;
+    const parties = data as Party[];
+    if (parties.length === 0) { setOpenParties([]); return; }
 
-    const enriched = await Promise.all(
-      (data as Party[]).map(async (p) => {
-        const { count } = await supabase
-          .from("party_members")
-          .select("*", { count: "exact", head: true })
-          .eq("party_id", p.id);
-        const memberCount = count ?? 0;
+    // Two queries total instead of 2 extra round-trips per party
+    // (member-count + leader-name lookups inside Promise.all) — this ran on
+    // every mount and on every realtime `parties` change.
+    const partyIds = parties.map((p) => p.id);
+    const leaderIds = [...new Set(parties.map((p) => p.created_by))];
+
+    const [{ data: memberRows }, { data: leaders }] = await Promise.all([
+      supabase.from("party_members").select("party_id").in("party_id", partyIds),
+      supabase.from("profiles").select("id, display_name").in("id", leaderIds),
+    ]);
+
+    const memberCounts = new Map<string, number>();
+    for (const row of (memberRows as { party_id: string }[] | null) ?? []) {
+      memberCounts.set(row.party_id, (memberCounts.get(row.party_id) ?? 0) + 1);
+    }
+    const leaderNames = new Map<string, string>();
+    for (const l of (leaders as { id: string; display_name: string | null }[] | null) ?? []) {
+      leaderNames.set(l.id, l.display_name ?? "Unknown");
+    }
+
+    const enriched = parties
+      .map((p) => {
+        const memberCount = memberCounts.get(p.id) ?? 0;
         if (memberCount >= p.max_members) return null;
-        const { data: leader } = await supabase
-          .from("profiles")
-          .select("display_name")
-          .eq("id", p.created_by)
-          .single();
-        return { ...p, member_count: memberCount, leader_name: leader?.display_name ?? "Unknown" };
+        return { ...p, member_count: memberCount, leader_name: leaderNames.get(p.created_by) ?? "Unknown" };
       })
-    );
-    setOpenParties(enriched.filter(Boolean) as any);
+      .filter(Boolean);
+    setOpenParties(enriched as any);
   }, []);
 
   const fetchMyParty = useCallback(async () => {
@@ -244,7 +257,12 @@ export function useParty() {
 
   const leaveParty = useCallback(async (): Promise<boolean> => {
     if (!user || !party) return false;
-    await supabase.from("party_members").delete().eq("party_id", party.id).eq("user_id", user.id);
+    const { error } = await supabase.from("party_members").delete().eq("party_id", party.id).eq("user_id", user.id);
+    if (error) {
+      console.error("[useParty] leaveParty error:", error);
+      toast({ title: "Error", description: "Failed to leave party.", variant: "destructive" });
+      return false;
+    }
     setParty(null);
     setMembers([]);
     return true;
@@ -252,8 +270,17 @@ export function useParty() {
 
   const disbandParty = useCallback(async (): Promise<boolean> => {
     if (!party) return false;
-    await supabase.from("parties").update({ status: "disbanded" } as any).eq("id", party.id);
-    await supabase.from("party_members").delete().eq("party_id", party.id);
+    // Runs as a SECURITY DEFINER RPC, not a direct delete: party_members
+    // RLS only allows deleting your *own* row, so a plain
+    // `.delete().eq("party_id", ...)` here only ever removed the leader's
+    // own membership — every other member was left attached to a party
+    // whose status flipped to 'disbanded'. See 20260804030000_*.sql.
+    const { error } = await supabase.rpc("disband_party" as any, { p_party_id: party.id });
+    if (error) {
+      console.error("[useParty] disbandParty error:", error);
+      toast({ title: "Error", description: error.message || "Failed to disband party.", variant: "destructive" });
+      return false;
+    }
     toast({ title: "Party Disbanded" });
     setParty(null);
     setMembers([]);
@@ -261,7 +288,16 @@ export function useParty() {
   }, [party]);
 
   const kickMember = useCallback(async (memberId: string): Promise<void> => {
-    await supabase.from("party_members").delete().eq("id", memberId);
+    // Runs as a SECURITY DEFINER RPC: party_members RLS only allows
+    // deleting your own row, so a leader's plain `.delete().eq("id", ...)`
+    // matched zero rows for anyone but the target themselves — the "kick"
+    // button silently did nothing. See 20260804030000_*.sql.
+    const { error } = await supabase.rpc("kick_party_member" as any, { p_member_id: memberId });
+    if (error) {
+      console.error("[useParty] kickMember error:", error);
+      toast({ title: "Error", description: error.message || "Failed to remove member.", variant: "destructive" });
+      return;
+    }
     // Realtime DELETE event handles the state update
   }, []);
 

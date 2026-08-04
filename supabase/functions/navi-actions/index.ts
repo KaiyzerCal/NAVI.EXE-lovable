@@ -22,10 +22,15 @@ const corsHeaders = {
 // so any authenticated user could previously set their own balance/level to
 // anything by calling navi-actions directly with a crafted update_profile
 // action. Verified live before this fix landed.
+// current_streak/longest_streak were removed too: they aren't in Claude's
+// update_profile tool schema (navi-chat/index.ts) — there's no legitimate
+// reason for this action to ever set them — and leaving them here let any
+// authenticated user set their own streak to an arbitrary multiple of 7 via
+// a raw POST, which defeats the award_streak_freeze eligibility check below.
 const profileAllowedKeys = [
   "display_name", "character_class", "mbti_type", "navi_level",
   "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust",
-  "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception",
+  "bond_loyalty", "subclass", "perception",
   "luck", "onboarding_done", "notification_settings", "user_navi_description", "last_active",
 ] as const;
 
@@ -385,10 +390,16 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
     }
 
     case "award_streak_freeze": {
-      const { data: p } = await sb.from("profiles").select("streak_freeze_count").eq("id", userId).single();
-      const current = Number((p as any)?.streak_freeze_count ?? 0);
-      await sb.from("profiles").update({ streak_freeze_count: current + 1 }).eq("id", userId);
-      await logActivity(sb, userId, "streak_freeze_earned", "Streak freeze earned (7-day milestone)", 0);
+      // Validated server-side: award_streak_freeze_if_eligible re-checks
+      // current_streak itself (not client-supplied) is a positive multiple
+      // of 7 that hasn't already been paid out, so calling this action
+      // repeatedly (or out of order) can't farm free copies of the item.
+      const { data, error } = await sb.rpc("award_streak_freeze_if_eligible", { _user_id: userId });
+      if (error) { console.error("[navi-actions] award_streak_freeze error:", error); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row?.awarded) {
+        await logActivity(sb, userId, "streak_freeze_earned", "Streak freeze earned (7-day milestone)", 0);
+      }
       return;
     }
 

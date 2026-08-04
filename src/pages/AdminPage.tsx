@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Shield, Users, MessageSquare, Loader2, ToggleLeft, ToggleRight, Flag, Check } from "lucide-react";
+import { Shield, Users, MessageSquare, Loader2, ToggleLeft, ToggleRight, Flag, Check, AlertTriangle, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 const ADMIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin`;
 
@@ -43,6 +45,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [tab, setTab] = useState<"users" | "feedback" | "reported">("users");
+  const [banTarget, setBanTarget] = useState<UserRow | null>(null);
+  const [banConfirmText, setBanConfirmText] = useState("");
+  const [banning, setBanning] = useState(false);
 
   // Authorization is enforced server-side (owner role). The client just calls
   // the admin function; a 403 means "not an admin".
@@ -88,18 +93,41 @@ export default function AdminPage() {
   }, [session?.access_token, refresh]);
 
   async function markReviewed(id: string, action: string) {
-    await callAdmin("review_report", { id, action });
-    setReported((prev) => prev.map((r) => (r.id === id ? { ...r, reviewed: true, action_taken: action } : r)));
+    try {
+      await callAdmin("review_report", { id, action });
+      setReported((prev) => prev.map((r) => (r.id === id ? { ...r, reviewed: true, action_taken: action } : r)));
+    } catch (e: any) {
+      toast({ title: "Failed to update report", description: e.message, variant: "destructive" });
+    }
   }
 
   async function toggleBeta(userId: string, current: boolean) {
-    await callAdmin("toggle_beta", { userId, value: !current });
-    setUsers((u) => u.map((p) => (p.id === userId ? { ...p, beta_tester: !current } : p)));
+    try {
+      await callAdmin("toggle_beta", { userId, value: !current });
+      setUsers((u) => u.map((p) => (p.id === userId ? { ...p, beta_tester: !current } : p)));
+    } catch (e: any) {
+      toast({ title: "Failed to update beta status", description: e.message, variant: "destructive" });
+    }
   }
 
-  async function banUser(userId: string) {
-    await callAdmin("ban_user", { userId });
-    setUsers((u) => u.filter((p) => p.id !== userId));
+  // ban_user is a full, irreversible account deletion (admin/index.ts:
+  // db.auth.admin.deleteUser) — it used to fire on a single click with no
+  // confirmation. Gated behind the same type-DELETE pattern SettingsPage
+  // already uses for the identical destructive action on your own account.
+  async function confirmBanUser() {
+    if (!banTarget || banConfirmText !== "DELETE") return;
+    setBanning(true);
+    try {
+      await callAdmin("ban_user", { userId: banTarget.id });
+      setUsers((u) => u.filter((p) => p.id !== banTarget.id));
+      toast({ title: "Account deleted", description: `${banTarget.display_name ?? "Operator"}'s account has been permanently removed.` });
+      setBanTarget(null);
+      setBanConfirmText("");
+    } catch (e: any) {
+      toast({ title: "Failed to delete account", description: e.message, variant: "destructive" });
+    } finally {
+      setBanning(false);
+    }
   }
 
   if (!user) return null;
@@ -196,7 +224,7 @@ export default function AdminPage() {
                     <td className="py-2 pr-4 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
                     <td className="py-2">
                       {u.id !== user.id && (
-                        <button onClick={() => banUser(u.id)} className="text-destructive text-[10px] hover:underline">BAN</button>
+                        <button onClick={() => { setBanTarget(u); setBanConfirmText(""); }} className="text-destructive text-[10px] hover:underline">DELETE</button>
                       )}
                     </td>
                   </tr>
@@ -278,6 +306,66 @@ export default function AdminPage() {
           )}
         </HudCard>
       )}
+
+      {/* Delete account confirmation modal — mirrors SettingsPage.tsx's
+          self-service delete flow, since this fires the exact same
+          irreversible action against another operator's account. */}
+      <AnimatePresence>
+        {banTarget && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !banning && setBanTarget(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-card border border-destructive/40 rounded-lg p-5"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-destructive" />
+                  <h3 className="font-display font-bold text-sm text-destructive tracking-wider">DELETE OPERATOR ACCOUNT</h3>
+                </div>
+                <button onClick={() => !banning && setBanTarget(null)} className="text-muted-foreground hover:text-foreground">
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs font-body text-muted-foreground mb-4 leading-relaxed">
+                This permanently deletes <span className="text-foreground font-bold">{banTarget.display_name ?? "this operator"}</span>'s
+                account. There is no way to recover this data afterward.
+              </p>
+              <label className="text-[10px] font-mono text-muted-foreground block mb-1">
+                Type <span className="text-destructive font-bold">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={banConfirmText}
+                onChange={(e) => setBanConfirmText(e.target.value)}
+                disabled={banning}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-mono text-foreground outline-none focus:border-destructive/50 transition-colors mb-4 disabled:opacity-50"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setBanTarget(null)}
+                  disabled={banning}
+                  className="flex-1 py-2 rounded border border-border text-muted-foreground text-xs font-mono hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  CANCEL
+                </button>
+                <button
+                  onClick={confirmBanUser}
+                  disabled={banConfirmText !== "DELETE" || banning}
+                  className="flex-1 py-2 rounded bg-destructive/20 border border-destructive/50 text-destructive text-xs font-mono hover:bg-destructive/30 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5"
+                >
+                  {banning ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {banning ? "DELETING..." : "PERMANENTLY DELETE"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -274,14 +274,18 @@ function QuestFormCard({
             </select>
           </div>
           <div>
-            <label className="text-[10px] font-mono text-muted-foreground block mb-1">XP REWARD</label>
+            <label className="text-[10px] font-mono text-muted-foreground block mb-1">XP REWARD (MAX 200)</label>
             <input
               type="number"
               value={form.xpReward}
-              onChange={(e) => setForm((f) => ({ ...f, xpReward: Math.max(1, parseInt(e.target.value) || 0) }))}
+              onChange={(e) => setForm((f) => ({ ...f, xpReward: Math.min(200, Math.max(1, parseInt(e.target.value) || 0)) }))}
               min={1}
+              max={200}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm font-body text-foreground outline-none focus:border-primary/40 transition-colors"
             />
+            {/* award_xp (economy_rpcs.sql) silently clips to 200 server-side
+                — this used to have no UI ceiling, so a "+5000 XP" quest was
+                legal to create and would only ever pay out 200. */}
           </div>
         </div>
         <div>

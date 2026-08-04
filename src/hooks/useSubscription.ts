@@ -19,7 +19,8 @@ export function useSubscription() {
   const isActive = isCore;
 
   const loading = !isReady;
-  const messageLimit = isFree ? 50 : Infinity;
+  // Must stay in sync with navi-chat/index.ts's FREE_LIMIT.
+  const messageLimit = isFree ? 15 : Infinity;
   const questLimit   = isFree ? 3  : Infinity;
 
   async function checkMessageAllowed(): Promise<boolean> {

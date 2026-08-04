@@ -11,6 +11,21 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // This function sends push content to an arbitrary user_id — it must only ever
+    // be reachable server-to-server (currently: daily-reminders, on a service-role
+    // client). Reject anything not carrying the service role key as its bearer
+    // token, otherwise any signed-up user could push arbitrary content to any
+    // other user's device by guessing a user_id.
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const callerToken = authHeader.replace("Bearer ", "");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!serviceRoleKey || callerToken !== serviceRoleKey) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { user_id, title, body, url } = await req.json();
 
     const vapidPublicKey  = Deno.env.get("VAPID_PUBLIC_KEY")  ?? "";

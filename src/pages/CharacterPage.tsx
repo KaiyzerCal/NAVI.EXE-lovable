@@ -9,8 +9,7 @@ import {
   TIER_THRESHOLDS,
   TIER_COLORS,
   evolutionTitleFromMbtiAndLevel,
-  totalXpForLevel,
-  tierProgressPercent,
+  tierProgressFromLevel,
 } from "@/lib/xpSystem";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Sword, Brain, Heart, Zap, Star, Eye, Plus, Trash2, Pencil, Check, X, ScanEye, Clover, Coins, Lock, ChevronRight, Layers, Wand2, Cpu, Loader2 as LoaderIcon } from "lucide-react";
@@ -204,9 +203,12 @@ export default function CharacterPage() {
 
   // Evolution tier data
   const currentTier = tierFromLevel(operatorLevel);
-  const tierPercent = tierProgressPercent(operatorXp);
+  // operator_xp resets to 0 every level-up (award_xp RPC) — it is not
+  // cumulative, so it must go through tierProgressFromLevel (level + within-
+  // level XP), not tierProgressPercent (which assumes a cumulative total and
+  // silently re-derives the wrong level for anyone above level 1).
+  const tierPercent = tierProgressFromLevel(operatorLevel, operatorXp);
   const { max: tierMax } = TIER_THRESHOLDS[currentTier];
-  const nextTierXp = currentTier < 5 ? totalXpForLevel(TIER_THRESHOLDS[(currentTier + 1) as 2|3|4|5].min) : null;
   const baseStats = computeBaseStats(
     questStats.completed,
     entries.length,

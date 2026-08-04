@@ -56,7 +56,15 @@ export function xpToNextTier(currentXp: number): number {
   return Math.max(0, totalXpForLevel(nextTierMin) - currentXp);
 }
 
-// Progress percentage (0–100) through the current tier toward the next tier boundary.
+// Progress percentage (0–100) through the current tier toward the next tier
+// boundary. NOTE: this treats currentXp as *cumulative* XP since level 1
+// (levelFromTotalXp re-derives the level from it) — it is only correct if
+// the caller's XP figure is actually cumulative. The server's operator_xp
+// (award_xp RPC, economy_rpcs.sql) is a per-level counter that resets to 0
+// on every level-up, not a cumulative total — feeding operator_xp into this
+// function silently re-derives the wrong (near-1) level for anyone above
+// level 1. Use tierProgressFromLevel below for that case; this is kept for
+// any genuinely-cumulative XP figure.
 export function tierProgressPercent(currentXp: number): number {
   const level = levelFromTotalXp(currentXp);
   const tier = tierFromLevel(level);
@@ -66,4 +74,22 @@ export function tierProgressPercent(currentXp: number): number {
   const tierEnd = totalXpForLevel(max + 1);
   if (tierEnd === tierStart) return 100;
   return Math.min(100, Math.floor(((currentXp - tierStart) / (tierEnd - tierStart)) * 100));
+}
+
+// Progress percentage (0–100) through the current tier, for the server's
+// actual per-level XP model: operator_level (authoritative level) plus
+// operator_xp (0 to xpPerLevel-1, resets on every level-up — see award_xp
+// in supabase/migrations/20260803070000_economy_rpcs.sql). Counts whole
+// levels already cleared within the tier, plus fractional progress through
+// the current level, against the tier's total level span.
+export function tierProgressFromLevel(operatorLevel: number, operatorXp: number): number {
+  const tier = tierFromLevel(operatorLevel);
+  const { min, max } = TIER_THRESHOLDS[tier];
+  if (tier >= 5) return 100;
+  const tierEndLevel = max + 1; // level at which the next tier begins
+  const xpPerCurrentLevel = (operatorLevel + 1) * 500; // mirrors award_xp's (op_level + 1) * 500
+  const levelsCleared = operatorLevel - min + Math.min(1, Math.max(0, operatorXp / xpPerCurrentLevel));
+  const tierSpan = tierEndLevel - min;
+  if (tierSpan <= 0) return 100;
+  return Math.min(100, Math.max(0, Math.floor((levelsCleared / tierSpan) * 100)));
 }

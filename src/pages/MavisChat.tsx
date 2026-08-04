@@ -1304,6 +1304,7 @@ export default function MavisChat() {
         const today = new Date().toISOString().slice(0, 10);
         const resetDate = (profile as any).message_count_reset_date ?? today;
         const used = resetDate === today ? ((profile as any).daily_message_count ?? 0) : 0;
+        // Must stay in sync with navi-chat/index.ts's FREE_LIMIT.
         const limit = 15;
         const remaining = Math.max(0, limit - used);
         const urgent = remaining <= 3;

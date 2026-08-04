@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { levelFromTotalXp, xpRequiredForLevel } from "@/lib/xpSystem";
 
 export interface NaviAction {
   type: string;
@@ -119,34 +118,40 @@ function ok(type: string, message: string, extra: Partial<NaviActionResult> = {}
 }
 
 // One canonical XP application path used by every action that grants XP.
+// Delegates the actual write to the award_xp RPC — same validated, capped
+// (0-200 per call), buff-multiplier-aware, atomic path navi-actions/
+// index.ts (the primary server call this file only runs as a fallback for)
+// uses. This used to be a hand-rolled duplicate: a raw, uncapped profile
+// update with no buff support, using levelFromTotalXp's cumulative-XP curve
+// to compute operator_level — a different formula than the RPC's actual
+// per-level-reset model ((level+1)*500, resetting operator_xp to 0 each
+// level-up — see award_xp in supabase/migrations/20260803070000_economy_
+// rpcs.sql), so operator_level here could silently disagree with the level
+// shown everywhere else in the app.
 async function applyXpToProfile(
   userId: string,
   amount: number
 ): Promise<{ ok: true; levelBefore: number; levelAfter: number; xpTotal: number } | { ok: false; error: string }> {
-  const { data: profile, error } = await supabase
+  const { data: before, error: beforeErr } = await supabase
     .from("profiles")
-    .select("xp_total, operator_xp, operator_level, navi_level")
+    .select("operator_level")
     .eq("id", userId)
     .maybeSingle();
-  if (error || !profile) return { ok: false, error: error?.message ?? "Profile not found" };
+  if (beforeErr) return { ok: false, error: beforeErr.message };
+  const levelBefore = (before as any)?.operator_level ?? 1;
 
-  const xpBefore = (profile as any).xp_total || 0;
-  const levelBefore = levelFromTotalXp(xpBefore);
-  const newTotal = xpBefore + amount;
-  const levelAfter = levelFromTotalXp(newTotal);
+  const { data: newXpTotal, error: rpcErr } = await supabase.rpc("award_xp", { _amount: amount });
+  if (rpcErr) return { ok: false, error: rpcErr.message };
 
-  // operator_xp / level kept in sync via the canonical xpSystem formula.
-  // Fallback (legacy): if formula returns Infinity at L100 we still cap.
-  const updates: any = {
-    xp_total: newTotal,
-    operator_level: levelAfter,
-    operator_xp: newTotal,
-  };
-  const { error: upErr } = await supabase.from("profiles").update(updates).eq("id", userId);
-  if (upErr) return { ok: false, error: upErr.message };
-  // Touch xpRequiredForLevel so tree-shakers keep it (and to validate formula presence at runtime).
-  void xpRequiredForLevel(levelAfter);
-  return { ok: true, levelBefore, levelAfter, xpTotal: newTotal };
+  const { data: after, error: afterErr } = await supabase
+    .from("profiles")
+    .select("operator_level")
+    .eq("id", userId)
+    .maybeSingle();
+  if (afterErr) return { ok: false, error: afterErr.message };
+  const levelAfter = (after as any)?.operator_level ?? levelBefore;
+
+  return { ok: true, levelBefore, levelAfter, xpTotal: (newXpTotal as number) ?? 0 };
 }
 
 export async function executeAction(userId: string, action: NaviAction): Promise<NaviActionResult> {
@@ -416,6 +421,33 @@ export async function executeAction(userId: string, action: NaviAction): Promise
           affectedTables: ["subskills"], affectedIds: { subskill_id: (data as any)?.id ?? null },
         });
       }
+      // update_subskill/delete_subskill are in MavisChat.tsx's
+      // CLIENT_FALLBACK_ACTION_TYPES with no matching case here — this
+      // fallback path runs whenever the server-side navi-actions call fails,
+      // so the missing case silently no-op'd after chat had already told
+      // the user the update succeeded. Mirrors navi-actions/index.ts's
+      // update_subskill exactly.
+      case "update_subskill": {
+        if (!p.subskill_id) return fail(type, "Missing required param: subskill_id");
+        const updates: any = {};
+        for (const key of ["name", "description", "level", "skill_id"]) {
+          if (p[key] !== undefined) updates[key] = p[key];
+        }
+        if (!Object.keys(updates).length) return fail(type, "No updatable fields provided");
+        const { error } = await supabase.from("subskills" as any).update(updates).eq("id", p.subskill_id).eq("user_id", userId);
+        if (error) return fail(type, "Failed to update subskill", error.message);
+        return ok(type, `Updated subskill.`, {
+          affectedTables: ["subskills"], affectedIds: { subskill_id: p.subskill_id },
+        });
+      }
+      case "delete_subskill": {
+        if (!p.subskill_id) return fail(type, "Missing required param: subskill_id");
+        const { error } = await supabase.from("subskills" as any).delete().eq("id", p.subskill_id).eq("user_id", userId);
+        if (error) return fail(type, "Failed to delete subskill", error.message);
+        return ok(type, `Deleted subskill.`, {
+          affectedTables: ["subskills"], affectedIds: { subskill_id: p.subskill_id },
+        });
+      }
       case "update_skill": {
         if (!p.skill_id) return fail(type, "Missing required param: skill_id");
         const updates: any = {};
@@ -467,7 +499,17 @@ export async function executeAction(userId: string, action: NaviAction): Promise
 
       // ───────── PROFILE ─────────
       case "update_profile": {
-        const allowed = ["display_name", "character_class", "mbti_type", "xp_total", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "current_streak", "longest_streak", "subclass", "perception", "luck", "codex_points", "cali_coins", "operator_level", "operator_xp", "onboarding_done", "notification_settings", "user_navi_description"];
+        // update_profile isn't in CLIENT_FALLBACK_ACTION_TYPES today, so
+        // this path is currently unreachable from chat — but it's a
+        // client-writable code path with no server-side validation, so it
+        // must never be able to touch anything with real economic value in
+        // case that ever changes. xp_total/codex_points/cali_coins/
+        // operator_level/operator_xp (currency/XP) and current_streak/
+        // longest_streak (not in Claude's update_profile tool schema in
+        // navi-chat/index.ts — no legitimate reason for this action to set
+        // them) are deliberately excluded. Kept in sync with
+        // navi-actions/index.ts's profileAllowedKeys.
+        const allowed = ["display_name", "character_class", "mbti_type", "navi_level", "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust", "bond_loyalty", "subclass", "perception", "luck", "onboarding_done", "notification_settings", "user_navi_description"];
         const updates: any = {};
         for (const key of allowed) if (p[key] !== undefined) updates[key] = p[key];
         if (!Object.keys(updates).length) return fail(type, "No updatable profile fields provided");
@@ -546,6 +588,22 @@ export async function executeAction(userId: string, action: NaviAction): Promise
           affectedIds: { item_id: (data as any)?.id ?? null },
         });
       }
+      // In CLIENT_FALLBACK_ACTION_TYPES with no matching case, same class of
+      // bug as update_subskill/delete_subskill above. Mirrors
+      // navi-actions/index.ts's update_equipment exactly.
+      case "update_equipment": {
+        if (!p.item_id) return fail(type, "Missing required param: item_id");
+        const updates: any = {};
+        for (const key of ["name", "description", "slot", "rarity", "stat_bonuses", "obtained_from", "buff_id", "is_equipped"]) {
+          if (p[key] !== undefined) updates[key] = p[key];
+        }
+        if (!Object.keys(updates).length) return fail(type, "No updatable fields provided");
+        const { error } = await supabase.from("equipment" as any).update(updates).eq("id", p.item_id).eq("user_id", userId);
+        if (error) return fail(type, "Failed to update equipment", error.message);
+        return ok(type, `Updated equipment.`, {
+          affectedTables: ["equipment"], affectedIds: { item_id: p.item_id },
+        });
+      }
       case "equip_item": {
         let itemId = p.item_id ?? null;
         let item: any = null;
@@ -618,6 +676,22 @@ export async function executeAction(userId: string, action: NaviAction): Promise
           `${p.effect_type === "debuff" ? "Debuff" : "Buff"}: ${p.name}`, 0);
         return ok(type, `${p.effect_type === "debuff" ? "Debuff" : "Buff"} "${p.name}" applied.`, {
           affectedTables: ["buffs", "activity_log"], affectedIds: { buff_id: (data as any)?.id ?? null },
+        });
+      }
+      // In CLIENT_FALLBACK_ACTION_TYPES with no matching case, same class of
+      // bug as update_subskill/update_equipment above. Mirrors
+      // navi-actions/index.ts's update_buff exactly.
+      case "update_buff": {
+        if (!p.buff_id) return fail(type, "Missing required param: buff_id");
+        const updates: any = {};
+        for (const key of ["name", "description", "effect_type", "stat_affected", "modifier_value", "duration_hours", "source", "expires_at"]) {
+          if (p[key] !== undefined) updates[key] = p[key];
+        }
+        if (!Object.keys(updates).length) return fail(type, "No updatable fields provided");
+        const { error } = await supabase.from("buffs" as any).update(updates).eq("id", p.buff_id).eq("user_id", userId);
+        if (error) return fail(type, "Failed to update buff", error.message);
+        return ok(type, `Updated buff.`, {
+          affectedTables: ["buffs"], affectedIds: { buff_id: p.buff_id },
         });
       }
       case "remove_buff": {

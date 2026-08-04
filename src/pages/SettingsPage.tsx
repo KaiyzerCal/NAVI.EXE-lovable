@@ -152,6 +152,34 @@ export default function SettingsPage() {
     });
   };
 
+  const [exporting, setExporting] = useState(false);
+  const handleExportData = async () => {
+    if (!user) return;
+    setExporting(true);
+    try {
+      const [{ data: quests }, { data: journal }, { data: skills }] = await Promise.all([
+        supabase.from("quests").select("*").eq("user_id", user.id),
+        supabase.from("journal_entries").select("*").eq("user_id", user.id),
+        supabase.from("skills" as any).select("*").eq("user_id", user.id),
+      ]);
+      const payload = { exported_at: new Date().toISOString(), profile, quests, journal, skills };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `navi-exe-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export ready", description: "Your data has been downloaded." });
+    } catch (e: any) {
+      toast({ title: "Export failed", description: e.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== "DELETE") return;
     setDeleting(true);
@@ -297,8 +325,14 @@ export default function SettingsPage() {
         {/* Data */}
         <HudCard title="DATA" icon={<Database size={14} />}>
           <div className="flex gap-2">
-            <button className="px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors">EXPORT DATA</button>
-            <button className="px-3 py-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-xs font-mono hover:bg-destructive/20 transition-colors">RESET PROGRESS</button>
+            <button
+              onClick={handleExportData}
+              disabled={exporting}
+              className="px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-mono hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {exporting ? <Loader2 size={12} className="animate-spin" /> : null}
+              {exporting ? "EXPORTING..." : "EXPORT DATA"}
+            </button>
           </div>
           <div className="flex gap-3 mt-3 pt-3 border-t border-border">
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors">TERMS OF SERVICE</a>

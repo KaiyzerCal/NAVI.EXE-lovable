@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 export interface ProfileData {
   display_name: string | null;
@@ -89,17 +90,30 @@ export function useProfile() {
       .select("*")
       .eq("id", user.id)
       .single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) console.error("[useProfile] fetch error:", error);
         if (data) setProfile(data as any);
         setLoading(false);
       });
   }, [user]);
 
+  // Every profile write in the app (skin equip, settings, onboarding, bond
+  // stats from chat, etc.) goes through this — it used to apply the
+  // optimistic update unconditionally and never check the write's result,
+  // so a failed update (RLS/trigger rejection — e.g. the quest-limit or
+  // equipped_skin paywall triggers — or a plain network error) left the UI
+  // permanently out of sync with the DB with no indication to the user.
   const updateProfile = useCallback(
     async (updates: Partial<ProfileData>) => {
       setProfile((p) => ({ ...p, ...updates }));
       if (user && Object.keys(updates).length > 0) {
-        await supabase.from("profiles").update(updates as any).eq("id", user.id);
+        const { error } = await supabase.from("profiles").update(updates as any).eq("id", user.id);
+        if (error) {
+          console.error("[useProfile] update error:", error);
+          toast({ title: "Error", description: error.message || "Failed to save changes.", variant: "destructive" });
+          const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+          if (data) setProfile(data as any);
+        }
       }
     },
     [user]
@@ -107,7 +121,8 @@ export function useProfile() {
 
   const refetchProfile = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    if (error) console.error("[useProfile] refetch error:", error);
     if (data) setProfile(data as any);
   }, [user]);
 

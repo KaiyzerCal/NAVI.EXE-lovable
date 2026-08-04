@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+// deploy-trigger: this function was never live at all — see the sibling
+// comment in navi-analyze-media/index.ts for why (merge-commit push, CI
+// diff logic silently deployed nothing).
 import { getAuthedUser, serviceClient } from "../_shared/auth.ts";
 
 const corsHeaders = {

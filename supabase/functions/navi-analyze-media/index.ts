@@ -1,4 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// deploy-trigger: the IDOR fix here landed in a merge-commit push that the
+// prior CI diff logic (HEAD~1) silently failed to deploy — see
+// a49326f's fix to deploy-edge-functions.yml. This touch gets it deployed
+// for real through the now-fixed pipeline.
 import { getAuthedUser, serviceClient } from "../_shared/auth.ts";
 
 const corsHeaders = {

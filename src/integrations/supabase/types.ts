@@ -960,6 +960,7 @@ export type Database = {
           id: string
           last_active: string | null
           last_evolution_tier: number
+          last_streak_freeze_milestone: number
           longest_streak: number
           luck: number
           mbti_type: string | null
@@ -1002,6 +1003,7 @@ export type Database = {
           id: string
           last_active?: string | null
           last_evolution_tier?: number
+          last_streak_freeze_milestone?: number
           longest_streak?: number
           luck?: number
           mbti_type?: string | null
@@ -1044,6 +1046,7 @@ export type Database = {
           id?: string
           last_active?: string | null
           last_evolution_tier?: number
+          last_streak_freeze_milestone?: number
           longest_streak?: number
           luck?: number
           mbti_type?: string | null
@@ -1496,6 +1499,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      award_streak_freeze_if_eligible: {
+        Args: { _user_id: string }
+        Returns: {
+          awarded: boolean
+          new_freeze_count: number
+        }[]
+      }
       award_xp: {
         Args: { _amount: number; _user_id?: string }
         Returns: number
@@ -1507,10 +1517,12 @@ export type Database = {
       }
       consume_message_credit: { Args: never; Returns: number }
       delete_account_data: { Args: { p_user_id: string }; Returns: undefined }
+      disband_party: { Args: { p_party_id: string }; Returns: undefined }
       has_active_subscription: {
         Args: { check_env?: string; user_uuid: string }
         Returns: boolean
       }
+      has_full_navi_access: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1519,6 +1531,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      kick_party_member: { Args: { p_member_id: string }; Returns: undefined }
       purchase_shop_item: { Args: { p_item_id: string }; Returns: undefined }
     }
     Enums: {

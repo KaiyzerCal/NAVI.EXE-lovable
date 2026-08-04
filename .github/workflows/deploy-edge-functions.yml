@@ -11,17 +11,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
-      # Deploys every function directory under supabase/functions instead of
-      # a hardcoded list — this workflow only ever covered 4 of the repo's
-      # (now 18) functions. Looping over the directory listing means a
-      # newly-added function is covered automatically, with nothing to
-      # remember to add here.
-      - name: Deploy all edge functions
+      # Deploys only the functions whose files actually changed in this
+      # push, determined from the diff against the previous commit — not
+      # every function directory. This project has a plan-level cap on
+      # total function count; deploying the full list unconditionally
+      # (tried once, see git history) fails outright with "Max number of
+      # functions reached for project" before anything lands, even for a
+      # one-line change to a single function. This also means a genuinely
+      # new function directory needs deploying once by hand the first time
+      # (same as any project running near its plan limit).
+      - name: Deploy changed edge functions
         run: |
           set -euo pipefail
-          for dir in supabase/functions/*/; do
+          changed_dirs=$(git diff --name-only HEAD~1 HEAD -- 'supabase/functions/*/**' \
+            | cut -d/ -f1-3 | sort -u)
+          if [ -z "$changed_dirs" ]; then
+            echo "No edge function files changed in this push."
+            exit 0
+          fi
+          for dir in $changed_dirs; do
             fn="$(basename "$dir")"
             if [ "$fn" = "_shared" ]; then continue; fi
             echo "::group::Deploy $fn"

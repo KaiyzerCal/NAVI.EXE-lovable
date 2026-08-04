@@ -12,7 +12,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # fetch-depth:2 broke silently on any push that lands as a merge
+          # commit (e.g. a local `git pull --no-rebase` before pushing,
+          # which happens routinely here since Lovable's own background
+          # agent also pushes directly to main) — HEAD~1 on a merge commit
+          # is just its first parent, which can be identical to HEAD for
+          # every file this workflow cares about, so the diff comes back
+          # empty and the run "succeeds" having deployed nothing. Confirmed
+          # live: a push with real changes to navi-analyze-media and
+          # navi-extract-memories deployed zero functions this way, and the
+          # bug went unnoticed because the job still exited 0. fetch-depth:0
+          # (full history) plus diffing against github.event.before instead
+          # of HEAD~1 fixes this regardless of merge topology.
+          fetch-depth: 0
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
       # Deploys only the functions whose files actually changed in this
@@ -27,7 +39,11 @@ jobs:
       - name: Deploy changed edge functions
         run: |
           set -euo pipefail
-          changed_dirs=$(git diff --name-only HEAD~1 HEAD -- 'supabase/functions/*/**' \
+          before_sha="${{ github.event.before }}"
+          if [ -z "$before_sha" ] || ! git cat-file -e "$before_sha" 2>/dev/null; then
+            before_sha="HEAD~1"
+          fi
+          changed_dirs=$(git diff --name-only "$before_sha" HEAD -- 'supabase/functions/*/**' \
             | cut -d/ -f1-3 | sort -u)
           if [ -z "$changed_dirs" ]; then
             echo "No edge function files changed in this push."

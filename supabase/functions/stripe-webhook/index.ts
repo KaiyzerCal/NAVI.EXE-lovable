@@ -112,10 +112,18 @@ serve(async (req) => {
         break;
       }
       case "invoice.payment_failed": {
-        const obj = event.data.object as any;
-        const customerId = obj.customer as string;
-        const userId = await getUserIdFromCustomer(customerId);
-        if (userId) await setTier(userId, "free");
+        // Previously downgraded to free immediately on the very first
+        // failed charge — a transient card decline or bank hiccup would
+        // drop a paying subscriber mid-cycle with no grace period. Stripe
+        // already retries failed payments on its own schedule and moves
+        // the subscription through status transitions (active → past_due
+        // → canceled) via customer.subscription.updated/deleted, both of
+        // which are handled correctly below: past_due leaves the existing
+        // tier untouched (grace period, matching Stripe's own retry
+        // window) and only customer.subscription.deleted — fired once
+        // Stripe's retries are actually exhausted — downgrades to free.
+        // Nothing to do here; this case exists for clarity/future
+        // analytics, not tier changes.
         break;
       }
       case "checkout.session.completed": {

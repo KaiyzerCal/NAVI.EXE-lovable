@@ -159,8 +159,8 @@ export default function InboxPage() {
     const otherIds = visibleRows.map((t) =>
       t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
     );
-    const { data: profiles } = await supabase
-      .from("public_profiles" as any)
+    const { data: profiles } = await (supabase as any)
+      .from("public_profiles")
       .select("id, display_name, navi_name")
       .in("id", otherIds);
     const profileMap: Record<string, any> = Object.fromEntries(
@@ -385,8 +385,8 @@ export default function InboxPage() {
     setSearchQuery(query);
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
-    const { data } = await supabase
-      .from("public_profiles" as any)
+    const { data } = await (supabase as any)
+      .from("public_profiles")
       .select("id, display_name, navi_name, operator_level")
       .ilike("display_name", `%${query}%`)
       .neq("id", user!.id)

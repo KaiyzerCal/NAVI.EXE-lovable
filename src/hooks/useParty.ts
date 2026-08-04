@@ -270,13 +270,13 @@ export function useParty() {
     // Server computes the per-member share from the party's own xp_pool and
     // member count, and awards every member atomically — a client can't
     // supply its own share or award to members it isn't validated against.
-    const { error } = await supabase.rpc("complete_party_quest", { p_party_id: party.id });
+    const { data: xpShare, error } = await supabase.rpc("complete_party_quest" as any, { p_party_id: party.id });
     if (error) {
       toast({ title: "Error", description: error.message || "Failed to complete party quest.", variant: "destructive" });
       return false;
     }
-    const xpShare = Math.floor(party.xp_pool / Math.max(members.length, 1));
-    toast({ title: "Party Quest Complete!", description: `${xpShare} XP awarded to each member.` });
+    const share = xpShare ?? Math.floor(party.xp_pool / Math.max(members.length, 1));
+    toast({ title: "Party Quest Complete!", description: `${share} XP awarded to each member.` });
     setParty(null);
     setMembers([]);
     return true;

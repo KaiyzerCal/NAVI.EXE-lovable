@@ -9,13 +9,15 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppData, type DisplayMessage } from "@/contexts/AppDataContext";
 import { getOrCreateConversation, loadMessages, saveMessage } from "@/lib/chatService";
-import { executeAction as executeClientAction, type NaviAction } from "@/lib/naviActions";
+import { executeAction as executeClientAction, type NaviAction, type NaviActionResult } from "@/lib/naviActions";
+import { useNavigate } from "react-router-dom";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 
-const CHAT_URL        = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
-const NAVI_ACTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
-const EMBED_URL       = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-embed-memories`;
+const CHAT_URL             = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
+const NAVI_ACTIONS_URL     = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
+const EMBED_URL            = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-embed-memories`;
+const EXTRACT_MEMORIES_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-extract-memories`;
 
 const CLIENT_FALLBACK_ACTION_TYPES = new Set([
   "create_journal",
@@ -114,6 +116,36 @@ function inferFallbackActions(userMessage: string, cleanText: string, appData?: 
     if (/(journal|entry|vault|note|log)/i.test(msg) && appData?.entries) {
       const entry = appData.entries.find((e: any) => msg.includes(e.title?.toLowerCase()));
       if (entry) return [{ type: "delete_journal", params: { entry_id: entry.id } }];
+    }
+  }
+
+  // Skill progression / level-up / XP intent
+  // Examples: "level up coding", "I practiced guitar", "trained Spanish for 30 min",
+  //          "give my fitness skill 50 xp", "increase my drawing skill"
+  if (appData?.skills?.length) {
+    const matchedSkill = appData.skills.find((s: any) =>
+      s.name && msg.includes(s.name.toLowerCase())
+    );
+    if (matchedSkill) {
+      // Explicit XP amount: "50 xp"
+      const xpMatch = msg.match(/(\d+)\s*xp/i);
+      if (xpMatch) {
+        return [{
+          type: "progress_skill",
+          params: { skill_id: matchedSkill.id, xp_amount: parseInt(xpMatch[1], 10), reason: userMessage.trim().slice(0, 80) },
+        }];
+      }
+      // Explicit level-up: "level up X", "X to next level"
+      if (/(level\s*up|next level|rank up|promote)/i.test(msg)) {
+        return [{ type: "level_up_skill", params: { skill_id: matchedSkill.id } }];
+      }
+      // Practice / train / progress verbs imply XP gain
+      if (/(practiced|trained|studied|worked on|did|drilled|improved|progressed|grinded|learned)/i.test(msg)) {
+        return [{
+          type: "progress_skill",
+          params: { skill_id: matchedSkill.id, xp_amount: 25, reason: userMessage.trim().slice(0, 80) },
+        }];
+      }
     }
   }
 
@@ -291,6 +323,7 @@ const INITIAL_MESSAGE: DisplayMessage = {
 
 export default function MavisChat() {
   const { user, session } = useAuth();
+  const navigate = useNavigate();
   const {
     profile, updateProfile, refetchProfile,
     quests, questStats, refetchQuests,
@@ -302,6 +335,7 @@ export default function MavisChat() {
     chatMessages: messages, setChatMessages: setMessages,
     conversationId, setConversationId,
     chatDbLoaded, setChatDbLoaded,
+    refreshAppData,
   } = useAppData();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -655,28 +689,20 @@ export default function MavisChat() {
       return;
     }
 
-    // Extract memories from last 50 user messages before clearing
-    const userMsgs = messages.filter(m => m.role === "user").slice(-50);
-    const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
-
-    if (allMemories.length > 0) {
-      const memoryRows = allMemories.map(item => ({
-        user_id: user.id,
-        memory_type: item.category,
-        content: item.detail,
-        importance: item.importance,
-      }));
-      await supabase.from("navi_core_memory").insert(memoryRows as any);
-      // Embed the newly saved memories in the background
-      fetch(EMBED_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${session?.access_token ?? ""}`,
-        },
-        body: JSON.stringify({ user_id: user.id }),
-      }).catch(() => {});
+    // Extract memories from last 10 user messages before clearing (AI-based, fire-and-forget)
+    const userMsgs = messages.filter(m => m.role === "user").slice(-10);
+    for (const m of userMsgs) {
+      if (m.content.length > 20) {
+        fetch(EXTRACT_MEMORIES_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({ user_id: user.id, message: m.content }),
+        }).catch(() => {});
+      }
     }
 
     // Delete chat messages from DB (keep conversation shell)
@@ -694,9 +720,22 @@ export default function MavisChat() {
     setIsSyncing(true);
 
     try {
-      // 1. Extract memories from ALL user messages in the thread
+      // 1. Extract memories from user messages via AI (fire-and-forget, batch of 20)
       const userMsgs = messages.filter(m => m.role === "user" && m.id !== "initial");
-      const allMemories = userMsgs.flatMap(m => extractMemoriesFromMessage(m.content));
+      for (const m of userMsgs.slice(-20)) {
+        if (m.content.length > 20) {
+          fetch(EXTRACT_MEMORIES_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${session?.access_token ?? ""}`,
+            },
+            body: JSON.stringify({ user_id: user.id, message: m.content }),
+          }).catch(() => {});
+        }
+      }
+      const allMemories: any[] = []; // regex extraction replaced by AI edge function above
 
       // 2. Condense the full conversation into a summary block
       const assistantMsgs = messages.filter(m => m.role === "assistant" && m.id !== "initial" && m.id !== "streaming");
@@ -823,6 +862,19 @@ export default function MavisChat() {
       return;
     }
 
+    // Fire-and-forget AI memory extraction for this message
+    if (userContent.length > 20) {
+      fetch(EXTRACT_MEMORIES_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Authorization": `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ user_id: user.id, message: userContent }),
+      }).catch(() => {});
+    }
+
     const userMsg: DisplayMessage = {
       id: userMsgId,
       role: "user",
@@ -893,6 +945,7 @@ export default function MavisChat() {
           media: mediaContext.length > 0 ? mediaContext : undefined,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           client_now_iso: new Date().toISOString(),
+          subscription_tier: (profile as any).subscription_tier ?? "free",
         },
         onDelta: (chunk) => {
           assistantContent += chunk;
@@ -918,76 +971,70 @@ export default function MavisChat() {
           console.log("[NAVI] Fallback used:", functionCallingActions.length === 0 && actions.length > 0);
           console.log("[NAVI] Actions:", JSON.stringify(actions, null, 2));
 
+          // Strip any raw action JSON noise from visible chat
+          let visibleText = cleanText
+            .replace(/```actions[\s\S]*?```/gi, "")
+            .replace(/```json\s*\{[\s\S]*?\}\s*```/gi, "")
+            .replace(/:::ACTION[\s\S]*?:::/g, "")
+            .trim();
+
+          let summary = "";
+          let navigateTarget: string | null = null;
+
           if (actions.length > 0) {
-            let failedActions: NaviAction[] = [];
-
-            try {
-              const actionResp = await fetch(NAVI_ACTIONS_URL, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                  Authorization: `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({ actions }),
-              });
-
-              const actionJson = await actionResp.json().catch(() => ({ results: [] }));
-              console.log("[NAVI] Action response status:", actionResp.status);
-              console.log("[NAVI] Action response body:", JSON.stringify(actionJson));
-
-              if (!actionResp.ok) {
-                throw new Error(actionJson.error || `Action request failed (${actionResp.status})`);
-              }
-
-              const failures = Array.isArray(actionJson.results)
-                ? actionJson.results
-                    .map((result: { success: boolean }, index: number) => (!result.success ? actions[index] : null))
-                    .filter((result): result is NaviAction => Boolean(result))
-                : [];
-
-              if (failures.length > 0) {
-                console.error("[NAVI] Action failures:", failures);
-                failedActions = failures;
-              }
-            } catch (err) {
-              console.error("[NAVI] Backend action execution failed:", err);
-              failedActions = actions;
-            }
-
-            if (failedActions.length > 0) {
-              const fallbackActions = failedActions.filter((action) => CLIENT_FALLBACK_ACTION_TYPES.has(action.type));
-
-              for (const action of fallbackActions) {
-                try {
-                  await executeClientAction(user.id, action);
-                } catch (fallbackError) {
-                  console.error("[NAVI] Client fallback failed:", action.type, fallbackError);
-                }
+            const results: NaviActionResult[] = [];
+            for (const action of actions) {
+              try {
+                const r = await executeClientAction(user.id, action);
+                results.push(r);
+              } catch (e: any) {
+                results.push({ type: action.type, success: false, message: "Exception", error: e?.message ?? String(e) });
               }
             }
+            console.log("[NAVI] Action results:", results);
 
-            await Promise.all([
-              refetchQuests(),
-              refetchJournal(),
-              refetchSkills(),
-              refetchEquipment(),
-              refetchEffects(),
-              refetchProfile(),
-              refetchAchievements(),
-            ]);
+            const refreshSet = new Set<string>();
+            for (const r of results) {
+              for (const t of r.affectedTables ?? []) refreshSet.add(t);
+              for (const s of r.refreshSections ?? []) refreshSet.add(s);
+              if (r.navigateTo && !navigateTarget) navigateTarget = r.navigateTo;
+            }
+
+            // Map DB tables → context refresh sections
+            const sectionMap: Record<string, string> = {
+              profiles: "profile", quests: "quests", skills: "skills",
+              journal_entries: "journal", equipment: "equipment", buffs: "buffs",
+              activity_log: "activity_log", achievements: "achievements",
+            };
+            const sections = Array.from(refreshSet).map((t) => sectionMap[t] ?? t);
+            if (sections.length > 0) await refreshAppData(sections);
+
+            const successes = results.filter((r) => r.success);
+            const failures = results.filter((r) => !r.success);
+            const parts: string[] = [];
+            if (successes.length > 0) parts.push(successes.map((r) => r.message).join(" "));
+            if (failures.length > 0) parts.push(`Failed: ${failures.map((r) => r.message).join("; ")}`);
+            summary = parts.join(" ");
           }
 
+          const finalText = summary
+            ? (visibleText ? `${visibleText}\n\n— ${summary}` : summary)
+            : visibleText;
+
           try {
-            const assistantId = await saveMessage(conversationId, user.id, "assistant", cleanText);
+            const assistantId = await saveMessage(conversationId, user.id, "assistant", finalText);
             setMessages((prev) =>
-              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: cleanText } : m))
+              prev.map((m) => (m.id === "streaming" ? { ...m, id: assistantId, content: finalText } : m))
             );
           } catch (err) {
             console.error("Failed to save assistant message:", err);
             setMessages((prev) =>
-              prev.map((m) => (m.id === "streaming" ? { ...m, content: cleanText } : m))
+              prev.map((m) => (m.id === "streaming" ? { ...m, content: finalText } : m))
             );
+          }
+
+          if (navigateTarget) {
+            try { navigate(navigateTarget); } catch (e) { console.warn("[NAVI] navigate failed", e); }
           }
 
           setIsLoading(false);
@@ -998,7 +1045,7 @@ export default function MavisChat() {
       setIsLoading(false);
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
-  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile]);
+  }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile, navigate]);
 
   // ── Key handler: Shift+Enter = newline, Enter alone = send ────────────────
   // isComposing guard prevents firing during IME composition (mobile autocomplete,
@@ -1246,9 +1293,38 @@ export default function MavisChat() {
         )}
       </div>
 
-      <p className="text-[10px] font-mono text-muted-foreground/50 text-center mt-1.5">
-        Enter to send · Shift+Enter for new line
-      </p>
+      {(() => {
+        const tier = (profile as any).subscription_tier ?? "free";
+        const isFree = tier === "free";
+        if (!isFree) return (
+          <p className="text-[10px] font-mono text-muted-foreground/50 text-center mt-1.5">
+            Enter to send · Shift+Enter for new line
+          </p>
+        );
+        const today = new Date().toISOString().slice(0, 10);
+        const resetDate = (profile as any).message_count_reset_date ?? today;
+        const used = resetDate === today ? ((profile as any).daily_message_count ?? 0) : 0;
+        const limit = 15;
+        const remaining = Math.max(0, limit - used);
+        const urgent = remaining <= 3;
+        return (
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <p className="text-[10px] font-mono text-muted-foreground/50">
+              Enter to send · Shift+Enter for new line
+            </p>
+            <span className={`text-[10px] font-mono ${urgent ? "text-amber-400" : "text-muted-foreground/50"}`}>
+              {remaining}/{limit} messages
+              {urgent && remaining > 0 && " · "}
+              {urgent && remaining > 0 && (
+                <a href="/upgrade" className="underline hover:text-primary transition-colors">upgrade</a>
+              )}
+              {remaining === 0 && (
+                <> · <a href="/upgrade" className="underline text-destructive hover:text-primary transition-colors">limit reached</a></>
+              )}
+            </span>
+          </div>
+        );
+      })()}
     </div>
   );
 }

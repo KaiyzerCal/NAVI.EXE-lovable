@@ -3,12 +3,13 @@ import {
   LayoutDashboard, MessageSquare, User, Swords, BookOpen,
   BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
   Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Search, Bell, ShoppingBag,
+  Trophy, TrendingUp, Calendar, Sword,
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
-import { useNotificationCount } from "@/pages/NotificationsPage";
+import { useNotificationCount } from "@/hooks/useNotificationCount";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -21,13 +22,17 @@ const navItems = [
   { to: "/stats", icon: BarChart3, label: "Stats" },
   { to: "/games", icon: Gamepad2, label: "Games" },
   { to: "/guild", icon: Shield, label: "Guild" },
+  { to: "/leaderboard", icon: Trophy, label: "Leaderboard" },
   { to: "/social", icon: Radio, label: "Feed" },
   { to: "/inbox", icon: Inbox, label: "Inbox" },
   { to: "/search", icon: Search, label: "Search" },
   { to: "/notifications", icon: Bell, label: "Notifications" },
   { to: "/agents", icon: Bot, label: "Agents" },
-  { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/shop", icon: ShoppingBag, label: "Shop" },
+  { to: "/market", icon: TrendingUp, label: "Market" },
+  { to: "/season", icon: Calendar, label: "Season" },
+  { to: "/challenges", icon: Sword, label: "Challenges" },
+  { to: "/upgrade", icon: Zap, label: "Upgrade" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
@@ -58,9 +63,9 @@ export default function AppSidebar() {
               className="overflow-hidden"
             >
               <h1 className="font-display text-primary text-sm font-bold tracking-widest text-glow-cyan whitespace-nowrap">
-                MAVIS-LITE
+                NAVI.EXE
               </h1>
-              <p className="text-muted-foreground text-[10px] font-mono whitespace-nowrap">v4.2 // NAVI.EXE</p>
+              <p className="text-muted-foreground text-[10px] font-mono whitespace-nowrap">// OPERATOR SYSTEM</p>
             </motion.div>
           )}
         </AnimatePresence>

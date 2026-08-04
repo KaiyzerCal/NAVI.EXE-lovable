@@ -23,3 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 supabase/.temp/
+.claude/
+
+# Environment files — never commit real secrets
+.env
+.env.*
+!.env.example
+
+# Use a single package manager (npm). Remove the other lockfiles.
+bun.lockb
+bun.lock

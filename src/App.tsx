@@ -12,38 +12,46 @@ import { useAppData } from "@/contexts/AppDataContext";
 import { supabase } from "@/integrations/supabase/client";
 import { removeStaleChannel } from "@/lib/realtimeChannel";
 import { FeedProvider } from "@/contexts/FeedContext";
+import { UnreadMessagesProvider } from "@/contexts/UnreadMessagesContext";
 import AppSidebar from "@/components/AppSidebar";
 import Onboarding from "@/components/Onboarding";
 import EvolutionEvent from "@/components/EvolutionEvent";
 // FeedbackWidget removed from layout — accessible via Settings if/when re-enabled.
+import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import AuthPage from "./pages/AuthPage";
-import Index from "./pages/Index";
-import NaviPage from "./pages/NaviPage";
-import MavisChat from "./pages/MavisChat";
-import CharacterPage from "./pages/CharacterPage";
-import QuestsPage from "./pages/QuestsPage";
-import JournalPage from "./pages/JournalPage";
-import StatsPage from "./pages/StatsPage";
-import PartyPage from "./pages/PartyPage";
-import SettingsPage from "./pages/SettingsPage";
-import UpgradePage from "./pages/UpgradePage";
-import AdminPage from "./pages/AdminPage";
-import GamesPage from "./pages/GamesPage";
-import GuildPage from "./pages/GuildPage";
-import SocialPage from "./pages/SocialPage";
-import InboxPage from "./pages/InboxPage";
-import ShopPage from "./pages/ShopPage";
-import AgentPage from "./pages/AgentPage";
-import SearchPage from "./pages/SearchPage";
-import NotificationsPage from "./pages/NotificationsPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
-import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { tierFromLevel, tierNameFromLevel, evolutionTitleFromMbtiAndLevel } from "@/lib/classEvolution";
 import { useFeed } from "@/contexts/FeedContext";
 import { toast } from "@/hooks/use-toast";
+
+// Lazy-loaded routes — split into async chunks to reduce initial bundle size
+const Index = lazy(() => import("./pages/Index"));
+const NaviPage = lazy(() => import("./pages/NaviPage"));
+const MavisChat = lazy(() => import("./pages/MavisChat"));
+const CharacterPage = lazy(() => import("./pages/CharacterPage"));
+const QuestsPage = lazy(() => import("./pages/QuestsPage"));
+const JournalPage = lazy(() => import("./pages/JournalPage"));
+const StatsPage = lazy(() => import("./pages/StatsPage"));
+const PartyPage = lazy(() => import("./pages/PartyPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const UpgradePage = lazy(() => import("./pages/UpgradePage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const GamesPage = lazy(() => import("./pages/GamesPage"));
+const GuildPage = lazy(() => import("./pages/GuildPage"));
+const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const SocialPage = lazy(() => import("./pages/SocialPage"));
+const InboxPage = lazy(() => import("./pages/InboxPage"));
+const AgentPage = lazy(() => import("./pages/AgentPage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const ShopPage = lazy(() => import("./pages/ShopPage"));
+const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
+const SeasonPage = lazy(() => import("./pages/SeasonPage"));
+const ChallengePage = lazy(() => import("./pages/ChallengePage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -52,10 +60,22 @@ function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      const done = localStorage.getItem("navi_onboarding_done");
-      if (!done) setShowOnboarding(true);
-    }
+    if (!user) return;
+    const done = localStorage.getItem("navi_onboarding_done");
+    if (done) return; // fast path: already cached locally
+    // localStorage empty (new device / cleared cache) — check DB as source of truth
+    supabase
+      .from("profiles")
+      .select("onboarding_done")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if ((data as any)?.onboarding_done) {
+          localStorage.setItem("navi_onboarding_done", "1"); // cache for next time
+        } else {
+          setShowOnboarding(true);
+        }
+      });
   }, [user]);
 
   if (loading) {
@@ -66,7 +86,12 @@ function AppContent() {
     );
   }
 
-  if (!user) return <AuthPage />;
+  if (!user) {
+    const path = window.location.pathname;
+    if (path === "/privacy") return <div className="min-h-screen bg-background p-6"><PrivacyPolicyPage /></div>;
+    if (path === "/terms") return <div className="min-h-screen bg-background p-6"><TermsOfServicePage /></div>;
+    return <AuthPage />;
+  }
 
   if (showOnboarding) {
     return <Onboarding onComplete={() => setShowOnboarding(false)} />;
@@ -75,7 +100,9 @@ function AppContent() {
   return (
     <AppDataProvider>
       <FeedProvider>
-        <AppShell />
+        <UnreadMessagesProvider>
+          <AppShell />
+        </UnreadMessagesProvider>
       </FeedProvider>
     </AppDataProvider>
   );
@@ -85,7 +112,7 @@ const STREAK_MILESTONES = [7, 14, 30, 60, 100];
 
 function AppShell() {
   const { profile, updateProfile } = useAppData();
-  const { autoPost } = useFeed();
+  const { autoPost, newPostCount, clearNewCount } = useFeed();
   const { user } = useAuth();
   const location = useLocation();
   const operatorLevel = profile.operator_level ?? 1;
@@ -130,7 +157,24 @@ function AppShell() {
     prevStreakRef.current = streak;
   }, [profile.current_streak]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Global DM toast notification
+  // Toast when new feed posts arrive and user isn't on the social page
+  const prevNewPostCountRef = useRef(0);
+  useEffect(() => {
+    if (newPostCount > 0 && newPostCount > prevNewPostCountRef.current) {
+      const onSocialPage = window.location.pathname === "/social";
+      if (!onSocialPage) {
+        toast({
+          title: "New activity in feed",
+          description: `${newPostCount} new post${newPostCount !== 1 ? "s" : ""} from operators`,
+        });
+      }
+    }
+    prevNewPostCountRef.current = newPostCount;
+  }, [newPostCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Global DM toast notification — watches navi_messages (the unified message table).
+  // RLS limits delivery to threads the user participates in; we skip messages the
+  // user sent themselves so only incoming messages produce a toast.
   useEffect(() => {
     if (!user) return;
     const channelName = `global-dm-toast-${user.id}`;
@@ -139,16 +183,13 @@ function AppShell() {
       .channel(channelName)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "direct_messages", filter: `recipient_id=eq.${user.id}` },
-        async (payload) => {
+        { event: "INSERT", schema: "public", table: "navi_messages" },
+        (payload) => {
           const msg = payload.new as any;
-          const { data: sender } = await supabase
-            .from("profiles")
-            .select("display_name")
-            .eq("id", msg.sender_id)
-            .single();
+          // Only toast for messages from someone else
+          if (!msg.sender_user_id || msg.sender_user_id === user.id) return;
           toast({
-            title: `${sender?.display_name ?? "Operator"} sent you a message`,
+            title: `${msg.sender_navi_name ?? "Operator"} sent you a message`,
             description: msg.content?.slice(0, 60) ?? "",
           });
         }
@@ -196,13 +237,13 @@ function AppShell() {
       <div className="flex min-h-screen">
         <AppSidebar />
         <main className="flex-1 p-6 overflow-y-auto">
-          {/* Per-route boundary: a crash on one page (like the realtime-
-              channel bug that just shipped) no longer takes the sidebar/nav
+          {/* Per-route boundary: a crash on one page no longer takes the sidebar/nav
               down with it — the user can still navigate elsewhere. */}
           <Sentry.ErrorBoundary
             key={location.pathname}
             fallback={({ resetError }) => <ErrorFallback resetError={resetError} />}
           >
+          <Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-primary" size={24} /></div>}>
           <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/navi" element={<NaviPage />} />
@@ -214,6 +255,7 @@ function AppShell() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/guild" element={<GuildPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/social" element={<SocialPage />} />
           <Route path="/inbox" element={<InboxPage />} />
           <Route path="/upgrade" element={<UpgradePage />} />
@@ -223,8 +265,14 @@ function AppShell() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/market" element={<MarketplacePage />} />
+          <Route path="/season" element={<SeasonPage />} />
+          <Route path="/challenges" element={<ChallengePage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           </Sentry.ErrorBoundary>
         </main>
       </div>
@@ -233,25 +281,27 @@ function AppShell() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="navi-theme">
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            {/* Privacy/Terms must be reachable without an account — app store
-                reviewers and prospective users need to view them pre-login. */}
-            <Routes>
-              <Route path="/privacy" element={<PrivacyPolicyPage />} />
-              <Route path="/terms" element={<TermsOfServicePage />} />
-              <Route path="/*" element={<AppContent />} />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+  <GlobalErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="navi-theme">
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              {/* Privacy/Terms must be reachable without an account — app store
+                  reviewers and prospective users need to view them pre-login. */}
+              <Routes>
+                <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                <Route path="/terms" element={<TermsOfServicePage />} />
+                <Route path="/*" element={<AppContent />} />
+              </Routes>
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  </GlobalErrorBoundary>
 );
 
 export default App;

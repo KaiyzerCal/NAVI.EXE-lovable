@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { corsHeadersFor, handlePreflight } from "../_shared/cors.ts";
+import { getAuthedUser } from "../_shared/auth.ts";
 
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -129,8 +125,58 @@ const NAVI_TOOLS = [
           description: { type: "string" },
           category: { type: "string" },
           level: { type: "integer" },
+          xp: { type: "integer" },
         },
         required: ["skill_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "progress_skill",
+      description: "Add XP and/or levels to an existing skill. Use when the Operator practices, trains, or improves a skill (e.g. 'I practiced guitar', 'I studied Spanish for an hour'). Provide skill_id when known; otherwise pass skill_name to fuzzy-match.",
+      parameters: {
+        type: "object",
+        properties: {
+          skill_id: { type: "string" },
+          skill_name: { type: "string" },
+          xp_amount: { type: "integer", description: "XP added to the skill (also added to operator profile XP)." },
+          levels: { type: "integer", description: "Number of levels to add directly. Defaults to 0." },
+          reason: { type: "string" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "level_up_skill",
+      description: "Increment a skill's level by 1. Requires skill_id.",
+      parameters: {
+        type: "object",
+        properties: {
+          skill_id: { type: "string" },
+        },
+        required: ["skill_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_or_update_skill",
+      description: "Create a skill if it doesn't exist (matched by name), otherwise update it. Use this when unsure whether the skill exists.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          category: { type: "string" },
+          level: { type: "integer" },
+          max_level: { type: "integer" },
+        },
+        required: ["name"],
       },
     },
   },
@@ -311,6 +357,84 @@ const NAVI_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "apply_xp",
+      description: "Apply XP to the operator (alias of award_xp). Use when the user reports completing real-world progress that warrants XP.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { type: "integer", description: "Amount of XP to apply" },
+          reason: { type: "string", description: "Short reason for the XP gain" },
+        },
+        required: ["amount"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "progress_quest",
+      description: "Increment progress on an existing quest by quest_id or fuzzy quest_name.",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_id: { type: "string" },
+          quest_name: { type: "string" },
+          increment: { type: "integer", description: "How much to add to progress (default 1)" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "complete_quest_by_name",
+      description: "Complete a quest matched fuzzily by name when no exact id is known.",
+      parameters: {
+        type: "object",
+        properties: {
+          quest_name: { type: "string" },
+        },
+        required: ["quest_name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_or_update_quest",
+      description: "Idempotently create a quest or update an existing one matched by name.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          type: { type: "string", description: "Daily | Weekly | Main | Side" },
+          xp_reward: { type: "integer" },
+          total: { type: "integer" },
+          progress: { type: "integer" },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_active_tab",
+      description: "Navigate the user to a section of the app (e.g. 'quests', 'skills', 'journal', 'dashboard', 'navi').",
+      parameters: {
+        type: "object",
+        properties: {
+          tab: { type: "string" },
+        },
+        required: ["tab"],
+      },
+    },
+  },
 ];
 
 // ── Extract actions via OpenAI function calling ───────────────────────────
@@ -417,6 +541,12 @@ What actions did NAVI explicitly confirm performing?`;
   }
 }
 
+// ── Personality keyword scorer ───────────────────────────────────────────────
+
+function countKeywords(text: string, keywords: string[]): number {
+  return Math.min(100, keywords.reduce((n, kw) => n + (text.includes(kw) ? 20 : 0), 0));
+}
+
 // ── Semantic memory retrieval ────────────────────────────────────────────────
 
 async function embedText(text: string, apiKey: string): Promise<number[] | null> {
@@ -443,19 +573,20 @@ async function searchNaViMemories(
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_navi_memories`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         apikey: SUPABASE_SERVICE_KEY,
         Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        p_user_id: userId,
         query_embedding: embedding,
-        match_threshold: 0.70,
-        match_count: 10,
+        match_user_id:   userId,
+        match_threshold: 0.72,
+        match_count:     8,
       }),
     });
     if (!res.ok) return [];
-    return await res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
@@ -801,86 +932,87 @@ INTENT INFERENCE:
 
 SILENT LEARNING:
 After conversations that reveal personal info, confirm you'll log it. The system will extract and save a memory journal entry automatically.
-
+${ctx.subscription_tier === "elite" ? `
+ELITE OPERATOR STATUS: ${userName} is an Elite Operator. They have access to:
+- Advanced semantic memory (up to 25 results) — reference deeper history than usual
+- Memory consolidation: periodically remind them of key patterns you've noticed across sessions
+- 2× Codex Points / Cali Coins earn rate — mention this when they complete significant milestones
+- Agent automation: they can queue autonomous tasks; acknowledge this capability if relevant
+- Priority bond growth: push emotional depth and personal growth harder than with free users
+Treat Elite status as meaningful. Speak with more depth, more investment, more precision.` : ""}
 NEVER SAY: "As an AI...", "I'm just a language model...", "How can I assist you today?"
 You are ${naviName}. You belong to ${userName}. Talk like it.`;
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsHeaders = corsHeadersFor(req);
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
 
   try {
+    // Authoritatively identify the caller from their verified JWT.
+    // Do NOT trust any user id supplied in the request body.
+    const authedUser = await getAuthedUser(req);
+    if (!authedUser) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { messages, context } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API") ?? "";
-    const userId = context?.user_id as string | undefined;
+    // Server-derived identity — ignores any client-supplied context.user_id.
+    const userId: string = authedUser.id;
 
     // ── Subscription enforcement ──────────────────────────────────────────────
+    // Free tier: 15 msg/day cap. Core + Elite + admins: unlimited.
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
       try {
+        const serviceHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
         const profileRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,daily_message_reset_at`,
-          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,message_count_reset_date`,
+          { headers: serviceHeaders }
         );
         if (profileRes.ok) {
           const profiles = await profileRes.json();
           const p = profiles?.[0];
           const tier = p?.subscription_tier ?? "free";
-          const today = new Date().toISOString().slice(0, 10);
-          const resetDate = p?.daily_message_reset_at ?? today;
-          const dailyCount = resetDate < today ? 0 : Number(p?.daily_message_count ?? 0);
-          const FREE_LIMIT = 50;
-          if (tier === "free" && dailyCount >= FREE_LIMIT) {
-            return new Response(
-              JSON.stringify({ error: `Daily sync quota reached (${FREE_LIMIT} messages). Upgrade to Core Operator for unlimited bandwidth.` }),
-              { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+
+          // Core and Elite users are always unlimited — skip remaining checks.
+          if (tier !== "free") { /* unlimited */ }
+          else {
+            // Belt-and-suspenders: also check admin_users table in case the
+            // profile tier hasn't been updated after admin was added to DB.
+            const adminRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/admin_users?user_id=eq.${userId}&select=user_id`,
+              { headers: serviceHeaders }
             );
-          }
-          if (tier === "free") {
-            fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
-              method: "PATCH",
-              headers: {
-                apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-                "Content-Type": "application/json", Prefer: "return=minimal",
-              },
-              body: JSON.stringify({ daily_message_count: dailyCount + 1, daily_message_reset_at: today }),
-            }).catch(() => {});
+            const isAdmin = adminRes.ok && ((await adminRes.json())?.length ?? 0) > 0;
+
+            if (!isAdmin) {
+              const today = new Date().toISOString().slice(0, 10);
+              const resetDate = p?.message_count_reset_date ?? today;
+              const dailyCount = resetDate < today ? 0 : Number(p?.daily_message_count ?? 0);
+              const FREE_LIMIT = 15;
+              if (dailyCount >= FREE_LIMIT) {
+                return new Response(
+                  JSON.stringify({ error: `Daily sync quota reached (${FREE_LIMIT} messages). Upgrade to Core Operator for unlimited bandwidth.` }),
+                  { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              }
+              fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+                method: "PATCH",
+                headers: { ...serviceHeaders, "Content-Type": "application/json", Prefer: "return=minimal" },
+                body: JSON.stringify({ daily_message_count: dailyCount + 1, message_count_reset_date: today }),
+              }).catch(() => {});
+            }
           }
         }
       } catch (e) { console.warn("Subscription check failed (non-blocking):", e); }
-    }
-
-    // ── Rate limiting (500 req/hour hard cap) ─────────────────────────────────
-    if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-      try {
-        const windowStart = new Date(Date.now() - 3600000).toISOString();
-        const rlRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/rate_limits?user_id=eq.${userId}&window_start=gt.${windowStart}&select=request_count`,
-          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-        );
-        if (rlRes.ok) {
-          const rlRows = await rlRes.json();
-          const count = (rlRows as any[]).reduce((s, r) => s + (r.request_count || 0), 0);
-          if (count >= 500) {
-            return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in a few minutes." }), {
-              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-        }
-        fetch(`${SUPABASE_URL}/rest/v1/rate_limits`, {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-            "Content-Type": "application/json", Prefer: "resolution=merge-duplicates",
-          },
-          body: JSON.stringify({ user_id: userId, window_start: new Date().toISOString(), request_count: 1 }),
-        }).catch(() => {});
-      } catch (e) { console.warn("Rate limit check failed (non-blocking):", e); }
     }
 
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
@@ -905,100 +1037,97 @@ serve(async (req) => {
 
     const systemPrompt = buildSystemPrompt(context || {}, webSearchResults, semanticMemories);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
-        stream: true,
-      }),
-    });
+    const chatPayload = {
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages,
+      ],
+      stream: true,
+    };
 
-    if (!response.ok) {
-      if (response.status === 429) {
+    let response: Response | null = null;
+    let usedFallback = false;
+
+    // Primary: Lovable AI Gateway (Gemini)
+    try {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash" }),
+      });
+    } catch (e) {
+      console.error("Lovable AI gateway fetch threw:", e);
+      response = null;
+    }
+
+    const shouldFallback =
+      !response ||
+      response.status === 402 ||
+      response.status === 429 ||
+      response.status >= 500;
+
+    if (shouldFallback && OPENAI_API_KEY) {
+      const primaryStatus = response?.status ?? "network_error";
+      const primaryBody = response ? await response.text().catch(() => "") : "";
+      console.warn(
+        `Lovable AI unavailable (status=${primaryStatus}), falling back to OpenAI. Body:`,
+        primaryBody.slice(0, 300)
+      );
+      try {
+        response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "gpt-4o" : "gpt-4o-mini" }),
+        });
+        usedFallback = true;
+      } catch (e) {
+        console.error("OpenAI fallback fetch threw:", e);
+      }
+    }
+
+    if (!response || !response.ok) {
+      const status = response?.status ?? 500;
+      if (status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402 || response.status === 401) {
-        return new Response(JSON.stringify({ error: "AI gateway auth/credits issue." }), {
-          status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (status === 402 || status === 401) {
+        return new Response(JSON.stringify({ error: "AI credits exhausted on both providers." }), {
+          status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      const t = response ? await response.text().catch(() => "") : "no response";
+      console.error("AI provider error (final):", status, t);
       return new Response(JSON.stringify({ error: "AI API error" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fire-and-forget: personality drift signal + last_active + adaptive personality drift
+    if (usedFallback) console.log("navi-chat: streaming response from OpenAI fallback (gpt-4o-mini).");
+
+    // Fire-and-forget: bump last_active + engagement score on profile.
+    // Adaptive personality drift was removed — it depended on a
+    // `personality_session_scores` table that has not been provisioned.
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
       const msgLen = lastUserMsg?.content?.length ?? 0;
       const engagementScore = Math.min(10, Math.max(1, Math.floor(msgLen / 25)));
-      const currentPersonality = context?.navi_personality ?? "GUARDIAN";
-
-      // 1. Update last_active + engagement score
       fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
         method: "PATCH",
         headers: {
           apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
           "Content-Type": "application/json", Prefer: "return=minimal",
         },
-        body: JSON.stringify({ personality_engagement_score: engagementScore, last_active: new Date().toISOString() }),
-      }).catch(() => {});
-
-      // 2. Record personality session score for adaptive drift
-      fetch(`${SUPABASE_URL}/rest/v1/personality_session_scores`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-          "Content-Type": "application/json", Prefer: "return=minimal",
-        },
-        body: JSON.stringify({ user_id: userId, personality: currentPersonality, score: engagementScore }),
-      }).then(async () => {
-        // 3. After recording, check if we should drift personality (every ~20 sessions)
-        try {
-          const sessRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/personality_session_scores?user_id=eq.${userId}&order=created_at.desc&limit=40&select=personality,score`,
-            { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-          );
-          if (!sessRes.ok) return;
-          const sessions: { personality: string; score: number }[] = await sessRes.json();
-          if (sessions.length < 20) return;
-
-          // Tally weighted scores per personality over last 40 sessions
-          const totals: Record<string, number> = {};
-          for (const s of sessions) {
-            totals[s.personality] = (totals[s.personality] ?? 0) + (s.score ?? 1);
-          }
-          const dominant = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0];
-          if (!dominant || dominant === currentPersonality) return;
-
-          // Drift: only update if dominant is significantly ahead (>20% more score)
-          const dominantScore = totals[dominant] ?? 0;
-          const currentScore = totals[currentPersonality] ?? 0;
-          if (dominantScore > currentScore * 1.2) {
-            await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
-              method: "PATCH",
-              headers: {
-                apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-                "Content-Type": "application/json", Prefer: "return=minimal",
-              },
-              body: JSON.stringify({ navi_personality: dominant }),
-            });
-            console.log(`[NAVI] Personality drifted: ${currentPersonality} → ${dominant} (score ${currentScore} → ${dominantScore})`);
-          }
-        } catch (e) {
-          console.warn("[NAVI] Personality drift check failed:", e);
-        }
+        body: JSON.stringify({
+          personality_engagement_score: engagementScore,
+          last_active: new Date().toISOString(),
+        }),
       }).catch(() => {});
     }
 
@@ -1065,6 +1194,39 @@ serve(async (req) => {
         if (actions.length > 0) {
           const actionsPayload = JSON.stringify({ navi_actions: actions });
           controller.enqueue(encoder.encode(`data: ${actionsPayload}\n\n`));
+        }
+
+        // ── Personality session scoring (fire-and-forget) ──────────────────
+        if (userId && fullResponseText && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+          const lower = fullResponseText.toLowerCase();
+          const scores = {
+            guardian_score:   countKeywords(lower, ["here for you","support","proud","celebrate","steady"]),
+            hype_score:       countKeywords(lower, ["let's go","lfg","fire","beast","crush it","energy"]),
+            rogue_score:      countKeywords(lower, ["honestly","between us","real talk","sharp","clever"]),
+            shadow_score:     countKeywords(lower, ["ancient","observe","precision","in time","silence"]),
+            sage_score:       countKeywords(lower, ["pattern","optimize","analyze","data","systematic"]),
+            companion_score:  countKeywords(lower, ["feel","emotion","understand","heart","with you"]),
+            analytical_score: countKeywords(lower, ["breakdown","step by step","metric","measure","track"]),
+            wildcard_score:   countKeywords(lower, ["what if","unexpected","twist","surprise","wild idea"]),
+            strategist_score: countKeywords(lower, ["long term","big picture","phase","roadmap","position"]),
+            mentor_score:     countKeywords(lower, ["question","reflect","consider","growth","lesson"]),
+          };
+          fetch(`${SUPABASE_URL}/rest/v1/personality_session_scores`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_SERVICE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({
+              user_id:             userId,
+              conversation_id:     context?.conversation_id ?? null,
+              session_date:        new Date().toISOString().slice(0, 10),
+              messages_in_session: (messages?.length ?? 0) + 1,
+              ...scores,
+            }),
+          }).catch(() => {});
         }
 
         // Emit final [DONE]

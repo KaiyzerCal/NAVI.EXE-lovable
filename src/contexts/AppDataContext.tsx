@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { useProfile, type ProfileData } from "@/hooks/useProfile";
 import { useQuests, type Quest, type QuestType, type CreateQuestInput, type UpdateQuestInput } from "@/hooks/useQuests";
 import { useJournal, type JournalEntry, type CreateJournalInput, type UpdateJournalInput } from "@/hooks/useJournal";
@@ -78,6 +78,9 @@ interface AppDataContextType {
   setConversationId: (id: string | null) => void;
   chatDbLoaded: boolean;
   setChatDbLoaded: (v: boolean) => void;
+
+  // Unified refresh helper
+  refreshAppData: (sections?: string[]) => Promise<void>;
 }
 
 const AppDataContext = createContext<AppDataContextType | null>(null);
@@ -98,7 +101,13 @@ const INITIAL_MESSAGE: DisplayMessage = {
 export function AppDataProvider({ children }: { children: ReactNode }) {
   // All hooks called once at top level
   const { profile, loading: profileLoading, updateProfile, refetchProfile } = useProfile();
-  const { quests, loading: questsLoading, stats: questStats, createQuest, updateQuest, toggleQuest, deleteQuest, refetch: refetchQuests } = useQuests();
+  const { quests, loading: questsLoading, stats: questStats, createQuest, updateQuest, toggleQuest: _toggleQuest, deleteQuest, refetch: refetchQuests } = useQuests();
+
+  // Wrap toggleQuest so XP changes are reflected in profile immediately
+  const toggleQuest = useCallback(async (id: string) => {
+    await _toggleQuest(id);
+    await refetchProfile();
+  }, [_toggleQuest, refetchProfile]);
   const { entries, loading: journalLoading, createEntry, updateEntry, deleteEntry, refetch: refetchJournal } = useJournal();
   const { achievements, loading: achievementsLoading, checkAchievements, stats: achievementStats, refetch: refetchAchievements } = useAchievements();
   const { skills, loading: skillsLoading, addSkill, updateSkill, deleteSkill, refetch: refetchSkills } = useOperatorSkills();
@@ -111,6 +120,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [chatDbLoaded, setChatDbLoaded] = useState(false);
 
   const isReady = !profileLoading;
+
+  const refreshAppData = async (sections?: string[]) => {
+    const wants = (s: string) => !sections || sections.length === 0 || sections.includes("all") || sections.includes(s);
+    const tasks: Promise<any>[] = [];
+    if (wants("profile") || wants("activity_log")) tasks.push(refetchProfile());
+    if (wants("quests")) tasks.push(refetchQuests());
+    // Subskills live under the skills hook; refresh skills whenever subskills change.
+    if (wants("skills") || wants("subskills")) tasks.push(refetchSkills());
+    if (wants("journal")) tasks.push(refetchJournal());
+    if (wants("equipment")) tasks.push(refetchEquipment());
+    if (wants("buffs")) tasks.push(refetchEffects());
+    if (wants("achievements")) tasks.push(refetchAchievements());
+    await Promise.all(tasks);
+  };
 
   if (!isReady) {
     return null;
@@ -127,6 +150,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       items, equipmentLoading, addItem, equipItem, updateItem, deleteItem, refetchEquipment,
       effects, effectsLoading, addEffect, removeEffect, refetchEffects,
       chatMessages, setChatMessages, conversationId, setConversationId, chatDbLoaded, setChatDbLoaded,
+      refreshAppData,
     }}>
       {children}
     </AppDataContext.Provider>

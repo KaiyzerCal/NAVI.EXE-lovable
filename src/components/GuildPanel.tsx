@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Shield, Plus, Search, Users, X, Crown, LogOut, Trash2 } from "lucide-react";
 import { useGuild, type CreateGuildInput } from "@/hooks/useGuild";
+import { useFeed } from "@/contexts/FeedContext";
 import HudCard from "@/components/HudCard";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -20,6 +21,7 @@ interface GuildPanelProps {
 
 export default function GuildPanel({ guildId, onGuildChange }: GuildPanelProps) {
   const { guild, members, loading, myRole, createGuild, joinGuild, leaveGuild, updateGuild, disbandGuild, searchGuilds, searchResults, searching } = useGuild(guildId);
+  const { autoPost } = useFeed();
   const [mode, setMode] = useState<"idle" | "create" | "search" | "edit">("idle");
   const [form, setForm] = useState<CreateGuildInput>({ name: "", tag: "", description: "", banner_color: "#6366f1" });
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,28 +34,44 @@ export default function GuildPanel({ guildId, onGuildChange }: GuildPanelProps) 
     setActionLoading(true);
     const id = await createGuild(form);
     setActionLoading(false);
-    if (id) { setMode("idle"); setForm({ name: "", tag: "", description: "", banner_color: "#6366f1" }); onGuildChange(); }
+    if (id) {
+      setMode("idle");
+      setForm({ name: "", tag: "", description: "", banner_color: "#6366f1" });
+      onGuildChange();
+      autoPost("GUILD_EVENT", `Founded guild [${form.tag}] ${form.name}`, { guild_name: form.name, tag: form.tag, event: "created" });
+    }
   };
 
   const handleJoin = async (targetId: string) => {
+    const target = searchResults.find((g: any) => g.id === targetId);
     setActionLoading(true);
     const ok = await joinGuild(targetId);
     setActionLoading(false);
-    if (ok) { setMode("idle"); onGuildChange(); }
+    if (ok) {
+      setMode("idle");
+      onGuildChange();
+      if (target) autoPost("GUILD_EVENT", `Joined guild [${target.tag}] ${target.name}`, { guild_name: target.name, tag: target.tag, event: "joined" });
+    }
   };
 
   const handleLeave = async () => {
+    const guildName = guild?.name;
+    const guildTag = guild?.tag;
     setActionLoading(true);
     await leaveGuild();
     setActionLoading(false);
     onGuildChange();
+    if (guildName) autoPost("GUILD_EVENT", `Left guild [${guildTag}] ${guildName}`, { guild_name: guildName, tag: guildTag, event: "left" });
   };
 
   const handleDisband = async () => {
+    const guildName = guild?.name;
+    const guildTag = guild?.tag;
     setActionLoading(true);
     await disbandGuild();
     setActionLoading(false);
     onGuildChange();
+    if (guildName) autoPost("GUILD_EVENT", `Disbanded guild [${guildTag}] ${guildName}`, { guild_name: guildName, tag: guildTag, event: "disbanded" });
   };
 
   const handleUpdate = async () => {

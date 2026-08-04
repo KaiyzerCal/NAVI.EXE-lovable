@@ -91,11 +91,9 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
 
     case "complete_quest": {
       if (!params.quest_id) throw new Error("Missing quest_id");
-      // Same validated RPC the "mark complete" button uses — marks
-      // completed, awards XP/codex/cali/quests_completed/skill XP, logs
-      // activity, and posts to the feed, all in one transaction. Passing
-      // userId explicitly is only honored because this call runs as
-      // service_role (see award_xp/complete_quest's _user_id handling).
+      // Same validated RPC the "mark complete" button uses — marks completed,
+      // awards XP/codex/cali/quests_completed/skill XP, logs activity, and posts
+      // to the feed, all in one transaction.
       const { error } = await sb.rpc("complete_quest", { p_quest_id: String(params.quest_id), p_user_id: userId });
       if (error) throw error;
       return;

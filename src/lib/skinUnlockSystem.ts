@@ -7,7 +7,8 @@ export interface SkinDefinition {
   category: SkinCategory;
   rarity: SkinRarity;
   unlockCondition: string;
-  unlockType: "default" | "level" | "navi_level" | "streak" | "quests" | "achievement" | "premium";
+<<<<<<< HEAD
+  unlockType: "default" | "level" | "navi_level" | "streak" | "quests" | "achievement" | "premium" | "elite";
   unlockValue?: number;
   achievementId?: string;
 }
@@ -109,8 +110,14 @@ export const SKIN_DEFINITIONS: SkinDefinition[] = [
   { id: "GEMSTONE",   name: "Gemstone",   category: "SPECIAL", rarity: "LEGENDARY", unlockType: "achievement", achievementId: "streak_100",   unlockCondition: "Maintain a 100-day streak" },
   { id: "STARMARK",   name: "Starmark",   category: "SPECIAL", rarity: "LEGENDARY", unlockType: "level",       unlockValue: 90,               unlockCondition: "Reach Operator Level 90" },
   { id: "EYEOFTRUTH", name: "Eye of Truth", category: "SPECIAL", rarity: "LEGENDARY", unlockType: "navi_level", unlockValue: 50,              unlockCondition: "Reach NAVI Level 50" },
+<<<<<<< HEAD
   { id: "ORACLE",     name: "Oracle",     category: "SPECIAL", rarity: "LEGENDARY", unlockType: "level",       unlockValue: 95,               unlockCondition: "Reach Operator Level 95" },
   { id: "ANCHOR",     name: "Anchor",     category: "SPECIAL", rarity: "LEGENDARY", unlockType: "achievement", achievementId: "sovereign",    unlockCondition: "Reach NAVI Level 100" },
+
+  // ELITE (Core/Elite subscription exclusive) ─────────────────────────────────
+  { id: "AXIOM",      name: "Axiom",      category: "SPECIAL",  rarity: "LEGENDARY", unlockType: "elite", unlockCondition: "Exclusive to Elite Operators" },
+  { id: "SOVEREIGN",  name: "Sovereign",  category: "SPECIAL",  rarity: "LEGENDARY", unlockType: "elite", unlockCondition: "Exclusive to Elite Operators" },
+  { id: "SPECTER",    name: "Specter",    category: "SPECIAL",  rarity: "LEGENDARY", unlockType: "elite", unlockCondition: "Exclusive to Elite Operators" },
 ];
 
 export interface UnlockState {
@@ -121,10 +128,12 @@ export interface UnlockState {
   unlockedAchievements: Set<string>;
   isPremium: boolean;
   isAdmin?: boolean;
+  isElite?: boolean;
 }
 
 export function isSkinUnlocked(skin: SkinDefinition, state: UnlockState): boolean {
   if (state.isAdmin) return true;
+  if (skin.unlockType === "elite") return !!(state.isAdmin || state.isElite);
   if (skin.unlockType === "default") return true;
   if (skin.unlockType === "premium") return state.isPremium;
   if (skin.unlockType === "level") return state.operatorLevel >= (skin.unlockValue ?? 0);

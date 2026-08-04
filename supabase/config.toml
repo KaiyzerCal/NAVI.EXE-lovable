@@ -1,4 +1,21 @@
 project_id = "fjkkcrmhptrzobajjsqg"
 
+# Webhooks are authenticated by Stripe signatures, not Supabase JWTs.
+[functions.stripe-webhook]
+verify_jwt = false
+
 [functions.create-portal-session]
 verify_jwt = false
+
+# Owner-gated: verifies the caller's role in the function body.
+[functions.admin]
+verify_jwt = false
+
+[functions.navi-personality-drift]
+verify_jwt = false
+
+[functions.navi-extract-memories]
+verify_jwt = true
+
+[functions.navi-agent-runner]
+verify_jwt = true

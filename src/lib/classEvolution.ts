@@ -22,6 +22,14 @@ export const TIER_THRESHOLDS: Record<EvolutionTier, { min: number; max: number }
   5: { min: 76, max: 100 },
 };
 
+export const TIER_COLORS: Record<EvolutionTier, string> = {
+  1: "#00E5FF",
+  2: "#7B2FFF",
+  3: "#FFBF00",
+  4: "#FF6B00",
+  5: "#FF2D9B",
+};
+
 export const MBTI_CLASS_MAP: Record<string, MbtiClassInfo> = {
   INTJ: {
     className: "The Architect",
@@ -118,22 +126,14 @@ export function tierNameFromLevel(level: number): string {
 }
 
 export function evolutionTitleFromMbtiAndLevel(mbti: string, level: number): string {
-  const info = MBTI_CLASS_MAP[mbti.toUpperCase()];
+  const info = MBTI_CLASS_MAP[(mbti || "").toUpperCase()];
   if (!info) return tierNameFromLevel(level);
   const tier = tierFromLevel(level);
   return info.tiers[tier - 1];
 }
 
-export const TIER_COLORS: Record<EvolutionTier, string> = {
-  1: "#00E5FF",
-  2: "#7B2FFF",
-  3: "#FFBF00",
-  4: "#FF6B00",
-  5: "#FF2D9B",
-};
-
 export function classNameFromMbti(mbti: string): string {
-  return MBTI_CLASS_MAP[mbti?.toUpperCase()]?.className ?? "Operator";
+  return MBTI_CLASS_MAP[(mbti || "").toUpperCase()]?.className ?? "Operator";
 }
 
 export function tierThreshold(tier: 1 | 2 | 3 | 4 | 5): number {

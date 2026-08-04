@@ -1,9 +1,16 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.mavislite.app',
-  appName: 'Mavis-Lite',
-  webDir: 'dist'
+  appId: 'com.naviexe.app',
+  appName: 'NAVI.EXE',
+  webDir: 'dist',
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: '#0a0a0f',
+      showSpinner: false,
+    },
+  },
 };
 
 export default config;

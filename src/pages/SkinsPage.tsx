@@ -7,6 +7,7 @@ import { useAppData } from "@/contexts/AppDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getNaviCharacter } from "@/components/navi-characters";
 import { supabase } from "@/integrations/supabase/client";
+import { useOwner } from "@/hooks/useOwner";
 import {
   SKIN_DEFINITIONS,
   SKIN_CATEGORIES,
@@ -158,8 +159,8 @@ export default function SkinsPage() {
   const [showLocked, setShowLocked] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("SVG");
 
-  const ADMIN_USER_IDS = (import.meta.env.VITE_ADMIN_USER_IDS ?? "").split(",").filter(Boolean);
-  const isAdmin = !!user && (ADMIN_USER_IDS.includes(user.id) || user.email?.endsWith("@vantara.exe"));
+  // Owner status is verified server-side via the has_role() RPC.
+  const isAdmin = useOwner();
 
   const unlockState: UnlockState = {
     operatorLevel: profile.operator_level ?? 1,
@@ -167,7 +168,8 @@ export default function SkinsPage() {
     currentStreak: profile.current_streak ?? 0,
     questsCompleted: (profile as any).quests_completed ?? 0,
     unlockedAchievements: new Set(),
-    isPremium: (profile as any).subscription_tier === "core" || (profile as any).subscription_tier === "power",
+    isPremium: (profile as any).subscription_tier === "core" || (profile as any).subscription_tier === "elite",
+    isElite: (profile as any).subscription_tier === "elite",
     isAdmin,
   };
 

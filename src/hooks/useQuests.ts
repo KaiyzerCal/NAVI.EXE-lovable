@@ -126,9 +126,8 @@ export function useQuests() {
         return;
       }
 
-      // Completing is: server computes and awards XP/codex/cali/quests_completed
-      // atomically from the quest's own stored reward, not a client-supplied
-      // amount, and can't be re-triggered by toggling off and back on.
+      // Completing: server awards XP/codex/cali atomically from the quest's
+      // stored reward — a client can't supply its own amount.
       setQuests((prev) =>
         prev.map((q) => (q.id === id ? { ...q, completed: true, progress: q.total } : q))
       );
@@ -137,6 +136,8 @@ export function useQuests() {
         console.error("[useQuests] complete_quest failed:", error);
         setQuests((prev) => prev.map((q) => (q.id === id ? quest : q)));
         toast({ title: "Error", description: "Failed to complete quest.", variant: "destructive" });
+      } else {
+        toast({ title: `✓ ${quest.name}`, description: `+${quest.xp_reward} XP earned` });
       }
     },
     [quests, updateQuest, user]

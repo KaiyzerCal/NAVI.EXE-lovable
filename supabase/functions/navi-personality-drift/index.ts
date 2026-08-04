@@ -9,10 +9,26 @@ const PERSONALITY_TYPES = [
 const MIN_SESSIONS    = 5;
 const DRIFT_THRESHOLD = 0.6;
 
-serve(async (_req) => {
+serve(async (req) => {
+  // Batch job with no legitimate end-user caller (nothing in this codebase
+  // invokes it — no cron schedule, no client code) meant to run on a
+  // schedule with elevated access, but had verify_jwt=false and no auth
+  // check of any kind — publicly callable by anyone, and it does a full
+  // table scan + writes profiles.navi_personality for every eligible user
+  // on each call. Gate on the service-role key, matching the
+  // service-role-pass-through pattern already used elsewhere in this repo
+  // (e.g. mavis-device-bridge) for internal-only endpoints.
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const callerToken = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (callerToken !== serviceRoleKey) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    serviceRoleKey,
   );
 
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

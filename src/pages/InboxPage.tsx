@@ -139,7 +139,7 @@ export default function InboxPage() {
       t.sender_user_id === user.id ? t.receiver_user_id : t.sender_user_id
     );
     const { data: profiles } = await supabase
-      .from("profiles")
+      .from("public_profiles" as any)
       .select("id, display_name, navi_name")
       .in("id", otherIds);
     const profileMap: Record<string, any> = Object.fromEntries(
@@ -365,7 +365,7 @@ export default function InboxPage() {
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
     const { data } = await supabase
-      .from("profiles")
+      .from("public_profiles" as any)
       .select("id, display_name, navi_name, operator_level")
       .ilike("display_name", `%${query}%`)
       .neq("id", user!.id)

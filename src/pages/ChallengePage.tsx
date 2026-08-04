@@ -78,7 +78,7 @@ export default function ChallengePage() {
   const searchOperators = async (q: string) => {
     if (!q.trim()) { setSearchResults([]); return; }
     setSearching(true);
-    const { data } = await supabase.from("profiles")
+    const { data } = await supabase.from("public_profiles" as any)
       .select("id, display_name, operator_level, character_class")
       .ilike("display_name", `%${q}%`)
       .neq("id", user?.id ?? "")

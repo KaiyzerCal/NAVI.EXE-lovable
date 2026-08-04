@@ -61,7 +61,7 @@ export default function SearchPage() {
       // Try combined display_name + username search; fall back to display_name only
       // if the username column doesn't exist yet (schema pending migration).
       let { data, error } = await (supabase as any)
-        .from("profiles")
+        .from("public_profiles")
         .select(COLS)
         .or(`display_name.ilike.%${term}%,username.ilike.%${term}%`)
         .neq("id", user.id)
@@ -69,7 +69,7 @@ export default function SearchPage() {
 
       if (error) {
         const fallback = await (supabase as any)
-          .from("profiles")
+          .from("public_profiles")
           .select(COLS)
           .ilike("display_name", `%${term}%`)
           .neq("id", user.id)

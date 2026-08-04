@@ -59,7 +59,19 @@ export default function UpgradePage() {
   const success = params.get("success") === "1";
   const cancelled = params.get("cancelled") === "1";
 
-  const forgeBalance = (profile as any).forge_balance ?? 0;
+  // forge_balance was never a real column on profiles — this always read
+  // undefined ?? 0, so the balance display was silently wrong for every
+  // user regardless of their actual balance. Forge currency lives in its
+  // own forge_balances table (one row per user).
+  const [forgeBalance, setForgeBalance] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await (supabase as any).from("forge_balances").select("balance").eq("user_id", user.id).maybeSingle();
+      setForgeBalance(data?.balance ?? 0);
+    })();
+  }, [user]);
 
   useEffect(() => {
     (async () => {
@@ -117,23 +129,15 @@ export default function UpgradePage() {
     if (!user || !session?.access_token) return;
     setPurchasingPack(pack.id);
     try {
-      // Insert quest templates as quests for the user
-      const quests = (pack.quest_templates as any[]).map((t: any) => ({
-        user_id: user.id,
-        name: t.name,
-        description: t.description || "",
-        type: t.type || "Daily",
-        total: 1,
-        xp_reward: t.xp_reward || 50,
-        progress: 0,
-        completed: false,
-      }));
-      const { error: qErr } = await supabase.from("quests").insert(quests as any);
-      if (qErr) throw qErr;
+      // Previously inserted quests + the ownership record directly from
+      // the client with zero currency check — forge_price existed on the
+      // pack but was never actually enforced. purchase_quest_pack does
+      // the balance check and both writes server-side, atomically.
+      const { error } = await (supabase as any).rpc("purchase_quest_pack", { p_pack_id: pack.id });
+      if (error) throw error;
 
-      // Record purchase
-      await (supabase as any).from("operator_quest_packs").insert({ user_id: user.id, pack_id: pack.id });
       setOwnedPackIds((prev) => new Set([...prev, pack.id]));
+      setForgeBalance((prev) => prev - pack.forge_price);
       toast({ title: `${pack.name} Activated!`, description: `${pack.quest_count} quests have been added to your board.` });
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Could not activate quest pack.", variant: "destructive" });
@@ -334,9 +338,14 @@ export default function UpgradePage() {
                     {owned ? (
                       <span className="text-[10px] font-mono text-neon-green">ACTIVE</span>
                     ) : (
+                      // Previously labeled "FREE" and never checked
+                      // forge_price at all — packs cost real Forge
+                      // currency (purchase_quest_pack now enforces this
+                      // server-side); show and gate on the real price.
                       <button
                         onClick={() => handlePackPurchase(pack)}
-                        disabled={!!purchasingPack}
+                        disabled={!!purchasingPack || forgeBalance < pack.forge_price}
+                        title={forgeBalance < pack.forge_price ? "Not enough Forge Points" : undefined}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 border border-primary/30 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors disabled:opacity-40"
                       >
                         {purchasingPack === pack.id ? (
@@ -344,7 +353,7 @@ export default function UpgradePage() {
                         ) : (
                           <>
                             <Coins size={10} />
-                            FREE
+                            {pack.forge_price}
                           </>
                         )}
                       </button>

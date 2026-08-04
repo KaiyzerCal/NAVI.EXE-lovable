@@ -705,8 +705,16 @@ export default function MavisChat() {
       }
     }
 
-    // Delete chat messages from DB (keep conversation shell)
-    await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
+    // Delete chat messages from DB (keep conversation shell). Previously
+    // this result was never checked — the UI cleared local messages and
+    // claimed success unconditionally, so a failed delete (RLS, network
+    // error) would silently reappear as "still there" on next load despite
+    // the user being told the thread was cleared.
+    const { error } = await supabase.from("chat_messages").delete().eq("conversation_id", conversationId);
+    if (error) {
+      toast({ title: "Could not clear thread", description: error.message, variant: "destructive" });
+      return;
+    }
 
     // Clear UI
     setMessages([INITIAL_MESSAGE]);

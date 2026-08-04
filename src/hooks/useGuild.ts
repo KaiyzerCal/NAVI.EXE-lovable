@@ -81,7 +81,11 @@ export function useGuild(guildId: string | null | undefined) {
 
   const leaveGuild = useCallback(async (): Promise<boolean> => {
     if (!user || !guildId) return false;
-    await supabase.from("guild_members").delete().eq("guild_id", guildId).eq("user_id", user.id);
+    // Previously ignored this result entirely — a failed delete (RLS,
+    // network error) still cleared local state and told the user they'd
+    // left, while the guild_members row silently remained.
+    const { error } = await supabase.from("guild_members").delete().eq("guild_id", guildId).eq("user_id", user.id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return false; }
     await supabase.from("profiles").update({ guild_id: null } as any).eq("id", user.id);
     setGuild(null); setMembers([]);
     toast({ title: "Left Guild" });
@@ -104,7 +108,8 @@ export function useGuild(guildId: string | null | undefined) {
     if (memberIds.length > 0) {
       await supabase.from("profiles").update({ guild_id: null } as any).in("id", memberIds);
     }
-    await supabase.from("guilds").delete().eq("id", guildId);
+    const { error } = await supabase.from("guilds").delete().eq("id", guildId);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return false; }
     setGuild(null); setMembers([]);
     toast({ title: "Guild Disbanded" });
     return true;

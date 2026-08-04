@@ -79,10 +79,18 @@ export function useOperatorSkills() {
   const deleteSkill = useCallback(
     async (id: string) => {
       if (!user) return;
+      const removed = skills.find((s) => s.id === id);
       setSkills((prev) => prev.filter((s) => s.id !== id));
-      await supabase.from("skills").delete().eq("id", id).eq("user_id", user.id);
+      // Previously ignored this result — a failed delete left the skill
+      // removed from the UI (silently reappearing only on next reload)
+      // with no error shown. Roll the optimistic removal back on failure.
+      const { error } = await supabase.from("skills").delete().eq("id", id).eq("user_id", user.id);
+      if (error) {
+        if (removed) setSkills((prev) => [...prev, removed]);
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
     },
-    [user]
+    [user, skills]
   );
 
   const levelUpByName = useCallback(
@@ -226,10 +234,15 @@ export function useEquipment() {
   const deleteItem = useCallback(
     async (id: string) => {
       if (!user) return;
+      const removed = items.find((i) => i.id === id);
       setItems((prev) => prev.filter((i) => i.id !== id));
-      await supabase.from("equipment").delete().eq("id", id).eq("user_id", user.id);
+      const { error } = await supabase.from("equipment").delete().eq("id", id).eq("user_id", user.id);
+      if (error) {
+        if (removed) setItems((prev) => [...prev, removed]);
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
     },
-    [user]
+    [user, items]
   );
 
   const refetch = useCallback(async () => {
@@ -321,10 +334,15 @@ export function useActiveEffects() {
   const removeEffect = useCallback(
     async (id: string) => {
       if (!user) return;
+      const removed = effects.find((e) => e.id === id);
       setEffects((prev) => prev.filter((e) => e.id !== id));
-      await supabase.from("buffs").delete().eq("id", id).eq("user_id", user.id);
+      const { error } = await supabase.from("buffs").delete().eq("id", id).eq("user_id", user.id);
+      if (error) {
+        if (removed) setEffects((prev) => [...prev, removed]);
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
     },
-    [user]
+    [user, effects]
   );
 
   const refetch = useCallback(async () => {

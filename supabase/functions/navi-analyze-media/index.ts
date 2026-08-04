@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { getAuthedUser, serviceClient } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,13 +13,40 @@ serve(async (req) => {
   }
 
   try {
-    const { media_id, file_url, file_type, file_name } = await req.json();
+    // Previously trusted media_id (and file_url/file_type/file_name) from
+    // the request body with no ownership check at all — any authenticated
+    // caller could overwrite any other user's media.ai_description, and
+    // could point the vision API at an arbitrary attacker-chosen file_url
+    // regardless of what was actually stored for that media_id.
+    const authedUser = await getAuthedUser(req);
+    if (!authedUser) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { media_id } = await req.json();
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API");
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API secret not set");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const sb = createClient(supabaseUrl, serviceKey);
+    const sb = serviceClient();
+
+    const { data: mediaRow, error: mediaErr } = await sb
+      .from("media")
+      .select("id, user_id, file_url, file_type, file_name")
+      .eq("id", media_id)
+      .single();
+    if (mediaErr || !mediaRow) {
+      return new Response(JSON.stringify({ error: "Media not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (mediaRow.user_id !== authedUser.id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { file_url, file_type, file_name } = mediaRow;
 
     let description = "";
 

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAuthedUser, serviceClient } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,8 +20,20 @@ Do NOT extract questions the user asked. Only extract facts the user stated abou
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const { user_id, message } = await req.json();
-  if (!user_id || !message) return new Response("missing params", { status: 400 });
+  // Previously trusted user_id straight from the request body with no
+  // ownership check — any authenticated caller could inject fabricated
+  // "memories" into another user's navi_core_memory (AI companion memory
+  // poisoning). Derive the caller from their verified JWT instead.
+  const authedUser = await getAuthedUser(req);
+  if (!authedUser) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const user_id = authedUser.id;
+
+  const { message } = await req.json();
+  if (!message) return new Response("missing params", { status: 400 });
 
   const openaiKey = Deno.env.get("OPENAI_API");
   if (!openaiKey) return new Response("no openai key", { status: 500 });
@@ -55,10 +67,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ inserted: 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const supabase = serviceClient();
 
   const { count } = await supabase.from("navi_core_memory").upsert(
     memories.map((m: any) => ({

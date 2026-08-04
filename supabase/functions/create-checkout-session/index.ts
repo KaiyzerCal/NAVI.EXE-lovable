@@ -26,6 +26,27 @@ serve(async (req) => {
 
     const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:5173";
 
+    // Previously this always built a hardcoded Core session regardless of
+    // what the client asked for — the request body was never read at all,
+    // so "Upgrade to Elite" silently charged and granted Core. Read and
+    // validate the requested tier instead.
+    const body = await req.json().catch(() => ({}));
+    const requestedTier = body?.tier === "elite" ? "elite" : "core";
+
+    const TIER_PRICING: Record<"core" | "elite", { name: string; description: string; unit_amount: number }> = {
+      core: {
+        name: "Core Operator",
+        description: "Unlimited quests · Unlimited AI · All 64 skins · Push notifications",
+        unit_amount: 799,
+      },
+      elite: {
+        name: "Elite Operator",
+        description: "Everything in Core · GPT-4o NAVI · Voice NAVI · Agent automation · 2× currency earn rate · Exclusive Elite skins",
+        unit_amount: 1999,
+      },
+    };
+    const pricing = TIER_PRICING[requestedTier];
+
     // Check if customer already exists
     const { data: profile } = await supabase
       .from("profiles")
@@ -53,17 +74,23 @@ serve(async (req) => {
         price_data: {
           currency: "usd",
           product_data: {
-            name: "Core Operator",
-            description: "Unlimited quests · Unlimited AI · All 64 skins · Push notifications",
+            name: pricing.name,
+            description: pricing.description,
           },
-          unit_amount: 799,
+          unit_amount: pricing.unit_amount,
           recurring: { interval: "month" },
         },
         quantity: 1,
       }],
       success_url: `${appUrl}/upgrade?success=1&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/upgrade?cancelled=1`,
-      metadata: { supabase_user_id: user.id },
+      metadata: { supabase_user_id: user.id, tier: requestedTier },
+      // Subscription-level metadata (distinct from the checkout session's
+      // own metadata above) so later lifecycle events — renewal,
+      // invoice.payment_succeeded, customer.subscription.updated — can
+      // still tell which tier this subscription is for, since those events
+      // don't carry the originating checkout session's metadata.
+      subscription_data: { metadata: { supabase_user_id: user.id, tier: requestedTier } },
     });
 
     return new Response(JSON.stringify({ url: session.url }), {

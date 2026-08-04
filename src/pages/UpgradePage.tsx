@@ -99,12 +99,13 @@ export default function UpgradePage() {
   async function handleEliteCheckout() {
     setEliteLoading(true);
     try {
-      const ELITE_PRICE_ID = "price_elite_placeholder"; // replace with real Stripe Elite price ID
-      const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-        body: { priceId: ELITE_PRICE_ID, tier: "elite" },
-      });
-      if (error) throw error;
-      if (data?.url) window.location.href = data.url;
+      // Previously built its own ad-hoc request with a literal
+      // "price_elite_placeholder" string and no real Elite price ever
+      // configured — create-checkout-session ignored the body entirely and
+      // always charged Core price for Core access. Reuse the same
+      // startCheckout() path handleUpgrade() already uses for Core, which
+      // correctly passes tier through to the edge function.
+      await startCheckout("elite");
     } catch (e: any) {
       toast({ title: "Checkout Error", description: e.message || "Could not start checkout.", variant: "destructive" });
     } finally {

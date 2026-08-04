@@ -21,7 +21,7 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
-  async function setTier(userId: string, tier: "free" | "core") {
+  async function setTier(userId: string, tier: "free" | "core" | "elite") {
     await supabase.from("profiles").update({ subscription_tier: tier }).eq("id", userId);
   }
 
@@ -29,6 +29,20 @@ serve(async (req) => {
     const customer = await stripe.customers.retrieve(customerId);
     if (customer.deleted) return null;
     return (customer as Stripe.Customer).metadata?.supabase_user_id ?? null;
+  }
+
+  // Every event handler below used to hardcode "core" regardless of which
+  // tier was actually purchased — Elite subscribers were always downgraded
+  // to Core on every lifecycle event. create-checkout-session now stamps
+  // tier onto subscription_data.metadata at creation time (in addition to
+  // the checkout session's own metadata), so it survives for the life of
+  // the subscription across renewal/update/payment events, not just the
+  // initial checkout.session.completed. Subscriptions created before this
+  // fix won't have this metadata — default to "core" for those, matching
+  // the previous (already-live) behavior rather than silently downgrading
+  // existing subscribers.
+  function tierFromSubscription(sub: Stripe.Subscription): "core" | "elite" {
+    return sub.metadata?.tier === "elite" ? "elite" : "core";
   }
 
   // Single source of truth for subscription status/renewal/cancel-flag,
@@ -72,7 +86,7 @@ serve(async (req) => {
         const userId = await getUserIdFromCustomer(sub.customer as string);
         if (userId) {
           await upsertSubscriptionRow(sub, userId);
-          if (sub.status === "active" || sub.status === "trialing") await setTier(userId, "core");
+          if (sub.status === "active" || sub.status === "trialing") await setTier(userId, tierFromSubscription(sub));
         }
         break;
       }
@@ -80,7 +94,12 @@ serve(async (req) => {
         const obj = event.data.object as any;
         const customerId = obj.customer as string;
         const userId = await getUserIdFromCustomer(customerId);
-        if (userId) await setTier(userId, "core");
+        if (userId && typeof obj.subscription === "string") {
+          const sub = await stripe.subscriptions.retrieve(obj.subscription);
+          await setTier(userId, tierFromSubscription(sub));
+        } else if (userId) {
+          await setTier(userId, "core");
+        }
         break;
       }
       case "customer.subscription.deleted": {
@@ -103,7 +122,8 @@ serve(async (req) => {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.supabase_user_id;
         if (userId) {
-          await setTier(userId, "core");
+          const tier = session.metadata?.tier === "elite" ? "elite" : "core";
+          await setTier(userId, tier);
           if (typeof session.subscription === "string") {
             const sub = await stripe.subscriptions.retrieve(session.subscription);
             await upsertSubscriptionRow(sub, userId);

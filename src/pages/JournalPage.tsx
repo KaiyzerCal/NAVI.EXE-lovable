@@ -300,26 +300,6 @@ export default function JournalPage() {
         </div>
       </PageHeader>
 
-      {/* View tabs */}
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setView("entries")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-            view === "entries"
-              ? "bg-primary/10 border-primary/30 text-primary"
-              : "bg-muted border-border text-muted-foreground hover:text-foreground"
-          }`}>
-          <BookOpen size={12} /> ENTRIES
-        </button>
-        <button onClick={() => setView("gallery")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono border transition-colors ${
-            view === "gallery"
-              ? "bg-primary/10 border-primary/30 text-primary"
-              : "bg-muted border-border text-muted-foreground hover:text-foreground"
-          }`}>
-          <Images size={12} /> GALLERY
-        </button>
-      </div>
-
       {view === "gallery" ? (
         <GallerySection
           media={media}

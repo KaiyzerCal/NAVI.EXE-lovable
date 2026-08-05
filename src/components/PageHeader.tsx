@@ -8,7 +8,7 @@ interface PageHeaderProps {
 
 export default function PageHeader({ title, subtitle, children }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-8">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
       <div>
         <h1 className="text-2xl font-display font-bold text-primary tracking-wider text-glow-cyan">
           {title}
@@ -17,7 +17,7 @@ export default function PageHeader({ title, subtitle, children }: PageHeaderProp
           <p className="text-muted-foreground text-sm font-mono mt-1">{subtitle}</p>
         )}
       </div>
-      {children}
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   );
 }

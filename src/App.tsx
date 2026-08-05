@@ -236,7 +236,10 @@ function AppShell() {
       )}
       <div className="flex min-h-screen">
         <AppSidebar />
-        <main className="flex-1 p-6 overflow-y-auto">
+        {/* AppSidebar renders only a fixed-position hamburger + overlay Sheet
+            on mobile (no docked column), so extra top clearance keeps that
+            button from sitting on top of page content. */}
+        <main className="flex-1 p-6 pt-16 md:pt-6 overflow-y-auto">
           {/* Per-route boundary: a crash on one page no longer takes the sidebar/nav
               down with it — the user can still navigate elsewhere. */}
           <Sentry.ErrorBoundary

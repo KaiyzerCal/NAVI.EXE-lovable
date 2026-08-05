@@ -3,13 +3,15 @@ import {
   LayoutDashboard, MessageSquare, User, Swords, BookOpen,
   BarChart3, Settings, Compass, ChevronLeft, ChevronRight, LogOut, Users,
   Gamepad2, Shield, Radio, Inbox, Zap, Bot, Globe, Search, Bell, ShoppingBag,
-  Trophy, TrendingUp, Calendar, Sword,
+  Trophy, TrendingUp, Calendar, Sword, Menu,
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useNotificationCount } from "@/hooks/useNotificationCount";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -36,12 +38,153 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
+function NavItems({
+  collapsed,
+  totalUnread,
+  notifCount,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  totalUnread: number;
+  notifCount: number;
+  onNavigate?: () => void;
+}) {
+  const location = useLocation();
+  return (
+    <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+      {navItems.map(({ to, icon: Icon, label }) => {
+        const isActive = location.pathname === to;
+        const isInbox = to === "/inbox";
+        const isNotifications = to === "/notifications";
+        const badge = isInbox && totalUnread > 0
+          ? totalUnread
+          : isNotifications && notifCount > 0
+          ? notifCount
+          : 0;
+        return (
+          <NavLink
+            key={to}
+            to={to}
+            onClick={onNavigate}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all group ${
+              isActive
+                ? "bg-primary/10 text-primary border border-primary/20 glow-subtle"
+                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border border-transparent"
+            }`}
+          >
+            <div className="relative shrink-0">
+              <Icon size={18} className={isActive ? "text-primary" : ""} />
+              {badge > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
+            </div>
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="whitespace-nowrap font-body flex-1"
+                >
+                  {label}
+                </motion.span>
+              )}
+            </AnimatePresence>
+            {!collapsed && badge > 0 && (
+              <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-1 leading-none shrink-0">
+                {badge > 99 ? "99+" : badge}
+              </span>
+            )}
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+}
+
+function SidebarLogo({ collapsed }: { collapsed: boolean }) {
+  return (
+    <div className="p-4 flex items-center gap-3 border-b border-border min-h-[64px]">
+      <div className="w-9 h-9 rounded bg-primary/20 border border-primary/30 flex items-center justify-center glow-subtle shrink-0">
+        <span className="font-display text-primary text-sm font-bold">M</span>
+      </div>
+      <AnimatePresence>
+        {!collapsed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <h1 className="font-display text-primary text-sm font-bold tracking-widest text-glow-cyan whitespace-nowrap">
+              NAVI.EXE
+            </h1>
+            <p className="text-muted-foreground text-[10px] font-mono whitespace-nowrap">// OPERATOR SYSTEM</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SignOutButton({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+  const { signOut } = useAuth();
+  return (
+    <button
+      onClick={() => { onNavigate?.(); signOut(); }}
+      className="mx-2 mb-1 px-3 py-2.5 rounded text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-3 border border-transparent"
+    >
+      <LogOut size={18} className="shrink-0" />
+      <AnimatePresence>
+        {!collapsed && (
+          <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap font-body">
+            Sign Out
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </button>
+  );
+}
+
 export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const location = useLocation();
-  const { signOut } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const isMobile = useIsMobile();
   const { totalUnread } = useUnreadMessages();
   const notifCount = useNotificationCount();
+
+  // Previously this was a fixed-width docked sidebar with no mobile
+  // treatment at all — on a narrow viewport it either squeezed the whole
+  // app into an unusable column or (depending on the parent flex layout)
+  // pushed content off-screen, despite this repo shipping android/ios
+  // Capacitor builds. On mobile, render a floating hamburger trigger that
+  // opens the same nav as a slide-out Sheet instead of a docked column.
+  if (isMobile) {
+    return (
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetTrigger asChild>
+          <button
+            className="fixed top-3 left-3 z-40 w-10 h-10 rounded bg-sidebar border border-border flex items-center justify-center text-sidebar-foreground shadow-sm"
+            aria-label="Open menu"
+          >
+            <Menu size={20} />
+          </button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-[260px] p-0 bg-sidebar border-border flex flex-col">
+          <SidebarLogo collapsed={false} />
+          <NavItems
+            collapsed={false}
+            totalUnread={totalUnread}
+            notifCount={notifCount}
+            onNavigate={() => setMobileOpen(false)}
+          />
+          <SignOutButton collapsed={false} onNavigate={() => setMobileOpen(false)} />
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
     <motion.aside
@@ -49,93 +192,9 @@ export default function AppSidebar() {
       transition={{ duration: 0.2 }}
       className="h-screen flex flex-col border-r border-border bg-sidebar sticky top-0 overflow-hidden"
     >
-      {/* Logo */}
-      <div className="p-4 flex items-center gap-3 border-b border-border min-h-[64px]">
-        <div className="w-9 h-9 rounded bg-primary/20 border border-primary/30 flex items-center justify-center glow-subtle shrink-0">
-          <span className="font-display text-primary text-sm font-bold">M</span>
-        </div>
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <h1 className="font-display text-primary text-sm font-bold tracking-widest text-glow-cyan whitespace-nowrap">
-                NAVI.EXE
-              </h1>
-              <p className="text-muted-foreground text-[10px] font-mono whitespace-nowrap">// OPERATOR SYSTEM</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-        {navItems.map(({ to, icon: Icon, label }) => {
-          const isActive = location.pathname === to;
-          const isInbox = to === "/inbox";
-          const isNotifications = to === "/notifications";
-          const badge = isInbox && totalUnread > 0
-            ? totalUnread
-            : isNotifications && notifCount > 0
-            ? notifCount
-            : 0;
-          return (
-            <NavLink
-              key={to}
-              to={to}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all group ${
-                isActive
-                  ? "bg-primary/10 text-primary border border-primary/20 glow-subtle"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border border-transparent"
-              }`}
-            >
-              <div className="relative shrink-0">
-                <Icon size={18} className={isActive ? "text-primary" : ""} />
-                {badge > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-              </div>
-              <AnimatePresence>
-                {!collapsed && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="whitespace-nowrap font-body flex-1"
-                  >
-                    {label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-              {!collapsed && badge > 0 && (
-                <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center px-1 leading-none shrink-0">
-                  {badge > 99 ? "99+" : badge}
-                </span>
-              )}
-            </NavLink>
-          );
-        })}
-      </nav>
-
-      {/* Sign out */}
-      <button
-        onClick={signOut}
-        className="mx-2 mb-1 px-3 py-2.5 rounded text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-3 border border-transparent"
-      >
-        <LogOut size={18} className="shrink-0" />
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap font-body">
-              Sign Out
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </button>
+      <SidebarLogo collapsed={collapsed} />
+      <NavItems collapsed={collapsed} totalUnread={totalUnread} notifCount={notifCount} />
+      <SignOutButton collapsed={collapsed} />
 
       {/* Collapse toggle */}
       <button

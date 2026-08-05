@@ -22,35 +22,9 @@ export interface Achievement {
   created_at: string;
 }
 
-const SYSTEM_ACHIEVEMENTS = [
-  { name: "First Mission", description: "Complete your first quest", category: "quests", threshold: 1, icon: "🗡️", rarity: "COMMON" },
-  { name: "Quest Runner", description: "Complete 10 quests", category: "quests", threshold: 10, icon: "⚔️", rarity: "COMMON" },
-  { name: "Centurion", description: "Complete 100 quests", category: "quests", threshold: 100, icon: "🏆", rarity: "RARE" },
-  { name: "Legendary Hunter", description: "Complete 500 quests", category: "quests", threshold: 500, icon: "👑", rarity: "EPIC" },
-  { name: "Main Arc Complete", description: "Complete a Main quest", category: "quests", threshold: 1, icon: "⭐", rarity: "RARE" },
-  { name: "Side Hustler", description: "Complete 5 Side quests", category: "quests", threshold: 5, icon: "🎯", rarity: "COMMON" },
-  { name: "First Entry", description: "Write your first journal entry", category: "journal", threshold: 1, icon: "📖", rarity: "COMMON" },
-  { name: "Chronicler", description: "Write 10 journal entries", category: "journal", threshold: 10, icon: "📚", rarity: "COMMON" },
-  { name: "Archivist", description: "Write 50 journal entries", category: "journal", threshold: 50, icon: "🗂️", rarity: "RARE" },
-  { name: "Consistent", description: "Maintain a 3-day streak", category: "streak", threshold: 3, icon: "🔥", rarity: "COMMON" },
-  { name: "Week Warrior", description: "Maintain a 7-day streak", category: "streak", threshold: 7, icon: "💥", rarity: "RARE" },
-  { name: "Iron Will", description: "Maintain a 30-day streak", category: "streak", threshold: 30, icon: "🌊", rarity: "EPIC" },
-  { name: "Unbreakable", description: "Maintain a 100-day streak", category: "streak", threshold: 100, icon: "💎", rarity: "LEGENDARY" },
-  { name: "Power Up", description: "Earn 1,000 total XP", category: "xp", threshold: 1000, icon: "⚡", rarity: "COMMON" },
-  { name: "XP Grinder", description: "Earn 10,000 total XP", category: "xp", threshold: 10000, icon: "🌟", rarity: "RARE" },
-  { name: "Max Power", description: "Earn 100,000 total XP", category: "xp", threshold: 100000, icon: "☀️", rarity: "LEGENDARY" },
-  { name: "Calibrated", description: "Complete the MBTI personality quiz", category: "character", threshold: 1, icon: "🧠", rarity: "COMMON" },
-  { name: "Sub-Classed", description: "Equip a sub-class", category: "character", threshold: 1, icon: "🎭", rarity: "COMMON" },
-  { name: "Operator Lv10", description: "Reach operator level 10", category: "character", threshold: 10, icon: "🛡️", rarity: "RARE" },
-  { name: "Operator Lv50", description: "Reach operator level 50", category: "character", threshold: 50, icon: "🌙", rarity: "EPIC" },
-  { name: "Max Operator", description: "Reach operator level 100", category: "character", threshold: 100, icon: "🌌", rarity: "LEGENDARY" },
-  { name: "Jack In", description: "Send your first message to NAVI", category: "navi", threshold: 1, icon: "🤖", rarity: "COMMON" },
-  { name: "Deep Link", description: "Send 100 messages to NAVI", category: "navi", threshold: 100, icon: "💬", rarity: "RARE" },
-  { name: "Full Sync", description: "Reach NAVI bond level 10", category: "navi", threshold: 10, icon: "🔗", rarity: "EPIC" },
-  { name: "Navi Lv10", description: "Reach NAVI level 10", category: "navi", threshold: 10, icon: "✨", rarity: "RARE" },
-  { name: "Navi Lv50", description: "Reach NAVI level 50", category: "navi", threshold: 50, icon: "🚀", rarity: "EPIC" },
-  { name: "Max Navi", description: "Reach NAVI level 100", category: "navi", threshold: 100, icon: "🌠", rarity: "LEGENDARY" },
-] as const;
+// The starter set now lives server-side in the seed_my_achievements() RPC
+// (see migrations/20260805010000_fix_achievements_client_write_blocked.sql)
+// since achievements RLS blocks direct client inserts.
 
 export function useAchievements() {
   const { user } = useAuth();
@@ -61,34 +35,11 @@ export function useAchievements() {
     if (!user) return;
     setLoading(true);
 
-    supabase
-      .from("achievements")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true })
-      .then(async ({ data, error }) => {
+    (supabase as any)
+      .rpc("seed_my_achievements")
+      .then(({ data, error }: { data: Achievement[] | null; error: any }) => {
         if (error) { console.error("[useAchievements] load:", error); setLoading(false); return; }
-
-        if (!data || data.length === 0) {
-          const toInsert = SYSTEM_ACHIEVEMENTS.map((a) => ({
-            user_id: user.id,
-            name: a.name,
-            description: a.description,
-            category: a.category,
-            threshold: a.threshold,
-            icon: a.icon,
-            rarity: a.rarity,
-            source: "system",
-            unlocked: false,
-          }));
-          const { data: seeded } = await supabase
-            .from("achievements")
-            .insert(toInsert as any)
-            .select();
-          setAchievements((seeded as Achievement[]) ?? []);
-        } else {
-          setAchievements(data as Achievement[]);
-        }
+        setAchievements((data as Achievement[]) ?? []);
         setLoading(false);
       });
   }, [user]);
@@ -151,20 +102,17 @@ export function useAchievements() {
 
       if (toUnlock.length === 0) return;
 
+      const { data: unlocked, error } = await (supabase as any).rpc("unlock_my_achievements", { p_ids: toUnlock });
+      if (error) { console.error("[useAchievements] unlock:", error); return; }
+      const unlockedIds = new Set(((unlocked as Achievement[]) ?? []).map((a) => a.id));
       const now = new Date().toISOString();
-      for (const id of toUnlock) {
-        await supabase
-          .from("achievements")
-          .update({ unlocked: true, unlocked_at: now } as any)
-          .eq("id", id);
-      }
 
       setAchievements((prev) =>
-        prev.map((a) => (toUnlock.includes(a.id) ? { ...a, unlocked: true, unlocked_at: now } : a))
+        prev.map((a) => (unlockedIds.has(a.id) ? { ...a, unlocked: true, unlocked_at: now } : a))
       );
 
-      const names = achievements.filter((a) => toUnlock.includes(a.id)).map((a) => a.name);
-      toast({ title: "🏆 Achievement Unlocked!", description: names.join(", ") });
+      const names = achievements.filter((a) => unlockedIds.has(a.id)).map((a) => a.name);
+      if (names.length > 0) toast({ title: "🏆 Achievement Unlocked!", description: names.join(", ") });
     },
     [user, achievements]
   );

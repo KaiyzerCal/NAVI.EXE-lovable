@@ -2,9 +2,12 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Bot, Plus, Loader2, CheckCircle, XCircle, Clock, Play, AlertTriangle } from "lucide-react";
+import PaywallCard from "@/components/PaywallCard";
+import { Bot, Plus, Loader2, CheckCircle, XCircle, Clock, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
 
 interface AgentTask {
   id: string;
@@ -19,10 +22,10 @@ interface AgentTask {
 }
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  pending:   { icon: <Clock size={12} />,        color: "text-muted-foreground", label: "QUEUED" },
-  running:   { icon: <Loader2 size={12} className="animate-spin" />, color: "text-primary", label: "RUNNING" },
-  completed: { icon: <CheckCircle size={12} />,  color: "text-neon-green",      label: "DONE" },
-  failed:    { icon: <XCircle size={12} />,      color: "text-destructive",     label: "FAILED" },
+  pending:     { icon: <Clock size={12} />,        color: "text-muted-foreground", label: "QUEUED" },
+  in_progress: { icon: <Loader2 size={12} className="animate-spin" />, color: "text-primary", label: "RUNNING" },
+  completed:   { icon: <CheckCircle size={12} />,  color: "text-neon-green",      label: "DONE" },
+  failed:      { icon: <XCircle size={12} />,      color: "text-destructive",     label: "FAILED" },
 };
 
 const AGENT_TYPES = [
@@ -34,6 +37,8 @@ const AGENT_TYPES = [
 
 export default function AgentPage() {
   const { user } = useAuth();
+  const { isFree, loading: subLoading } = useSubscription();
+  const { toast } = useToast();
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -63,26 +68,42 @@ export default function AgentPage() {
   async function createTask() {
     if (!newTitle.trim() || !user) return;
     setSubmitting(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("agent_tasks")
       .insert({
         user_id: user.id,
         title: newTitle.trim(),
-        description: newDesc.trim() || null,
+        description: newDesc.trim(),
         agent_type: newType,
         priority: 1,
       })
       .select()
       .single();
-    if (data) setTasks((prev) => [data, ...prev]);
+    if (error || !data) {
+      toast({ title: "Couldn't queue task", description: error?.message ?? "Please try again.", variant: "destructive" });
+      setSubmitting(false);
+      return;
+    }
+    setTasks((prev) => [data, ...prev]);
     setNewTitle("");
     setNewDesc("");
     setShowCreate(false);
     setSubmitting(false);
+
+    setTasks((prev) => prev.map((t) => (t.id === data.id ? { ...t, status: "in_progress" } : t)));
+    const { error: runError } = await supabase.functions.invoke("navi-agent-runner", { body: { task_id: data.id } });
+    if (runError) {
+      toast({ title: "Agent run failed", description: runError.message, variant: "destructive" });
+    }
+    await loadTasks();
   }
 
   async function deleteTask(taskId: string) {
-    await supabase.from("agent_tasks").delete().eq("id", taskId);
+    const { error } = await supabase.from("agent_tasks").delete().eq("id", taskId);
+    if (error) {
+      toast({ title: "Couldn't delete task", description: error.message, variant: "destructive" });
+      return;
+    }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
   }
 
@@ -95,20 +116,21 @@ export default function AgentPage() {
     return `${Math.floor(hrs / 24)}d ago`;
   }
 
+  if (!subLoading && isFree) {
+    return (
+      <div>
+        <PageHeader title="AGENT FRAMEWORK" subtitle="// AUTONOMOUS TASK EXECUTION" />
+        <PaywallCard
+          feature="AGENT FRAMEWORK"
+          limit="Queue a task and NAVI plans and executes it autonomously — creating quests, journal entries, and awarding XP on your behalf."
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader title="AGENT FRAMEWORK" subtitle="// AUTONOMOUS TASK EXECUTION" />
-
-      {/* Coming soon banner */}
-      <div className="mb-5 p-3 rounded border border-secondary/30 bg-secondary/5">
-        <div className="flex items-center gap-2">
-          <AlertTriangle size={12} className="text-secondary" />
-          <p className="text-[10px] font-mono text-secondary">PHASE 4 PREVIEW — Agent execution requires Power Operator tier</p>
-        </div>
-        <p className="text-xs font-body text-muted-foreground mt-1">
-          Queue tasks now. Autonomous execution activates with Power tier release.
-        </p>
-      </div>
 
       <div className="flex justify-end mb-4">
         <button

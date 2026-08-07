@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Bell, Database, Shield, Check, Sun, Moon, BellRing, BellOff, AlertTriangle, Loader2, X } from "lucide-react";
+import { User, Bell, Database, Shield, Check, Sun, Moon, BellRing, BellOff, AlertTriangle, Loader2, X, Bot, ExternalLink } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { toast } from "@/hooks/use-toast";
@@ -150,6 +150,37 @@ export default function SettingsPage() {
       updateProfile({ notification_settings: { ...profile.notification_settings, ...next } });
       return next;
     });
+  };
+
+  const [composioSaving, setComposioSaving] = useState(false);
+  const [toolkitSlug, setToolkitSlug] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [connectUrl, setConnectUrl] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  const toggleComposio = async () => {
+    setComposioSaving(true);
+    await updateProfile({ composio_enabled: !profile.composio_enabled } as any);
+    setComposioSaving(false);
+  };
+
+  const connectComposioApp = async () => {
+    const slug = toolkitSlug.trim().toLowerCase();
+    if (!slug || connecting) return;
+    setConnecting(true);
+    setConnectError(null);
+    setConnectUrl(null);
+    const { data, error } = await supabase.functions.invoke("navi-agent-runner", {
+      body: { direct_action: "composio_connect", toolkit_slug: slug },
+    });
+    if (error || data?.error) {
+      setConnectError(data?.error ?? error?.message ?? "Failed to start connection.");
+    } else if (data?.connect_url) {
+      setConnectUrl(data.connect_url);
+    } else {
+      setConnectError("No connection link returned.");
+    }
+    setConnecting(false);
   };
 
   const [exporting, setExporting] = useState(false);
@@ -320,6 +351,57 @@ export default function SettingsPage() {
               );
             })}
           </div>
+        </HudCard>
+
+        {/* Agent */}
+        <HudCard title="AGENT" icon={<Bot size={14} />}>
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
+            <div>
+              <p className="text-sm font-body">Real-World Tools (Composio)</p>
+              <p className="text-[10px] font-mono text-muted-foreground max-w-xs">
+                When enabled, your NAVI's Agent tasks can act on real-world accounts you connect (Gmail, calendars, Slack, etc.), not just NAVI's own data.
+              </p>
+            </div>
+            <button
+              disabled={composioSaving}
+              onClick={toggleComposio}
+              className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${profile.composio_enabled ? "bg-primary/30" : "bg-muted"} disabled:opacity-50`}
+            >
+              <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-all ${profile.composio_enabled ? "right-0.5 bg-primary" : "left-0.5 bg-muted-foreground"}`} />
+            </button>
+          </div>
+
+          {profile.composio_enabled && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-mono text-muted-foreground">Connect an app</p>
+              <div className="flex gap-2">
+                <input
+                  value={toolkitSlug}
+                  onChange={(e) => setToolkitSlug(e.target.value)}
+                  placeholder="e.g. gmail, slack, notion"
+                  className="flex-1 bg-muted border border-border rounded px-3 py-2 text-xs font-mono text-foreground outline-none focus:border-primary/40"
+                />
+                <button
+                  onClick={connectComposioApp}
+                  disabled={connecting || !toolkitSlug.trim()}
+                  className="px-3 py-2 rounded text-xs font-mono bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {connecting ? <Loader2 size={12} className="animate-spin" /> : "CONNECT"}
+                </button>
+              </div>
+              {connectUrl && (
+                <a
+                  href={connectUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-mono text-primary hover:underline"
+                >
+                  <ExternalLink size={11} /> Finish authorizing {toolkitSlug.trim()}
+                </a>
+              )}
+              {connectError && <p className="text-[10px] font-mono text-destructive">{connectError}</p>}
+            </div>
+          )}
         </HudCard>
 
         {/* Data */}

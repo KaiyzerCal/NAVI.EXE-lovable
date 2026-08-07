@@ -39,6 +39,7 @@ export interface ProfileData {
   message_count_reset_date: string;
   last_evolution_tier: number;
   username: string | null;
+  composio_enabled: boolean;
 }
 
 const defaults: ProfileData = {
@@ -76,6 +77,7 @@ const defaults: ProfileData = {
   message_count_reset_date: new Date().toISOString().slice(0, 10),
   last_evolution_tier: 1,
   username: null,
+  composio_enabled: false,
 };
 
 export function useProfile() {

@@ -46,11 +46,13 @@ async function composioFetch(path: string, init: RequestInit = {}): Promise<any>
   return data;
 }
 
-const AGENT_SYSTEM_PROMPT = `You are NAVI, an autonomous agent executing a task on behalf of the operator.
+function buildSystemPrompt(composioEnabled: boolean): string {
+  return `You are NAVI, an autonomous agent executing a task on behalf of the operator.
 Think step-by-step. Use the tools available to you to complete the task.
-${COMPOSIO_API_KEY ? "You also have access to real-world tools via Composio (composio_search_tools to find one, composio_execute_action to run it, composio_connect_account if the operator needs to authorize a new app first) — use these when the task needs something outside NAVI itself, like sending an email or creating a calendar event." : ""}
+${COMPOSIO_API_KEY && composioEnabled ? "You also have access to real-world tools via Composio (composio_search_tools to find one, composio_execute_action to run it, composio_connect_account if the operator needs to authorize a new app first) — use these when the task needs something outside NAVI itself, like sending an email or creating a calendar event." : ""}
 After completing all actions, summarize what you did in plain English for the operator.
 Be concise. If you cannot complete part of the task, explain why.`;
+}
 
 const NAVI_TOOLS = [
   {
@@ -185,10 +187,14 @@ const NAVI_TOOLS = [
 
 const COMPOSIO_TOOL_NAMES = new Set(["composio_search_tools", "composio_execute_action", "composio_connect_account"]);
 
-// Only advertise Composio tools when the capability is actually configured —
-// otherwise every call to them would just fail with "not connected".
-function availableTools(): typeof NAVI_TOOLS {
-  return COMPOSIO_API_KEY ? NAVI_TOOLS : NAVI_TOOLS.filter((t) => !COMPOSIO_TOOL_NAMES.has(t.function.name));
+// Only advertise Composio tools when the capability is both configured
+// (COMPOSIO_API_KEY set) AND the operator has opted in via their own
+// profiles.composio_enabled toggle — a configured key alone shouldn't give
+// every operator's agent silent access to real-world accounts.
+function availableTools(composioEnabled: boolean): typeof NAVI_TOOLS {
+  return COMPOSIO_API_KEY && composioEnabled
+    ? NAVI_TOOLS
+    : NAVI_TOOLS.filter((t) => !COMPOSIO_TOOL_NAMES.has(t.function.name));
 }
 
 // Extracted from the OpenAI tool-calling loop so the same 5 tool
@@ -337,6 +343,7 @@ async function handleMcpRequest(
   body: Record<string, unknown>,
   userId: string,
   sb: any,
+  composioEnabled: boolean,
 ): Promise<Response> {
   const { method, params, id } = body as { method: string; params?: Record<string, unknown>; id?: unknown };
 
@@ -356,13 +363,13 @@ async function handleMcpRequest(
   }
 
   if (method === "tools/list") {
-    return mcpJson({ jsonrpc: "2.0", id, result: { tools: availableTools().map((t) => ({ name: t.function.name, description: t.function.description, inputSchema: t.function.parameters })) } });
+    return mcpJson({ jsonrpc: "2.0", id, result: { tools: availableTools(composioEnabled).map((t) => ({ name: t.function.name, description: t.function.description, inputSchema: t.function.parameters })) } });
   }
 
   if (method === "tools/call") {
     const toolName = String(params?.name ?? "");
     const args = (params?.arguments ?? {}) as Record<string, any>;
-    if (!availableTools().some((t) => t.function.name === toolName)) {
+    if (!availableTools(composioEnabled).some((t) => t.function.name === toolName)) {
       return mcpJson({ jsonrpc: "2.0", id, error: { code: -32602, message: `Unknown tool: ${toolName}` } });
     }
     try {
@@ -592,11 +599,38 @@ serve(async (req) => {
 
     const body = await req.json();
 
+    const { data: callerProfile } = await sb.from("profiles").select("composio_enabled").eq("id", user.id).maybeSingle();
+    const composioEnabled = !!(callerProfile as any)?.composio_enabled;
+
+    // ── Direct settings-page action (not the agentic loop) ─────────────────
+    // The Composio "Connect an app" button in Settings needs a plain
+    // request/response, not a queued task run through the OpenAI loop.
+    if (body?.direct_action === "composio_connect") {
+      if (!COMPOSIO_API_KEY || !composioEnabled) {
+        return new Response(JSON.stringify({ error: "Composio isn't enabled for this operator." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const toolkitSlug = String(body?.toolkit_slug ?? "").trim();
+      if (!toolkitSlug) {
+        return new Response(JSON.stringify({ error: "toolkit_slug is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      try {
+        const data = await composioFetch(`/connected-accounts`, {
+          method: "POST",
+          body: JSON.stringify({ user_id: user.id, toolkit_slug: toolkitSlug }),
+        });
+        const connectUrl = data?.connection_url ?? data?.redirect_url ?? data?.url ?? null;
+        return new Response(JSON.stringify({ connect_url: connectUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return new Response(JSON.stringify({ error: msg }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     // ── MCP (Model Context Protocol) requests ──────────────────────────────
     // Auth (user) is already resolved above, so this reuses the exact same
     // trust boundary as the existing queued-task path below.
     if (body?.jsonrpc === "2.0" && typeof body?.method === "string") {
-      return await handleMcpRequest(body, user.id, sb);
+      return await handleMcpRequest(body, user.id, sb, composioEnabled);
     }
 
     const { task_id } = body;
@@ -624,7 +658,7 @@ serve(async (req) => {
     }
 
     const messages: any[] = [
-      { role: "system", content: AGENT_SYSTEM_PROMPT },
+      { role: "system", content: buildSystemPrompt(composioEnabled) },
       { role: "user",   content: `Task: ${(task as any).title}\n\n${(task as any).description ?? ""}` },
     ];
 
@@ -636,7 +670,7 @@ serve(async (req) => {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "gpt-4o-mini", messages, tools: availableTools(), tool_choice: "auto" }),
+        body: JSON.stringify({ model: "gpt-4o-mini", messages, tools: availableTools(composioEnabled), tool_choice: "auto" }),
       });
 
       if (!res.ok) break;

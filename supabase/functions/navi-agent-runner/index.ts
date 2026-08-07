@@ -11,8 +11,44 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ── Composio (real-world tool execution) ─────────────────────────────────────
+// Optional capability: only active once COMPOSIO_API_KEY is set as a Supabase
+// secret. Gives the agent access to Composio's 3000+ app integrations (Gmail,
+// Slack, Notion, GitHub, etc.) instead of NAVI's own hand-built tool set, so
+// paid-tier agent runs can act on the operator's real accounts, not just
+// NAVI's internal quest/journal/XP data. Each NAVI user's Composio
+// connections are isolated by passing their Supabase user id as Composio's
+// per-user identity, per Composio's documented session model.
+//
+// Built against Composio's documented v3.1 REST API (base URL, auth header,
+// and the /tools and /tools/execute/{slug} endpoints are confirmed from
+// their docs) but not live-tested against a real account — verify once a
+// real COMPOSIO_API_KEY is added to this project's secrets.
+const COMPOSIO_API_KEY = Deno.env.get("COMPOSIO_API_KEY") ?? "";
+const COMPOSIO_BASE_URL = "https://backend.composio.dev/api/v3.1";
+
+async function composioFetch(path: string, init: RequestInit = {}): Promise<any> {
+  const res = await fetch(`${COMPOSIO_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      "x-api-key": COMPOSIO_API_KEY,
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await res.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch { data = text; }
+  if (!res.ok) {
+    throw new Error(`Composio ${path} failed (${res.status}): ${typeof data === "string" ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300)}`);
+  }
+  return data;
+}
+
 const AGENT_SYSTEM_PROMPT = `You are NAVI, an autonomous agent executing a task on behalf of the operator.
 Think step-by-step. Use the tools available to you to complete the task.
+${COMPOSIO_API_KEY ? "You also have access to real-world tools via Composio (composio_search_tools to find one, composio_execute_action to run it, composio_connect_account if the operator needs to authorize a new app first) — use these when the task needs something outside NAVI itself, like sending an email or creating a calendar event." : ""}
 After completing all actions, summarize what you did in plain English for the operator.
 Be concise. If you cannot complete part of the task, explain why.`;
 
@@ -101,7 +137,59 @@ const NAVI_TOOLS = [
       },
     },
   },
+  // ── Composio real-world tools (only usable when COMPOSIO_API_KEY is set) ──
+  {
+    type: "function",
+    function: {
+      name: "composio_search_tools",
+      description: "Search Composio's catalog of real-world app integrations (Gmail, Slack, Notion, GitHub, calendars, etc.) to find a tool for a task NAVI can't do itself.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "What you're trying to do, e.g. 'send an email' or 'create a calendar event'" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "composio_execute_action",
+      description: "Execute a specific Composio tool found via composio_search_tools, acting on the operator's connected account.",
+      parameters: {
+        type: "object",
+        properties: {
+          tool_slug: { type: "string", description: "The exact tool slug returned by composio_search_tools" },
+          arguments: { type: "object", description: "Arguments for the tool, matching its input schema" },
+        },
+        required: ["tool_slug", "arguments"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "composio_connect_account",
+      description: "Start the OAuth connection flow for an app the operator hasn't authorized yet — call this if composio_execute_action fails because no account is connected, then tell the operator the link to finish authorizing.",
+      parameters: {
+        type: "object",
+        properties: {
+          toolkit_slug: { type: "string", description: "The app/toolkit to connect, e.g. 'gmail' or 'slack'" },
+        },
+        required: ["toolkit_slug"],
+      },
+    },
+  },
 ];
+
+const COMPOSIO_TOOL_NAMES = new Set(["composio_search_tools", "composio_execute_action", "composio_connect_account"]);
+
+// Only advertise Composio tools when the capability is actually configured —
+// otherwise every call to them would just fail with "not connected".
+function availableTools(): typeof NAVI_TOOLS {
+  return COMPOSIO_API_KEY ? NAVI_TOOLS : NAVI_TOOLS.filter((t) => !COMPOSIO_TOOL_NAMES.has(t.function.name));
+}
 
 // Extracted from the OpenAI tool-calling loop so the same 5 tool
 // implementations can also be called directly from the MCP tools/call
@@ -186,6 +274,50 @@ async function executeNaviTool(
     };
   }
 
+  if (toolName === "composio_search_tools" || toolName === "composio_execute_action" || toolName === "composio_connect_account") {
+    if (!COMPOSIO_API_KEY) {
+      return { resultText: "Composio isn't connected for this NAVI instance yet — ask the operator to add COMPOSIO_API_KEY to enable real-world tools.", actionRecord: null };
+    }
+    try {
+      if (toolName === "composio_search_tools") {
+        const data = await composioFetch(`/tools?search=${encodeURIComponent(String(args.query ?? ""))}`);
+        const tools = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+        const summary = tools.slice(0, 10).map((t: any) => `${t.slug ?? t.name}: ${t.description ?? ""}`).join("\n");
+        return {
+          resultText: summary || "No matching Composio tools found.",
+          actionRecord: { type: "composio_search", query: args.query },
+        };
+      }
+
+      if (toolName === "composio_execute_action") {
+        const data = await composioFetch(`/tools/execute/${encodeURIComponent(String(args.tool_slug ?? ""))}`, {
+          method: "POST",
+          body: JSON.stringify({ user_id: userId, arguments: args.arguments ?? {} }),
+        });
+        return {
+          resultText: `Composio action ${args.tool_slug} result: ${JSON.stringify(data).slice(0, 500)}`,
+          actionRecord: { type: "composio_execute", tool_slug: args.tool_slug },
+        };
+      }
+
+      // composio_connect_account
+      const data = await composioFetch(`/connected-accounts`, {
+        method: "POST",
+        body: JSON.stringify({ user_id: userId, toolkit_slug: args.toolkit_slug }),
+      });
+      const connectUrl = data?.connection_url ?? data?.redirect_url ?? data?.url;
+      return {
+        resultText: connectUrl
+          ? `Send the operator this link to connect ${args.toolkit_slug}: ${connectUrl}`
+          : `Started connecting ${args.toolkit_slug}, but no connect URL was returned: ${JSON.stringify(data).slice(0, 300)}`,
+        actionRecord: { type: "composio_connect", toolkit_slug: args.toolkit_slug },
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { resultText: `Composio error: ${msg}`, actionRecord: null };
+    }
+  }
+
   return { resultText: `Unknown tool: ${toolName}`, actionRecord: null };
 }
 
@@ -224,13 +356,13 @@ async function handleMcpRequest(
   }
 
   if (method === "tools/list") {
-    return mcpJson({ jsonrpc: "2.0", id, result: { tools: NAVI_TOOLS.map((t) => ({ name: t.function.name, description: t.function.description, inputSchema: t.function.parameters })) } });
+    return mcpJson({ jsonrpc: "2.0", id, result: { tools: availableTools().map((t) => ({ name: t.function.name, description: t.function.description, inputSchema: t.function.parameters })) } });
   }
 
   if (method === "tools/call") {
     const toolName = String(params?.name ?? "");
     const args = (params?.arguments ?? {}) as Record<string, any>;
-    if (!NAVI_TOOLS.some((t) => t.function.name === toolName)) {
+    if (!availableTools().some((t) => t.function.name === toolName)) {
       return mcpJson({ jsonrpc: "2.0", id, error: { code: -32602, message: `Unknown tool: ${toolName}` } });
     }
     try {
@@ -313,7 +445,7 @@ serve(async (req) => {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "gpt-4o-mini", messages, tools: NAVI_TOOLS, tool_choice: "auto" }),
+        body: JSON.stringify({ model: "gpt-4o-mini", messages, tools: availableTools(), tool_choice: "auto" }),
       });
 
       if (!res.ok) break;

@@ -42,6 +42,18 @@ Standard handshake: `initialize` → `tools/list` → `tools/call`.
 - **create_skill** — `category` is one of
   `General | Combat | Knowledge | Social | Fitness | Creative | Technical`.
 
+## Real-world tools (Composio)
+
+When `COMPOSIO_API_KEY` is configured for this project, three extra tools
+become available: `composio_search_tools`, `composio_execute_action`, and
+`composio_connect_account`. These act on the operator's own connected
+accounts (Gmail, Slack, Notion, GitHub, calendars, etc.) — not NAVI's own
+data. If `composio_execute_action` fails because nothing's connected yet,
+call `composio_connect_account` and hand the operator the resulting link
+rather than giving up silently. Not live-tested against a real Composio
+account as of this writing — treat unexpected errors from these three as
+worth surfacing plainly, not retrying blindly.
+
 ## Behavior notes
 
 - This is the operator's actual game-progression data — treat XP and

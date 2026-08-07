@@ -122,7 +122,7 @@ export default function AgentPage() {
         <PageHeader title="AGENT FRAMEWORK" subtitle="// AUTONOMOUS TASK EXECUTION" />
         <PaywallCard
           feature="AGENT FRAMEWORK"
-          limit="Queue a task and NAVI plans and executes it autonomously — creating quests, journal entries, and awarding XP on your behalf."
+          limit="Queue a task and NAVI plans and executes it autonomously — creating quests, journal entries, and awarding XP on your behalf. When connected, NAVI can also act on real-world tools like email and calendars on your behalf."
         />
       </div>
     );

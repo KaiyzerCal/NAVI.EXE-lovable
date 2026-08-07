@@ -1806,6 +1806,7 @@ export type Database = {
         Returns: boolean
       }
       kick_party_member: { Args: { p_member_id: string }; Returns: undefined }
+      navi_level_from_xp: { Args: { _total_xp: number }; Returns: number }
       purchase_quest_pack: { Args: { p_pack_id: string }; Returns: undefined }
       purchase_shop_item: { Args: { p_item_id: string }; Returns: undefined }
       seed_my_achievements: {

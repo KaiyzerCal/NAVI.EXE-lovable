@@ -61,8 +61,12 @@ export default function OperatorProfileSheet({
     setProfile(null);
     setError(null);
     setLoading(true);
-    supabase
-      .from("profiles")
+    // public_profiles, not profiles — profiles' RLS is owner-only
+    // (auth.uid() = id), so this always returned zero rows for anyone
+    // viewing someone else's profile and .single() errored out. This view
+    // exists specifically for party/search/leaderboard/social reads.
+    (supabase as any)
+      .from("public_profiles")
       .select(
         "id, display_name, navi_name, navi_level, character_class, mbti_type, subclass, operator_level, current_streak, quests_completed, xp_total, bond_affection, bond_trust, bond_loyalty, created_at, last_evolution_tier, perception, luck, subscription_tier"
       )

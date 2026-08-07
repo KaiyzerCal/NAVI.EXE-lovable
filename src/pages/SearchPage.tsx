@@ -45,7 +45,7 @@ export default function SearchPage() {
 
   const runSearch = useCallback(
     async (q: string) => {
-      if (!user || q.trim().length < 2) {
+      if (!user || q.trim().length < 1) {
         setResults([]);
         setSearched(false);
         setLoading(false);
@@ -58,12 +58,13 @@ export default function SearchPage() {
       const COLS = "id, display_name, username, navi_name, character_class, mbti_type, operator_level, subscription_tier";
       const term = q.trim();
 
-      // Try combined display_name + username search; fall back to display_name only
-      // if the username column doesn't exist yet (schema pending migration).
+      // Search display name, @handle, AND the operator's NAVI name — an
+      // operator looking for a friend by their NAVI's name (not their own
+      // handle) previously got zero results no matter how exact the term.
       let { data, error } = await (supabase as any)
         .from("public_profiles")
         .select(COLS)
-        .or(`display_name.ilike.%${term}%,username.ilike.%${term}%`)
+        .or(`display_name.ilike.%${term}%,username.ilike.%${term}%,navi_name.ilike.%${term}%`)
         .neq("id", user.id)
         .limit(30);
 
@@ -92,7 +93,7 @@ export default function SearchPage() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (query.trim().length < 2) {
+    if (query.trim().length < 1) {
       setResults([]);
       setSearched(false);
       setLoading(false);
@@ -102,7 +103,7 @@ export default function SearchPage() {
     setLoading(true);
     debounceRef.current = setTimeout(() => {
       runSearch(query);
-    }, 300);
+    }, 150);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -173,7 +174,7 @@ export default function SearchPage() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or @handle..."
+          placeholder="Search by name, @handle, or NAVI name..."
           autoFocus
           className="w-full bg-card border border-border rounded-lg pl-10 pr-10 py-3 text-sm font-body text-foreground outline-none focus:border-primary/50 transition-colors placeholder:text-muted-foreground/60"
         />
@@ -205,10 +206,10 @@ export default function SearchPage() {
               className="mx-auto mb-3 opacity-20 text-muted-foreground"
             />
             <p className="font-mono text-muted-foreground text-sm">
-              Search operators by name or @handle
+              Search operators by name, @handle, or their NAVI's name
             </p>
             <p className="font-mono text-muted-foreground/50 text-xs mt-1">
-              Minimum 2 characters to search
+              Results update as you type
             </p>
           </motion.div>
         )}

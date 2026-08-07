@@ -377,6 +377,182 @@ async function handleMcpRequest(
   return mcpJson({ jsonrpc: "2.0", id, error: { code: -32601, message: `Unknown method: ${method}` } });
 }
 
+// ── NAVI companion chatter (friends/party/guild NAVIs "hang out") ──────────
+// Mega Man NT Warrior-style ambient banter between connected operators'
+// NAVIs, generated periodically by a pg_cron job hitting the internal
+// action above. Humans only ever read these threads (navi_companion_*
+// tables have no client insert/update policy) — the NAVIs are the only
+// "speakers."
+
+interface CompanionGroup {
+  context_type: "friend" | "party" | "guild";
+  context_id: string | null;
+  participantIds: string[];
+}
+
+interface NaviProfile {
+  id: string;
+  navi_name: string | null;
+  character_class: string | null;
+  mbti_type: string | null;
+  subclass: string | null;
+  bond_affection: number | null;
+  bond_trust: number | null;
+  bond_loyalty: number | null;
+}
+
+async function generateNaviDialogue(profiles: NaviProfile[], openaiKey: string): Promise<{ user_id: string; navi_name: string; content: string }[] | null> {
+  if (!openaiKey) return null;
+
+  const roster = profiles
+    .map((p, i) => `${i}: ${p.navi_name ?? "NAVI"} — a ${p.character_class ?? "Operator"}-class NAVI, ${p.mbti_type ?? ""} ${p.subclass ?? ""}, bond levels affection ${p.bond_affection ?? 0}/trust ${p.bond_trust ?? 0}/loyalty ${p.bond_loyalty ?? 0}.`)
+    .join("\n");
+
+  const system = `You write short, in-character banter between NAVI companion AIs in a Mega Man NT Warrior-style setting — digital partners who hang out and talk amongst themselves while their operators are away. Each NAVI has a distinct personality driven by its class and MBTI type. Keep it warm and a little playful, grounded in their traits — not generic chit-chat. 4 to 6 short lines total, alternating naturally between the NAVIs present (not necessarily strict round-robin). No stage directions, no operator dialogue — only the NAVIs speaking.
+
+Roster:
+${roster}
+
+Respond with strict JSON only: {"lines":[{"speaker_index": number, "content": string}, ...]}`;
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: "Generate the hangout exchange." },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.9,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? "{}");
+    const lines = (Array.isArray(parsed.lines) ? parsed.lines : [])
+      .filter((l: any) => typeof l.speaker_index === "number" && profiles[l.speaker_index] && typeof l.content === "string" && l.content.trim())
+      .slice(0, 8)
+      .map((l: any) => ({
+        user_id: profiles[l.speaker_index].id,
+        navi_name: profiles[l.speaker_index].navi_name ?? "NAVI",
+        content: l.content.trim().slice(0, 500),
+      }));
+    return lines.length > 0 ? lines : null;
+  } catch {
+    return null;
+  }
+}
+
+async function runCompanionChatter(sb: any, openaiKey: string): Promise<any[]> {
+  const COOLDOWN_MS = 6 * 60 * 60 * 1000; // don't re-chatter the same group more than once per 6h
+  const MAX_GROUPS_PER_RUN = 8; // bound OpenAI cost/latency per cron tick
+  const results: any[] = [];
+
+  const groups: CompanionGroup[] = [];
+
+  // Friends = mutual follows (both directions), deduped by sorted pair.
+  const { data: follows } = await sb.from("operator_follows").select("follower_id, following_id");
+  if (follows) {
+    const pairSet = new Set((follows as any[]).map((f) => `${f.follower_id}:${f.following_id}`));
+    const seen = new Set<string>();
+    for (const f of follows as any[]) {
+      if (pairSet.has(`${f.following_id}:${f.follower_id}`)) {
+        const pair = [f.follower_id, f.following_id].sort();
+        const key = pair.join(":");
+        if (!seen.has(key)) {
+          seen.add(key);
+          groups.push({ context_type: "friend", context_id: null, participantIds: pair });
+        }
+      }
+    }
+  }
+
+  const { data: partyRows } = await sb.from("party_members").select("party_id, user_id");
+  if (partyRows) {
+    const byParty = new Map<string, string[]>();
+    for (const r of partyRows as any[]) {
+      if (!byParty.has(r.party_id)) byParty.set(r.party_id, []);
+      byParty.get(r.party_id)!.push(r.user_id);
+    }
+    for (const [partyId, members] of byParty) {
+      if (members.length >= 2) groups.push({ context_type: "party", context_id: partyId, participantIds: members.sort() });
+    }
+  }
+
+  const { data: guildRows } = await sb.from("guild_members").select("guild_id, user_id");
+  if (guildRows) {
+    const byGuild = new Map<string, string[]>();
+    for (const r of guildRows as any[]) {
+      if (!byGuild.has(r.guild_id)) byGuild.set(r.guild_id, []);
+      byGuild.get(r.guild_id)!.push(r.user_id);
+    }
+    for (const [guildId, members] of byGuild) {
+      if (members.length < 2) continue;
+      // Cap participants per session so the dialogue stays coherent even in
+      // large guilds — a rotating sample rather than every member at once.
+      const sample = members.length <= 4 ? members : [...members].sort(() => Math.random() - 0.5).slice(0, 4);
+      groups.push({ context_type: "guild", context_id: guildId, participantIds: sample.sort() });
+    }
+  }
+
+  let generated = 0;
+  for (const g of groups) {
+    if (generated >= MAX_GROUPS_PER_RUN) break;
+
+    let thread: any = null;
+    if (g.context_type === "friend") {
+      const { data } = await sb.from("navi_companion_threads").select("*")
+        .eq("context_type", "friend")
+        .eq("participant_ids", g.participantIds)
+        .maybeSingle();
+      thread = data;
+    } else {
+      const { data } = await sb.from("navi_companion_threads").select("*")
+        .eq("context_type", g.context_type)
+        .eq("context_id", g.context_id)
+        .maybeSingle();
+      thread = data;
+    }
+
+    if (thread && Date.now() - new Date(thread.last_message_at).getTime() < COOLDOWN_MS) continue;
+
+    if (!thread) {
+      const { data: created } = await sb.from("navi_companion_threads")
+        .insert({ context_type: g.context_type, context_id: g.context_id, participant_ids: g.participantIds })
+        .select("*").single();
+      thread = created;
+    }
+    if (!thread) continue;
+
+    const { data: profiles } = await sb.from("profiles")
+      .select("id, navi_name, character_class, mbti_type, subclass, bond_affection, bond_trust, bond_loyalty")
+      .in("id", g.participantIds);
+    if (!profiles || (profiles as any[]).length < 2) continue;
+
+    const dialogue = await generateNaviDialogue(profiles as NaviProfile[], openaiKey);
+    if (!dialogue) continue;
+
+    await sb.from("navi_companion_messages").insert(
+      dialogue.map((line) => ({
+        thread_id: thread.id,
+        speaker_user_id: line.user_id,
+        speaker_navi_name: line.navi_name,
+        content: line.content,
+      }))
+    );
+    await sb.from("navi_companion_threads").update({ last_message_at: new Date().toISOString() }).eq("id", thread.id);
+
+    generated++;
+    results.push({ thread_id: thread.id, context_type: g.context_type, lines: dialogue.length });
+  }
+
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -389,6 +565,21 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ── Internal cron entrypoint (NAVI companion chatter) ───────────────────
+    // Service-role callers only — mirrors send-push-notification's
+    // caller-token-must-equal-service-role-key gate exactly, so this never
+    // resolves through the per-user auth.getUser() path below.
+    const bearerToken = authHeader.replace("Bearer ", "");
+    if (bearerToken === SUPABASE_SERVICE_KEY) {
+      const internalBody = await req.json().catch(() => ({}));
+      if (internalBody?.action === "run_companion_chatter") {
+        const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+        const results = await runCompanionChatter(sb, OPENAI_API_KEY);
+        return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "Unknown internal action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

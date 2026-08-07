@@ -44,6 +44,7 @@ const GuildPage = lazy(() => import("./pages/GuildPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const SocialPage = lazy(() => import("./pages/SocialPage"));
 const InboxPage = lazy(() => import("./pages/InboxPage"));
+const NaviHangoutPage = lazy(() => import("./pages/NaviHangoutPage"));
 const AgentPage = lazy(() => import("./pages/AgentPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
@@ -261,6 +262,7 @@ function AppShell() {
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/social" element={<SocialPage />} />
           <Route path="/inbox" element={<InboxPage />} />
+          <Route path="/hangout" element={<NaviHangoutPage />} />
           <Route path="/upgrade" element={<UpgradePage />} />
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/admin" element={<AdminPage />} />

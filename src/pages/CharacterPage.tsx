@@ -284,9 +284,16 @@ export default function CharacterPage() {
             <p className="text-[10px] font-mono text-muted-foreground mb-1">
               OPERATOR LV{operatorLevel} · NAVI LV{profile.navi_level} · {operatorXp.toLocaleString()} XP
             </p>
-            <p className="text-[10px] font-mono text-muted-foreground mb-2 flex items-center gap-3">
-              <span><Coins size={10} className="inline mr-0.5 text-accent" />{((profile as any).codex_points ?? 0).toLocaleString()} CP</span>
-              <span><Coins size={10} className="inline mr-0.5 text-secondary" />{((profile as any).cali_coins ?? 0).toLocaleString()} CC</span>
+            <p className="text-[10px] font-mono text-muted-foreground mb-0.5 flex items-center gap-3">
+              <span title="Codex Points — your everyday currency, earned in larger amounts from every quest.">
+                <Coins size={10} className="inline mr-0.5 text-accent" />{((profile as any).codex_points ?? 0).toLocaleString()} CP
+              </span>
+              <span title="Cali Coins — a rarer currency, earned in smaller amounts per quest, spent on premium items.">
+                <Coins size={10} className="inline mr-0.5 text-secondary" />{((profile as any).cali_coins ?? 0).toLocaleString()} CC
+              </span>
+            </p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-2">
+              CP = common, earned often · CC = rare, earned in small amounts
             </p>
             <ProgressBar value={operatorXp % xpForLevel(1) || operatorXp} max={xpToNext} variant="cyan" showValue={false} size="sm" />
             <p className="text-[9px] font-mono text-muted-foreground mt-0.5">
@@ -332,7 +339,7 @@ export default function CharacterPage() {
         <div className="space-y-4">
 
           {/* ── Evolution Path ─────────────────────────────────────────────── */}
-          <HudCard title="EVOLUTION PATH" icon={<Star size={14} />} glow>
+          <HudCard title="EVOLUTION PATH" description="Your title and tier evolve automatically as your Operator level rises — this doesn't cost anything, it's tracking your overall progress." icon={<Star size={14} />} glow>
             {/* Current title + tier */}
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -465,7 +472,7 @@ export default function CharacterPage() {
           <GuildPanel guildId={(profile as any).guild_id} onGuildChange={() => refetchProfile()} />
 
           {/* Character Info */}
-          <HudCard title="CHARACTER INFO" icon={<Star size={14} />} glow>
+          <HudCard title="CHARACTER INFO" description="Your class, sub-class, and personality type — mostly cosmetic identity, some influence how NAVI's coaching tone comes across." icon={<Star size={14} />} glow>
             <div className="space-y-3">
               <div className="flex justify-between items-center py-1.5 border-b border-border">
                 <div>
@@ -708,7 +715,7 @@ export default function CharacterPage() {
       {/* ── SKILLS ───────────────────────────────────────────────────────── */}
       {activeTab === "SKILLS" && (
         <div className="space-y-4">
-          <HudCard title="OPERATOR SKILLS" icon={<Zap size={14} />} glow>
+          <HudCard title="OPERATOR SKILLS" description="Track real-world abilities you're building. Link a skill to a quest and it levels up (1-100) each time that quest is completed." icon={<Zap size={14} />} glow>
             {skillsLoading ? (
               <Loader2 className="animate-spin text-primary" size={18} />
             ) : skills.length === 0 ? (
@@ -772,7 +779,7 @@ export default function CharacterPage() {
       {/* ── INVENTORY (Equipment) ───────────────────────────────────────── */}
       {activeTab === "INVENTORY" && (
         <div className="space-y-4">
-          <HudCard title="INVENTORY & EQUIPMENT" icon={<Star size={14} />} glow>
+          <HudCard title="INVENTORY & EQUIPMENT" description="Titles, badges, and gear NAVI grants you or you add yourself. Equipped items show on your profile — rarity is cosmetic, it doesn't affect stats." icon={<Star size={14} />} glow>
             {equipLoading ? (
               <Loader2 className="animate-spin text-primary" size={18} />
             ) : items.length === 0 ? (
@@ -830,7 +837,7 @@ export default function CharacterPage() {
 
       {/* ── ACTIVE EFFECTS ────────────────────────────────────────────────── */}
       {activeTab === "EFFECTS" && (
-        <HudCard title="ACTIVE EFFECTS" icon={<Zap size={14} />} glow>
+        <HudCard title="ACTIVE EFFECTS" description="Temporary buffs and debuffs — from quests, milestones, or shop items — that expire automatically at their listed date." icon={<Zap size={14} />} glow>
           {effectsLoading ? (
             <Loader2 className="animate-spin text-primary" size={18} />
           ) : effects.length === 0 ? (

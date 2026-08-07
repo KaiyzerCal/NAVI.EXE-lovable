@@ -118,29 +118,34 @@ export default function ShopPage() {
       <PageHeader title="SHOP" subtitle="// SPEND YOUR EARNINGS" />
 
       {/* Balance Bar */}
-      <div className="flex gap-6 mb-6 bg-card border border-primary/20 rounded p-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-            <Zap size={16} className="text-primary" />
+      <div className="mb-6 bg-card border border-primary/20 rounded p-4">
+        <div className="flex gap-6">
+          <div className="flex items-center gap-2.5" title="Codex Points — your everyday currency, earned in larger amounts from every quest.">
+            <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+              <Zap size={16} className="text-primary" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-muted-foreground">CODEX POINTS</p>
+              <p className="font-display text-xl font-bold text-primary">{codexPoints.toLocaleString()}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-mono text-muted-foreground">CODEX POINTS</p>
-            <p className="font-display text-xl font-bold text-primary">{codexPoints.toLocaleString()}</p>
+          <div className="flex items-center gap-2.5" title="Cali Coins — a rarer currency, earned in smaller amounts per quest, spent on premium items.">
+            <div className="w-8 h-8 rounded bg-accent/10 flex items-center justify-center">
+              <Coins size={16} className="text-accent" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-muted-foreground">CALI COINS</p>
+              <p className="font-display text-xl font-bold text-accent">{caliCoins.toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="ml-auto text-right hidden sm:block">
+            <p className="text-[10px] font-mono text-muted-foreground">EARN BY</p>
+            <p className="text-[10px] font-mono text-foreground/60">completing quests</p>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded bg-accent/10 flex items-center justify-center">
-            <Coins size={16} className="text-accent" />
-          </div>
-          <div>
-            <p className="text-[10px] font-mono text-muted-foreground">CALI COINS</p>
-            <p className="font-display text-xl font-bold text-accent">{caliCoins.toLocaleString()}</p>
-          </div>
-        </div>
-        <div className="ml-auto text-right hidden sm:block">
-          <p className="text-[10px] font-mono text-muted-foreground">EARN BY</p>
-          <p className="text-[10px] font-mono text-foreground/60">completing quests</p>
-        </div>
+        <p className="text-[9px] font-mono text-muted-foreground/60 mt-2 pt-2 border-t border-border">
+          Both currencies come from the same quests — Codex Points pay for everyday utility items, Cali Coins are the scarcer one and pay for premium cosmetics and bonuses.
+        </p>
       </div>
 
       <div className="space-y-6">

@@ -8,19 +8,19 @@ import { useAuth } from "@/contexts/AuthContext";
 const CIPHERS = [
   { encoded: "BQQMF",   decoded: "APPLE",  shift: 1 },
   { encoded: "XPSME",   decoded: "WORLD",  shift: 1 },
-  { encoded: "TIBEP",   decoded: "SHARP",  shift: 1 },
+  { encoded: "TIBSQ",   decoded: "SHARP",  shift: 1 },
   { encoded: "ESJWF",   decoded: "DRIVE",  shift: 1 },
   { encoded: "CMBOL",   decoded: "BLANK",  shift: 1 },
   { encoded: "GPDVT",   decoded: "FOCUS",  shift: 1 },
   { encoded: "HSPXUI",  decoded: "GROWTH", shift: 1 },
   { encoded: "TUSFBL",  decoded: "STREAK", shift: 1 },
   { encoded: "RVFTU",   decoded: "QUEST",  shift: 1 },
-  { encoded: "WJDUPZ",  decoded: "VICTOR", shift: 1 },
+  { encoded: "WJDUPS",  decoded: "VICTOR", shift: 1 },
   { encoded: "QPXFS",   decoded: "POWER",  shift: 1 },
   { encoded: "DPEF",    decoded: "CODE",   shift: 1 },
   { encoded: "OFUXPSL", decoded: "NETWORK", shift: 1 },
   { encoded: "MBVODI",  decoded: "LAUNCH", shift: 1 },
-  { encoded: "QSPUPPM", decoded: "PROTOCOL", shift: 1 },
+  { encoded: "QSPUPDPM", decoded: "PROTOCOL", shift: 1 },
 ];
 
 const TIME_LIMIT = 30;

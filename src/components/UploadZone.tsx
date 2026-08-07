@@ -81,8 +81,15 @@ export default function UploadZone({ linkedEntityType, linkedEntityId, onUploadC
     }
 
     setProgress(70);
-    const { data: urlData } = supabase.storage.from("mavis-media").getPublicUrl(path);
-    const fileUrl = urlData.publicUrl;
+    // mavis-media is a private bucket (journal attachments can be personal/
+    // legal/evidence) — sign the URL rather than getPublicUrl, which would
+    // 403 since there's no owner-scoped public read policy. Long expiry
+    // because file_url is stored once and rendered indefinitely, not
+    // re-signed on each view.
+    const { data: urlData } = await supabase.storage
+      .from("mavis-media")
+      .createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+    const fileUrl = urlData?.signedUrl ?? "";
 
     // Save metadata
     const { data: mediaRow, error: dbError } = await supabase.from("media" as any).insert({

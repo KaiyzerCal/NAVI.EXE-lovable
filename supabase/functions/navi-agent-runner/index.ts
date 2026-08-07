@@ -238,15 +238,13 @@ async function executeNaviTool(
   }
 
   if (toolName === "award_xp") {
-    const { data: profile } = await sb.from("profiles")
-      .select("operator_xp, xp_total")
-      .eq("id", userId)
-      .single();
-    if (!profile) return { resultText: "Failed to award XP: profile not found", actionRecord: null };
-    await sb.from("profiles").update({
-      operator_xp: ((profile as any).operator_xp ?? 0) + args.amount,
-      xp_total:    ((profile as any).xp_total ?? 0) + args.amount,
-    }).eq("id", userId);
+    // Delegates to the award_xp RPC instead of writing operator_xp/xp_total
+    // directly — a raw column update skips the RPC's level-up rollover
+    // (WHILE op_xp >= (op_level+1)*500), which is exactly how an operator
+    // ends up with e.g. operator_xp far past their level's threshold while
+    // operator_level never advances. Also gets the RPC's 0-200 cap for free.
+    const { error } = await sb.rpc("award_xp", { _amount: args.amount, _user_id: userId });
+    if (error) return { resultText: `Failed to award XP: ${error.message}`, actionRecord: null };
     return {
       resultText: `Awarded ${args.amount} XP${args.reason ? ` for: ${args.reason}` : ""}`,
       actionRecord: { type: "award_xp", amount: args.amount },

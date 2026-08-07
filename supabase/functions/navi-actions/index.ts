@@ -27,8 +27,12 @@ const corsHeaders = {
 // reason for this action to ever set them — and leaving them here let any
 // authenticated user set their own streak to an arbitrary multiple of 7 via
 // a raw POST, which defeats the award_streak_freeze eligibility check below.
+// navi_level removed — it's now an earned stat (award_xp computes it from
+// xp_total), locked at the DB level by protect_privileged_profile_columns()
+// the same as operator_level. Listing it here would just mean a non-admin
+// write attempt fails at the trigger instead of never being offered.
 const profileAllowedKeys = [
-  "display_name", "character_class", "mbti_type", "navi_level",
+  "display_name", "character_class", "mbti_type",
   "navi_name", "navi_personality", "equipped_skin", "bond_affection", "bond_trust",
   "bond_loyalty", "subclass", "perception",
   "luck", "onboarding_done", "notification_settings", "user_navi_description", "last_active",

@@ -1103,6 +1103,7 @@ export type Database = {
           cali_coins: number
           character_class: string | null
           codex_points: number
+          composio_enabled: boolean
           created_at: string
           current_streak: number
           custom_title: string | null
@@ -1146,6 +1147,7 @@ export type Database = {
           cali_coins?: number
           character_class?: string | null
           codex_points?: number
+          composio_enabled?: boolean
           created_at?: string
           current_streak?: number
           custom_title?: string | null
@@ -1189,6 +1191,7 @@ export type Database = {
           cali_coins?: number
           character_class?: string | null
           codex_points?: number
+          composio_enabled?: boolean
           created_at?: string
           current_streak?: number
           custom_title?: string | null

@@ -11,6 +11,12 @@ const FALLBACK_SUPABASE_PUBLISHABLE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqa2tjcm1ocHRyem9iYWpqc3FnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTE3MTEsImV4cCI6MjA4OTY4NzcxMX0.X3NlDLT6Jh-AayP1qiA882SH0PiFOjf1TYEkE66qzr0";
 const FALLBACK_SUPABASE_PROJECT_ID = "fjkkcrmhptrzobajjsqg";
 
+// Web Push VAPID public key. Public by design (it ships in the client bundle and
+// is sent to the push service); the matching private key lives only in edge
+// function secrets. Fallback ensures production builds without a .env still work.
+const FALLBACK_VAPID_PUBLIC_KEY =
+  "BCWXBuNfqMJI3h_NMr1VM68JVBy0HPyz95HCzl9qIx1wOqsNLS7mC-0yb1qsRv0qfYFkhQRtYybcxY-EB2fQJiI";
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -31,6 +37,9 @@ export default defineConfig(({ mode }) => {
     ),
     "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(
       env.VITE_SUPABASE_PROJECT_ID || FALLBACK_SUPABASE_PROJECT_ID
+    ),
+    "import.meta.env.VITE_VAPID_PUBLIC_KEY": JSON.stringify(
+      env.VITE_VAPID_PUBLIC_KEY || FALLBACK_VAPID_PUBLIC_KEY
     ),
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

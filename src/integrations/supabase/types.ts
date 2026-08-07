@@ -1743,6 +1743,54 @@ export type Database = {
       kick_party_member: { Args: { p_member_id: string }; Returns: undefined }
       purchase_quest_pack: { Args: { p_pack_id: string }; Returns: undefined }
       purchase_shop_item: { Args: { p_item_id: string }; Returns: undefined }
+      seed_my_achievements: {
+        Args: never
+        Returns: {
+          category: string
+          created_at: string
+          description: string
+          icon: string | null
+          id: string
+          name: string
+          rarity: string
+          source: string
+          threshold: number | null
+          unlocked: boolean
+          unlocked_at: string | null
+          user_id: string
+          xp: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "achievements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      unlock_my_achievements: {
+        Args: { p_ids: string[] }
+        Returns: {
+          category: string
+          created_at: string
+          description: string
+          icon: string | null
+          id: string
+          name: string
+          rarity: string
+          source: string
+          threshold: number | null
+          unlocked: boolean
+          unlocked_at: string | null
+          user_id: string
+          xp: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "achievements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       app_role: "owner" | "user" | "admin"

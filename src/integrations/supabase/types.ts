@@ -664,6 +664,68 @@ export type Database = {
         }
         Relationships: []
       }
+      navi_companion_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          speaker_navi_name: string
+          speaker_user_id: string
+          thread_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          speaker_navi_name: string
+          speaker_user_id: string
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          speaker_navi_name?: string
+          speaker_user_id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "navi_companion_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "navi_companion_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      navi_companion_threads: {
+        Row: {
+          context_id: string | null
+          context_type: string
+          created_at: string | null
+          id: string
+          last_message_at: string | null
+          participant_ids: string[]
+        }
+        Insert: {
+          context_id?: string | null
+          context_type: string
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          participant_ids: string[]
+        }
+        Update: {
+          context_id?: string | null
+          context_type?: string
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          participant_ids?: string[]
+        }
+        Relationships: []
+      }
       navi_core_memory: {
         Row: {
           content: string

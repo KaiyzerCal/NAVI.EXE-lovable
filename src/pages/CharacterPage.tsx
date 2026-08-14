@@ -73,7 +73,7 @@ function SkinCard({
     e.stopPropagation();
     setGenerating(true);
     await supabase.functions.invoke("navi-generate-skin", {
-      body: { skinName: def.name, skinColor: RARITY_AI_COLOR[def.rarity] },
+      body: { skinName: def.name, skinColor: RARITY_AI_COLOR[def.rarity], category: def.category },
     });
     setImgError(false);
     setGenerating(false);

@@ -102,6 +102,45 @@ function buildPrompt(skinName: string, category?: string, accent?: string, style
 // generated since March and 8 of the 72 were never created at all.
 // gpt-image-1 always returns b64_json; dall-e-3 returns a url by default,
 // which is handled below.
+// Image generation via Lovable's AI gateway (google/gemini-2.5-flash-image-preview).
+// Billed against Lovable credits rather than the OpenAI key — the same gateway
+// and key navi-chat already uses. Returns null (rather than throwing) so the
+// caller can fall back to OpenAI, and reports the response shape on failure so
+// a wrong assumption about the payload is visible instead of silent.
+async function generateViaLovable(prompt: string): Promise<{ bytes?: Uint8Array; error?: string }> {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) return { error: "LOVABLE_API_KEY not set" };
+
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image-preview",
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!res.ok) return { error: `lovable ${res.status} ${(await res.text()).slice(0, 300)}` };
+
+  const data = await res.json();
+  const msg = data?.choices?.[0]?.message;
+  // Observed shape is images[].image_url.url as a data: URI, but accept the
+  // other plausible carriers rather than assuming exactly one.
+  const candidate =
+    msg?.images?.[0]?.image_url?.url ??
+    msg?.images?.[0]?.url ??
+    data?.data?.[0]?.b64_json ??
+    (typeof msg?.content === "string" && msg.content.startsWith("data:image") ? msg.content : undefined);
+
+  if (typeof candidate !== "string") {
+    return { error: `lovable: no image found; keys=${JSON.stringify(Object.keys(msg ?? {}))}` };
+  }
+  const b64 = candidate.startsWith("data:") ? candidate.split(",")[1] ?? "" : candidate;
+  if (!b64) return { error: "lovable: empty image payload" };
+  return { bytes: Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)) };
+}
+
 async function generateImage(apiKey: string, prompt: string): Promise<Uint8Array> {
   const attempts: Array<Record<string, unknown>> = [
     { model: "gpt-image-1", prompt, n: 1, size: "1024x1024", quality: "high", background: "transparent", output_format: "png" },
@@ -156,12 +195,15 @@ serve(async (req) => {
       pathOverride,
       // Regenerate even when a file already exists (restyling an existing set).
       force,
+      // "lovable" (default, Lovable credits) | "openai" | "auto" (try Lovable,
+      // fall back to OpenAI).
+      provider: providerRaw,
     } = await req.json();
     if (!skinName) throw new Error("skinName required");
 
     // Each style gets its own folder. The original flat "<name>.png" layout is
     // left alone so the pre-existing art stays available as a fallback.
-    const styleKey = STYLES[String(style ?? "painterly").toLowerCase()] ? String(style ?? "painterly").toLowerCase() : "painterly";
+    const styleKey = STYLES[String(style ?? "cgi").toLowerCase()] ? String(style ?? "cgi").toLowerCase() : "cgi";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -186,10 +228,28 @@ serve(async (req) => {
       }
     }
 
-    const apiKey = Deno.env.get("OPENAI_API");
-    if (!apiKey) throw new Error("OPENAI_API secret not set");
+    const prompt = buildPrompt(skinName, category, skinColor, styleKey);
 
-    const binaryData = await generateImage(apiKey, buildPrompt(skinName, category, skinColor, styleKey));
+    // Prefer Lovable's gateway (Lovable credits) over OpenAI (per-image billing
+    // on the OpenAI key). `provider` forces one or the other for comparison.
+    const provider = String(providerRaw ?? "lovable").toLowerCase();
+    let binaryData: Uint8Array | undefined;
+    let lovableError: string | undefined;
+
+    if (provider !== "openai") {
+      const r = await generateViaLovable(prompt);
+      binaryData = r.bytes;
+      lovableError = r.error;
+      if (!binaryData && provider === "lovable") {
+        throw new Error(`Lovable image generation failed: ${lovableError}`);
+      }
+    }
+
+    if (!binaryData) {
+      const apiKey = Deno.env.get("OPENAI_API");
+      if (!apiKey) throw new Error(`OPENAI_API secret not set (lovable: ${lovableError ?? "skipped"})`);
+      binaryData = await generateImage(apiKey, prompt);
+    }
 
     const { error: uploadError } = await supabase.storage
       .from("navi-skins")

@@ -427,26 +427,39 @@ serve(async (req) => {
       if (!frontBlob) throw new Error(`No front render at ${filePath} to rotate`);
       const front = new Uint8Array(await frontBlob.arrayBuffer());
 
+      // The viewer shows the model at ~300 px, so it loads these reduced frames
+      // rather than eight 2 MB originals (which would be ~16 MB per rotation).
+      const frameThumbPath = (deg: number) => `${styleKey}/turntable/${slug}/thumb/${deg}.png`;
+      const FRAME_PX = 384;
+
       const frames: Record<number, string> = {};
       const errors: string[] = [];
 
+      const storeFrame = async (deg: number, bytes: Uint8Array) => {
+        const full = await supabase.storage.from("navi-skins")
+          .upload(framePath(deg), bytes, { contentType: "image/png", upsert: true });
+        if (full.error) throw new Error(full.error.message);
+        const small = await supabase.storage.from("navi-skins")
+          .upload(frameThumbPath(deg), await makeThumb(bytes, FRAME_PX), { contentType: "image/png", upsert: true });
+        if (small.error) throw new Error(small.error.message);
+        frames[deg] = publicUrl(frameThumbPath(deg));
+      };
+
       // Angle 0 is the front render itself — copied, not regenerated.
-      await supabase.storage.from("navi-skins")
-        .upload(framePath(0), front, { contentType: "image/png", upsert: true });
-      frames[0] = publicUrl(framePath(0));
+      await storeFrame(0, front);
 
       for (const deg of TURNTABLE_ANGLES.slice(1)) {
         if (!force) {
-          const { data: existing } = await supabase.storage.from("navi-skins").download(framePath(deg));
-          if (existing) { frames[deg] = publicUrl(framePath(deg)); continue; }
+          const { data: existing } = await supabase.storage.from("navi-skins").download(frameThumbPath(deg));
+          if (existing) { frames[deg] = publicUrl(frameThumbPath(deg)); continue; }
         }
         const r = await generateViaLovable(turntablePrompt(skinName, deg), front);
         if (!r.bytes) { errors.push(`${deg}deg: ${r.error}`); continue; }
-        const keyed = await keyOutChroma(r.bytes);
-        const { error } = await supabase.storage.from("navi-skins")
-          .upload(framePath(deg), keyed, { contentType: "image/png", upsert: true });
-        if (error) { errors.push(`${deg}deg upload: ${error.message}`); continue; }
-        frames[deg] = publicUrl(framePath(deg));
+        try {
+          await storeFrame(deg, await keyOutChroma(r.bytes));
+        } catch (e) {
+          errors.push(`${deg}deg store: ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
 
       return new Response(

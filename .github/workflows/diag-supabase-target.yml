@@ -1,0 +1,26 @@
+name: Diagnose Supabase deploy target
+# Temporary. Answers one question: does SUPABASE_ACCESS_TOKEN reach NAVI's
+# real project (fjkkcrmhptrzobajjsqg), or a different account entirely?
+# The deploy-edge-functions workflow reports success either way, so a green
+# check has not been proof that anything landed on the project the app uses.
+on:
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: supabase/setup-cli@v1
+      - name: List projects visible to this token
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase projects list
+      - name: Does the configured ref match the app's project?
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ "$SUPABASE_PROJECT_REF" = "fjkkcrmhptrzobajjsqg" ]; then
+            echo "MATCH: deploys target NAVI's real project."
+          else
+            echo "MISMATCH: SUPABASE_PROJECT_REF is NOT fjkkcrmhptrzobajjsqg."
+          fi

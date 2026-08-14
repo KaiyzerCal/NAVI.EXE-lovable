@@ -5,14 +5,12 @@ import { motion } from "framer-motion";
 import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi, Heart, Loader2, Snowflake, Shield } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useNavigate } from "react-router-dom";
-import { Suspense, useState } from "react";
-import { getNaviCharacter } from "@/components/navi-characters";
-import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
+import { useState } from "react";
+import { skinArtUrl } from "@/lib/skinArt";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 const fadeIn = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.3 } };
-const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/navi-skins`;
 
 // XP needed per level (simple linear scale)
 const xpForLevel = (level: number) => level * 500;
@@ -20,7 +18,6 @@ const xpForLevel = (level: number) => level * 500;
 export default function Dashboard() {
   const { profile, profileLoading, quests, questsLoading, questStats: stats, entries, journalLoading, refetchProfile } = useAppData();
   const navigate = useNavigate();
-  const [naviRenderMode] = useNaviRenderMode();
   const { user, session } = useAuth();
   const { toast } = useToast();
   const [usingFreeze, setUsingFreeze] = useState(false);
@@ -47,8 +44,7 @@ export default function Dashboard() {
 
   const loading = profileLoading || questsLoading || journalLoading;
 
-  const skinUrl = `${STORAGE_BASE}/${profile.equipped_skin.toLowerCase()}.png`;
-  const NaviCharComponent = getNaviCharacter(profile.equipped_skin);
+  const skinUrl = skinArtUrl(profile.equipped_skin);
   const bondAvg = Math.round((profile.bond_affection + profile.bond_trust + profile.bond_loyalty) / 3);
   const operatorXp = profile.operator_xp ?? profile.xp_total ?? 0;
   const operatorLevel = profile.operator_level ?? 1;
@@ -101,13 +97,7 @@ export default function Dashboard() {
             onClick={() => navigate("/navi")}
             className="w-32 h-32 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
           >
-            {naviRenderMode === "SVG" && NaviCharComponent ? (
-              <Suspense fallback={<div className="w-24 h-24" />}>
-                <NaviCharComponent size={100} animated />
-              </Suspense>
-            ) : (
-              <img src={skinUrl} alt="NAVI" className="w-24 h-24 object-contain group-hover:scale-105 transition-transform" />
-            )}
+            <img src={skinUrl} alt="NAVI" className="w-24 h-24 object-contain group-hover:scale-105 transition-transform" />
             <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-neon-green border-2 border-background flex items-center justify-center">
               <Wifi size={8} className="text-background" />
             </div>

@@ -1,11 +1,11 @@
-import { useState, Suspense } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
-import { Lock, Layers, Wand2, Cpu, Loader2 } from "lucide-react";
+import { Lock, Layers, Wand2, Loader2 } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getNaviCharacter } from "@/components/navi-characters";
+import { skinArtUrl } from "@/lib/skinArt";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwner } from "@/hooks/useOwner";
 import {
@@ -39,43 +39,37 @@ const RARITY_AI_COLOR: Record<SkinRarity, string> = {
   LEGENDARY: "orange and gold fire",
 };
 
-type ViewMode = "SVG" | "AI";
-
 function SkinCard({
   skinId,
   isUnlocked,
   isEquipped,
   onEquip,
-  viewMode,
 }: {
   skinId: string;
   isUnlocked: boolean;
   isEquipped: boolean;
   onEquip: () => void;
-  viewMode: ViewMode;
 }) {
   const def = SKIN_DEFINITIONS.find((s) => s.id === skinId)!;
-  const NaviComponent = getNaviCharacter(skinId);
   const rarityColor = RARITY_COLORS[def.rarity];
   const glow = RARITY_GLOW[def.rarity];
 
   const [imgError, setImgError] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const storageUrl = `${supabaseUrl}/storage/v1/object/public/navi-skins/${def.name.toLowerCase()}.png`;
+  const storageUrl = skinArtUrl(def.name);
 
   async function generateAiSkin(e: React.MouseEvent) {
     e.stopPropagation();
     setGenerating(true);
     await supabase.functions.invoke("navi-generate-skin", {
-      body: { skinName: def.name, skinColor: RARITY_AI_COLOR[def.rarity], category: def.category },
+      body: { skinName: def.name, skinColor: RARITY_AI_COLOR[def.rarity], category: def.category, style: "cgi" },
     });
     setImgError(false);
     setGenerating(false);
   }
 
-  const showAi = viewMode === "AI" && isUnlocked;
+  const showAi = isUnlocked;
 
   return (
     <motion.div
@@ -125,10 +119,6 @@ function SkinCard({
                 </>
             }
           </button>
-        ) : isUnlocked && NaviComponent ? (
-          <Suspense fallback={<div className="w-14 h-14 rounded-full bg-muted/30 animate-pulse" />}>
-            <NaviComponent size={56} animated={false} />
-          </Suspense>
         ) : (
           <div className="w-14 h-14 rounded-full bg-muted/20 border border-border flex items-center justify-center">
             <Lock size={16} className="text-muted-foreground/40" />
@@ -157,7 +147,6 @@ export default function SkinsPage() {
   const [activeCategory, setActiveCategory] = useState<SkinCategory | "ALL">("ALL");
   const [rarityFilter, setRarityFilter] = useState<SkinRarity | "ALL">("ALL");
   const [showLocked, setShowLocked] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>("SVG");
 
   // Owner status is verified server-side via the has_role() RPC.
   const isAdmin = useOwner();
@@ -255,54 +244,15 @@ export default function SkinsPage() {
         </div>
       </div>
 
-      {/* Style toggle */}
-      <div className="flex items-center gap-2 mb-5">
-        <span className="text-[9px] font-mono text-muted-foreground">VIEW STYLE</span>
-        <div className="flex rounded border border-border overflow-hidden">
-          <button
-            onClick={() => setViewMode("SVG")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
-              ${viewMode === "SVG" ? "bg-primary/15 text-primary border-r border-primary/30" : "text-muted-foreground hover:text-foreground border-r border-border"}`}
-          >
-            <Cpu size={9} /> SPRITE
-          </button>
-          <button
-            onClick={() => setViewMode("AI")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-mono transition-colors
-              ${viewMode === "AI" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            <Wand2 size={9} /> AI GEN
-          </button>
-        </div>
-        {viewMode === "AI" && (
-          <span className="text-[8px] font-mono text-muted-foreground/60">
-            // tap GEN AI on unlocked skins without an image yet
-          </span>
-        )}
-      </div>
-
       {/* Currently equipped */}
       <div className="mb-4 p-3 rounded border border-primary/30 bg-primary/5 flex items-center gap-3">
         <div className="w-10 h-10 shrink-0">
-          {(() => {
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            if (viewMode === "AI") {
-              return (
-                <img
-                  src={`${supabaseUrl}/storage/v1/object/public/navi-skins/${(profile.equipped_skin ?? "").toLowerCase()}.png`}
-                  alt={profile.equipped_skin ?? ""}
-                  className="w-10 h-10 object-contain rounded"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                />
-              );
-            }
-            const NaviComp = getNaviCharacter(profile.equipped_skin);
-            return NaviComp ? (
-              <Suspense fallback={<div className="w-10 h-10 rounded-full bg-muted/30 animate-pulse" />}>
-                <NaviComp size={40} animated />
-              </Suspense>
-            ) : null;
-          })()}
+          <img
+            src={skinArtUrl(profile.equipped_skin)}
+            alt={profile.equipped_skin ?? ""}
+            className="w-10 h-10 object-contain rounded"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
         </div>
         <div>
           <p className="text-[10px] font-mono text-muted-foreground">EQUIPPED</p>
@@ -329,7 +279,6 @@ export default function SkinsPage() {
                       isUnlocked={isSkinUnlocked(skin, unlockState)}
                       isEquipped={profile.equipped_skin === skin.id}
                       onEquip={() => equipSkin(skin.id)}
-                      viewMode={viewMode}
                     />
                   ))}
                 </div>
@@ -345,7 +294,6 @@ export default function SkinsPage() {
                 isUnlocked={isSkinUnlocked(skin, unlockState)}
                 isEquipped={profile.equipped_skin === skin.id}
                 onEquip={() => equipSkin(skin.id)}
-                viewMode={viewMode}
               />
             ))}
           </div>

@@ -2,9 +2,9 @@ import PageHeader from "@/components/PageHeader";
 import HudCard from "@/components/HudCard";
 import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
-import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye, Cpu, Wand2, RefreshCw } from "lucide-react";
-import { useState, useEffect, Suspense } from "react";
-import { getNaviCharacter } from "@/components/navi-characters";
+import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye, Wand2, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { skinArtUrl } from "@/lib/skinArt";
 import NaviErrorBoundary from "@/components/NaviErrorBoundary";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useOwner } from "@/hooks/useOwner";
-import { useNaviRenderMode } from "@/hooks/useNaviRenderMode";
 import { usePaywall } from "@/hooks/usePaywall";
 
 type SkinCategory = "ELEMENTAL" | "CLASS" | "MYTHIC" | "COSMIC" | "NATURE" | "TECH" | "SPECIAL";
@@ -25,8 +24,7 @@ interface NaviSkin {
   rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
 }
 
-const STORAGE_BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/navi-skins`;
-const getSkinUrl = (name: string) => `${STORAGE_BASE}/${name.toLowerCase()}.png`;
+const getSkinUrl = (name: string) => skinArtUrl(name);
 
 const RARITY_BORDER: Record<string, string> = {
   COMMON: "border-muted-foreground/30",
@@ -173,7 +171,6 @@ export default function NaviPage() {
   const [unlockedSkins, setUnlockedSkins] = useState<Set<string>>(new Set(["NETOP"]));
   const [unlockConditions, setUnlockConditions] = useState<Record<string, { unlock_type: string; unlock_value: number; description: string }>>({});
   const [editMode, setEditMode] = useState(false);
-  const [skinViewMode, setSkinViewMode] = useNaviRenderMode();
   const [omniSyncing, setOmniSyncing] = useState(false);
   const [omniSyncMsg, setOmniSyncMsg] = useState<string | null>(null);
 
@@ -232,7 +229,6 @@ export default function NaviPage() {
   const unlockedCount = ALL_SKINS.filter((s) => isSkinUnlocked(s.name)).length;
   const naviLevel = profile.navi_level;
   const unlockedNaviSkills = NAVI_SKILLS_BY_LEVEL.filter((s) => s.unlockLevel <= naviLevel);
-  const EquippedNaviChar = getNaviCharacter(equippedSkin);
 
   return (
     <div>
@@ -255,17 +251,7 @@ export default function NaviPage() {
           {previewSkin && (
             <div className="flex flex-col items-center p-6">
               <div className="w-56 h-56 rounded-lg bg-muted/30 border border-border flex items-center justify-center mb-4 overflow-hidden">
-                {(() => {
-                  const PreviewNavi = getNaviCharacter(previewSkin.name);
-                  if (skinViewMode === "SVG" && PreviewNavi) {
-                    return (
-                      <Suspense fallback={<div className="w-full h-full" />}>
-                        <PreviewNavi size={200} animated />
-                      </Suspense>
-                    );
-                  }
-                  return <img src={getSkinUrl(previewSkin.name)} alt={previewSkin.name} className="w-full h-full object-contain drop-shadow-[0_0_16px_hsl(185,100%,50%,0.3)]" />;
-                })()}
+                <img src={getSkinUrl(previewSkin.name)} alt={previewSkin.name} className="w-full h-full object-contain drop-shadow-[0_0_16px_hsl(185,100%,50%,0.3)]" />
               </div>
               <h3 className="font-display text-lg text-primary font-bold">{previewSkin.name}</h3>
               <div className="flex gap-2 mt-1 mb-3">
@@ -298,17 +284,11 @@ export default function NaviPage() {
           className="w-40 h-40 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
           title="Open Navi AI Chat"
         >
-          {skinViewMode === "SVG" && EquippedNaviChar ? (
-            <Suspense fallback={<div className="w-32 h-32" />}>
-              <EquippedNaviChar size={128} animated />
-            </Suspense>
-          ) : (
-            <img
-              src={getSkinUrl(equippedSkin)}
-              alt="NAVI companion"
-              className="w-32 h-32 object-contain drop-shadow-[0_0_12px_hsl(185,100%,50%,0.4)] group-hover:scale-105 transition-transform"
-            />
-          )}
+          <img
+            src={getSkinUrl(equippedSkin)}
+            alt="NAVI companion"
+            className="w-32 h-32 object-contain drop-shadow-[0_0_12px_hsl(185,100%,50%,0.4)] group-hover:scale-105 transition-transform"
+          />
           <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-green border-2 border-background flex items-center justify-center">
             <Wifi size={10} className="text-background" />
           </div>
@@ -474,17 +454,6 @@ export default function NaviPage() {
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <p className="text-xs font-mono text-muted-foreground">{unlockedCount}/{ALL_SKINS.length} UNLOCKED • TAP TO PREVIEW</p>
           <div className="flex items-center gap-2">
-            {/* SPRITE / AI GEN toggle */}
-            <div className="flex rounded border border-primary/40 overflow-hidden">
-              <button onClick={() => setSkinViewMode("SVG")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono transition-colors ${skinViewMode === "SVG" ? "bg-primary/15 text-primary border-r border-primary/30" : "text-muted-foreground hover:text-foreground border-r border-border"}`}>
-                <Cpu size={9} /> SPRITE
-              </button>
-              <button onClick={() => setSkinViewMode("AI")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono transition-colors ${skinViewMode === "AI" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-                <Wand2 size={9} /> AI GEN
-              </button>
-            </div>
             <Input placeholder="Search skins..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-40 h-7 text-xs bg-muted/50 border-border" />
           </div>
         </div>
@@ -496,18 +465,11 @@ export default function NaviPage() {
         </div>
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[600px] overflow-y-auto pr-1">
           {filteredSkins.map((skin) => {
-            const SkinNavi = getNaviCharacter(skin.name);
             const unlocked = isSkinUnlocked(skin.name);
             return (
             <button key={skin.name} onClick={() => setPreviewSkin(skin)} className={`rounded border p-2 flex flex-col items-center gap-1.5 transition-all relative group ${RARITY_BORDER[skin.rarity]} ${RARITY_BG[skin.rarity]} ${equippedSkin === skin.name ? "ring-1 ring-primary" : ""} cursor-pointer hover:border-primary/60`}>
               <div className={`w-12 h-12 rounded-full overflow-hidden bg-muted/30 flex items-center justify-center ${!unlocked ? "opacity-40 grayscale" : ""}`}>
-                {skinViewMode === "SVG" && SkinNavi ? (
-                  <Suspense fallback={<div className="w-full h-full" />}>
-                    <SkinNavi size={48} animated={false} />
-                  </Suspense>
-                ) : (
-                  <img src={getSkinUrl(skin.name)} alt={skin.name} className={`w-full h-full object-contain ${unlocked ? "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]" : ""}`} loading="lazy" />
-                )}
+                <img src={getSkinUrl(skin.name)} alt={skin.name} className={`w-full h-full object-contain ${unlocked ? "drop-shadow-[0_0_6px_hsl(185,100%,50%,0.3)]" : ""}`} loading="lazy" />
               </div>
               <p className="font-mono text-[8px] text-foreground leading-tight text-center truncate w-full">{skin.name}</p>
               <span className={`text-[7px] font-mono ${skin.rarity === "LEGENDARY" ? "text-accent" : skin.rarity === "EPIC" ? "text-secondary" : skin.rarity === "RARE" ? "text-primary" : "text-muted-foreground"}`}>{skin.rarity}</span>

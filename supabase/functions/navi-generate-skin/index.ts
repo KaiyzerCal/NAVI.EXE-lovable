@@ -129,16 +129,29 @@ function buildPrompt(
 // and key navi-chat already uses. Returns null (rather than throwing) so the
 // caller can fall back to OpenAI, and reports the response shape on failure so
 // a wrong assumption about the payload is visible instead of silent.
-async function generateViaLovable(prompt: string): Promise<{ bytes?: Uint8Array; error?: string }> {
+async function generateViaLovable(
+  prompt: string,
+  // When present, the model is given this image to work FROM rather than
+  // inventing a fresh design. Used for turntable frames, where every angle
+  // must be recognisably the same character.
+  referencePng?: Uint8Array,
+): Promise<{ bytes?: Uint8Array; error?: string }> {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) return { error: "LOVABLE_API_KEY not set" };
+
+  const content = referencePng
+    ? [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: `data:image/png;base64,${bytesToBase64(referencePng)}` } },
+      ]
+    : prompt;
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "google/gemini-2.5-flash-image-preview",
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content }],
       modalities: ["image", "text"],
     }),
   });
@@ -220,6 +233,36 @@ async function keyOutChroma(png: Uint8Array): Promise<Uint8Array> {
   }
 
   return await img.encode();
+}
+
+// btoa() on a 2 MB image blows the argument limit if the whole array is spread
+// into String.fromCharCode at once, so build the binary string in chunks.
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// Turntable frames. Angle 0 is the existing front render (reused, never
+// regenerated); the rest are produced FROM it so the character stays
+// recognisably itself instead of being redesigned per angle.
+const TURNTABLE_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+function turntablePrompt(skinName: string, deg: number): string {
+  return [
+    `The attached image shows a 3D character named "${skinName}".`,
+    `Render the EXACT SAME character rotated ${deg} degrees clockwise around its vertical axis,`,
+    "as a turntable/orbit view of the same figure.",
+    "Preserve the design precisely: identical species, silhouette, outfit, colours, materials,",
+    "proportions, and glowing eye colour. Do not redesign, restyle, or add anything new.",
+    "Keep the camera height, distance, framing, scale and lighting identical to the reference,",
+    "so the frames can be played in sequence without the character jumping in size or position.",
+    deg === 180 ? "This is the rear view: show the back of the head and body." : "",
+    BACKGROUNDS.chroma,
+  ].filter(Boolean).join(" ");
 }
 
 // Grid thumbnails. The full renders are ~2 MB each at 1024², and the skins
@@ -328,6 +371,9 @@ serve(async (req) => {
       // Generate nothing; just derive the grid thumbnail from artwork that
       // already exists. Used to backfill skins rendered before thumbs existed.
       thumbOnly,
+      // Build the rotatable turntable frames for this skin, using its existing
+      // front render as the reference every other angle is derived from.
+      turntable,
     } = await req.json();
     if (!skinName) throw new Error("skinName required");
 
@@ -368,6 +414,43 @@ serve(async (req) => {
       const thumbBytes = await uploadThumb(bytes);
       return new Response(
         JSON.stringify({ thumbUrl: publicUrl(thumbPath), sourceBytes: bytes.length, thumbBytes }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Turntable: reuse the front render as angle 0, derive the rest from it.
+    if (turntable) {
+      const slug = String(skinName).toLowerCase();
+      const framePath = (deg: number) => `${styleKey}/turntable/${slug}/${deg}.png`;
+
+      const { data: frontBlob } = await supabase.storage.from("navi-skins").download(filePath);
+      if (!frontBlob) throw new Error(`No front render at ${filePath} to rotate`);
+      const front = new Uint8Array(await frontBlob.arrayBuffer());
+
+      const frames: Record<number, string> = {};
+      const errors: string[] = [];
+
+      // Angle 0 is the front render itself — copied, not regenerated.
+      await supabase.storage.from("navi-skins")
+        .upload(framePath(0), front, { contentType: "image/png", upsert: true });
+      frames[0] = publicUrl(framePath(0));
+
+      for (const deg of TURNTABLE_ANGLES.slice(1)) {
+        if (!force) {
+          const { data: existing } = await supabase.storage.from("navi-skins").download(framePath(deg));
+          if (existing) { frames[deg] = publicUrl(framePath(deg)); continue; }
+        }
+        const r = await generateViaLovable(turntablePrompt(skinName, deg), front);
+        if (!r.bytes) { errors.push(`${deg}deg: ${r.error}`); continue; }
+        const keyed = await keyOutChroma(r.bytes);
+        const { error } = await supabase.storage.from("navi-skins")
+          .upload(framePath(deg), keyed, { contentType: "image/png", upsert: true });
+        if (error) { errors.push(`${deg}deg upload: ${error.message}`); continue; }
+        frames[deg] = publicUrl(framePath(deg));
+      }
+
+      return new Response(
+        JSON.stringify({ frames, angles: TURNTABLE_ANGLES, errors: errors.length ? errors : undefined }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

@@ -5,7 +5,7 @@ import HudCard from "@/components/HudCard";
 import { Lock, Layers, Wand2, Loader2 } from "lucide-react";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { skinArtUrl } from "@/lib/skinArt";
+import { skinThumbUrl } from "@/lib/skinArt";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwner } from "@/hooks/useOwner";
 import {
@@ -57,7 +57,7 @@ function SkinCard({
   const [imgError, setImgError] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  const storageUrl = skinArtUrl(def.name);
+  const storageUrl = skinThumbUrl(def.name);
 
   async function generateAiSkin(e: React.MouseEvent) {
     e.stopPropagation();
@@ -248,7 +248,7 @@ export default function SkinsPage() {
       <div className="mb-4 p-3 rounded border border-primary/30 bg-primary/5 flex items-center gap-3">
         <div className="w-10 h-10 shrink-0">
           <img
-            src={skinArtUrl(profile.equipped_skin)}
+            src={skinThumbUrl(profile.equipped_skin)}
             alt={profile.equipped_skin ?? ""}
             className="w-10 h-10 object-contain rounded"
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}

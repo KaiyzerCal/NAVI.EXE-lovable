@@ -11,7 +11,30 @@
 // lost, but nothing reads from them any more.
 const BASE = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/navi-skins/cgi`;
 
-/** Public URL for a skin's artwork, keyed by its display name (e.g. "Flamebird"). */
+/** Full-resolution artwork (1024², ~2 MB). Use only where it's shown large. */
 export function skinArtUrl(skinName: string | null | undefined): string {
   return `${BASE}/${String(skinName ?? "").toLowerCase()}.png`;
 }
+
+/**
+ * 256px thumbnail (~60 KB) for grids and small avatars.
+ *
+ * The grid draws skins at ~56px, so serving the full render there meant a
+ * 72-card page could pull >140 MB. Thumbnails bring the same page to ~4 MB.
+ * Reach for skinArtUrl only when the art is actually displayed large.
+ */
+export function skinThumbUrl(skinName: string | null | undefined): string {
+  return `${BASE}/thumb/${String(skinName ?? "").toLowerCase()}.png`;
+}
+
+/**
+ * Turntable frame for the rotatable 3D view. Angles: 0,45,...,315.
+ *
+ * Points at the reduced (384px) frames, not the 1024px originals — a rotation
+ * loads all eight, which would otherwise be ~16 MB for a ~300px viewer.
+ */
+export function skinTurntableUrl(skinName: string | null | undefined, deg: number): string {
+  return `${BASE}/turntable/${String(skinName ?? "").toLowerCase()}/thumb/${deg}.png`;
+}
+
+export const TURNTABLE_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const;

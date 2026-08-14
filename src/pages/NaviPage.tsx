@@ -4,7 +4,8 @@ import ProgressBar from "@/components/ProgressBar";
 import { motion } from "framer-motion";
 import { Heart, Wifi, Shield, Zap, Sparkles, Lock, Check, Trophy, MessageSquare, Star, Eye, Wand2, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
-import { skinArtUrl } from "@/lib/skinArt";
+import { skinThumbUrl } from "@/lib/skinArt";
+import NaviTurntable from "@/components/NaviTurntable";
 import NaviErrorBoundary from "@/components/NaviErrorBoundary";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -24,7 +25,7 @@ interface NaviSkin {
   rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
 }
 
-const getSkinUrl = (name: string) => skinArtUrl(name);
+const getSkinUrl = (name: string) => skinThumbUrl(name);
 
 const RARITY_BORDER: Record<string, string> = {
   COMMON: "border-muted-foreground/30",
@@ -279,22 +280,23 @@ export default function NaviPage() {
         animate={{ opacity: 1, scale: 1 }}
         className="flex flex-col items-center mb-8"
       >
-        <button
-          onClick={() => navigate("/mavis")}
-          className="w-40 h-40 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-4 relative overflow-hidden cursor-pointer hover:border-primary/60 transition-all group"
-          title="Open Navi AI Chat"
-        >
-          <img
-            src={getSkinUrl(equippedSkin)}
-            alt="NAVI companion"
-            className="w-32 h-32 object-contain drop-shadow-[0_0_12px_hsl(185,100%,50%,0.4)] group-hover:scale-105 transition-transform"
-          />
+        {/* The hero used to be one big button that opened the chat. It now hosts
+            the drag-to-rotate turntable, so the chat action moved to its own
+            button below — a horizontal drag inside a click target would
+            otherwise fire navigation on release. */}
+        <div className="w-40 h-40 rounded-full bg-primary/5 border-2 border-primary/30 flex items-center justify-center glow-cyan mb-3 relative">
+          <NaviTurntable skinName={equippedSkin} size={136} />
           <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-green border-2 border-background flex items-center justify-center">
             <Wifi size={10} className="text-background" />
           </div>
-          <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center">
-            <MessageSquare size={24} className="text-primary opacity-0 group-hover:opacity-80 transition-opacity" />
-          </div>
+        </div>
+
+        <button
+          onClick={() => navigate("/mavis")}
+          className="mb-4 flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/40 bg-primary/10 text-primary text-[10px] font-mono hover:bg-primary/20 hover:border-primary/60 transition-colors"
+          title="Open Navi AI Chat"
+        >
+          <MessageSquare size={11} /> TALK TO NAVI
         </button>
         <h2 className="font-display text-lg text-primary font-bold text-glow-cyan">
           {editMode ? (

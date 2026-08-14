@@ -6,7 +6,7 @@ import { Swords, Star, BookOpen, Activity, TrendingUp, Zap, MessageSquare, Wifi,
 import { useAppData } from "@/contexts/AppDataContext";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { skinArtUrl } from "@/lib/skinArt";
+import { skinThumbUrl } from "@/lib/skinArt";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -44,7 +44,7 @@ export default function Dashboard() {
 
   const loading = profileLoading || questsLoading || journalLoading;
 
-  const skinUrl = skinArtUrl(profile.equipped_skin);
+  const skinUrl = skinThumbUrl(profile.equipped_skin);
   const bondAvg = Math.round((profile.bond_affection + profile.bond_trust + profile.bond_loyalty) / 3);
   const operatorXp = profile.operator_xp ?? profile.xp_total ?? 0;
   const operatorLevel = profile.operator_level ?? 1;

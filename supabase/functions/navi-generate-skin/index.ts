@@ -25,21 +25,45 @@ const corsHeaders = {
 //                              focal points (notably the eyes) is what makes
 //                              the reference read as high-craft rather than
 //                              generic-bright.
-const STYLE = [
-  "Painterly 2D game character art, in the style of a hand-painted RPG character sheet.",
+// Shared across both styles so the two render modes show the SAME character
+// in two different art treatments, rather than two unrelated designs.
+const SHARED_SUBJECT = [
   "Chibi proportions: roughly 2.5 heads tall, oversized expressive head, short stubby limbs, small body.",
   "Anthropomorphic creature standing upright on two legs, wearing layered clothing",
   "(jacket, hoodie, coat, scarf, or robe) with visible fabric folds and worn detail.",
-  "Visible painterly brush texture and soft edges — NOT flat vector, NOT cel-shaded anime,",
-  "NOT a 3D render, NOT glossy plastic, NOT photorealistic.",
-  "Muted, desaturated, earthy colour palette (olive, rust, umber, slate, teal)",
-  "with a small number of saturated accent colours used sparingly for focus.",
-  "Glowing eyes as the strongest focal point. Strong dark outline and a clean readable silhouette.",
-  "Subtle rim lighting separating the character from the background.",
+  "Glowing eyes as the strongest focal point. Clean, readable silhouette.",
   "Full body, facing forward, symmetrical relaxed idle stance, centered in frame,",
   "with a soft contact shadow beneath the feet.",
   "Transparent background. Single character only. No text, no logos, no watermark, no border, no frame.",
 ].join(" ");
+
+const PAINTERLY_STYLE = [
+  "Painterly 2D game character art, in the style of a hand-painted RPG character sheet.",
+  "Visible painterly brush texture and soft edges — NOT flat vector, NOT cel-shaded anime,",
+  "NOT a 3D render, NOT glossy plastic, NOT photorealistic.",
+  "Muted, desaturated, earthy colour palette (olive, rust, umber, slate, teal)",
+  "with a small number of saturated accent colours used sparingly for focus.",
+  "Strong dark outline. Subtle rim lighting separating the character from the background.",
+  SHARED_SUBJECT,
+].join(" ");
+
+const CGI_STYLE = [
+  "High-end stylized 3D CGI character render, as if from a modern animated feature film",
+  "or a collectible vinyl designer toy. Rendered in three dimensions with real depth and volume.",
+  "Physically-based materials with clearly differentiated surfaces: soft fuzzy fabric,",
+  "brushed metal, worn leather, subsurface scattering through skin and ears.",
+  "Cinematic three-point studio lighting with a strong rim light, soft global illumination,",
+  "gentle ambient occlusion in the crevices, shallow depth of field.",
+  "Crisp micro-detail — stitching, fabric weave, scuffs, fingerprints on metal.",
+  "Richer and more saturated than a painting, but still grounded and tasteful.",
+  "NOT a 2D drawing, NOT painterly, NOT flat, NOT cel-shaded, NOT pixel art.",
+  SHARED_SUBJECT,
+].join(" ");
+
+const STYLES: Record<string, string> = {
+  painterly: PAINTERLY_STYLE,
+  cgi: CGI_STYLE,
+};
 
 // Per-category direction so a Tech skin and a Mythic skin don't come back as
 // the same creature in a different hue. The old function drove colour off
@@ -54,17 +78,18 @@ const CATEGORY_DIRECTION: Record<string, string> = {
   SPECIAL:   "Rare special theme: unusual materials and an unmistakably distinct design that reads as a prize.",
 };
 
-function buildPrompt(skinName: string, category?: string, accent?: string): string {
+function buildPrompt(skinName: string, category?: string, accent?: string, style?: string): string {
   const categoryLine = (category && CATEGORY_DIRECTION[category.toUpperCase()]) ?? "";
   // The name itself carries the creature identity (Flamebird, Ironbear,
   // Moonwitch...), so it drives the design rather than a rarity colour.
   const accentLine = accent ? `Accent colour palette: ${accent}.` : "";
+  const styleBlock = STYLES[String(style ?? "painterly").toLowerCase()] ?? PAINTERLY_STYLE;
   return [
     `A collectible creature companion character named "${skinName}".`,
     `Design the creature to match its name — its species, silhouette and outfit should read as "${skinName}" at a glance.`,
     categoryLine,
     accentLine,
-    STYLE,
+    styleBlock,
   ].filter(Boolean).join(" ");
 }
 
@@ -123,13 +148,20 @@ serve(async (req) => {
       skinName,
       skinColor,
       category,
-      // Write somewhere other than "<name>.png" — used to render style
-      // previews without overwriting the live art for a skin.
+      // "painterly" (2D hand-painted) or "cgi" (stylized 3D render). These are
+      // the app's two render modes — the same character in two art treatments.
+      style,
+      // Write somewhere other than the default style path — used to render
+      // previews without overwriting live art.
       pathOverride,
       // Regenerate even when a file already exists (restyling an existing set).
       force,
     } = await req.json();
     if (!skinName) throw new Error("skinName required");
+
+    // Each style gets its own folder. The original flat "<name>.png" layout is
+    // left alone so the pre-existing art stays available as a fallback.
+    const styleKey = STYLES[String(style ?? "painterly").toLowerCase()] ? String(style ?? "painterly").toLowerCase() : "painterly";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -142,7 +174,7 @@ serve(async (req) => {
       console.log("Bucket creation error:", bucketError.message);
     }
 
-    const filePath = String(pathOverride ?? `${String(skinName).toLowerCase()}.png`);
+    const filePath = String(pathOverride ?? `${styleKey}/${String(skinName).toLowerCase()}.png`);
 
     if (!force) {
       const { data: fileData } = await supabase.storage.from("navi-skins").download(filePath);
@@ -157,7 +189,7 @@ serve(async (req) => {
     const apiKey = Deno.env.get("OPENAI_API");
     if (!apiKey) throw new Error("OPENAI_API secret not set");
 
-    const binaryData = await generateImage(apiKey, buildPrompt(skinName, category, skinColor));
+    const binaryData = await generateImage(apiKey, buildPrompt(skinName, category, skinColor, styleKey));
 
     const { error: uploadError } = await supabase.storage
       .from("navi-skins")

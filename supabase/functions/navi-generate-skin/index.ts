@@ -222,6 +222,49 @@ async function keyOutChroma(png: Uint8Array): Promise<Uint8Array> {
   return await img.encode();
 }
 
+// Grid thumbnails. The full renders are ~2 MB each at 1024², and the skins
+// grid draws them at ~56 px — a 72-card grid would pull >100 MB on mobile.
+//
+// ImageScript only ships nearest-neighbour resizing, which drops 15 of every
+// 16 pixels going 1024 -> 256 and produces a crunchy, aliased thumbnail. Since
+// the ratio is an exact factor, a box filter is both simple and correct.
+// Averaging is alpha-weighted: RGB under fully transparent pixels is arbitrary
+// (the magenta plate, in our case), so a naive average would drag that colour
+// into every edge pixel and re-introduce the fringe the keyer just removed.
+function boxDownscale(img: Image, target: number): Image {
+  const f = Math.max(1, Math.floor(img.width / target));
+  if (f <= 1) return img;
+  const w = Math.floor(img.width / f);
+  const h = Math.floor(img.height / f);
+  const out = new Image(w, h);
+  const src = img.bitmap;
+  const dst = out.bitmap;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let rs = 0, gs = 0, bs = 0, as = 0;
+      for (let dy = 0; dy < f; dy++) {
+        const row = (y * f + dy) * img.width;
+        for (let dx = 0; dx < f; dx++) {
+          const o = (row + x * f + dx) * 4;
+          const a = src[o + 3];
+          rs += src[o] * a; gs += src[o + 1] * a; bs += src[o + 2] * a; as += a;
+        }
+      }
+      const o = (y * w + x) * 4;
+      dst[o]     = as ? Math.round(rs / as) : 0;
+      dst[o + 1] = as ? Math.round(gs / as) : 0;
+      dst[o + 2] = as ? Math.round(bs / as) : 0;
+      dst[o + 3] = Math.round(as / (f * f));
+    }
+  }
+  return out;
+}
+
+async function makeThumb(png: Uint8Array, size = 256): Promise<Uint8Array> {
+  return await boxDownscale(await Image.decode(png), size).encode();
+}
+
 async function generateImage(apiKey: string, prompt: string): Promise<Uint8Array> {
   const attempts: Array<Record<string, unknown>> = [
     { model: "gpt-image-1", prompt, n: 1, size: "1024x1024", quality: "high", background: "transparent", output_format: "png" },
@@ -282,6 +325,9 @@ serve(async (req) => {
       // Skip chroma keying and store the raw magenta plate — for inspecting
       // whether the model actually produced a clean, flat key colour.
       rawChroma,
+      // Generate nothing; just derive the grid thumbnail from artwork that
+      // already exists. Used to backfill skins rendered before thumbs existed.
+      thumbOnly,
     } = await req.json();
     if (!skinName) throw new Error("skinName required");
 
@@ -301,6 +347,30 @@ serve(async (req) => {
     }
 
     const filePath = String(pathOverride ?? `${styleKey}/${String(skinName).toLowerCase()}.png`);
+    const thumbPath = `${styleKey}/thumb/${String(skinName).toLowerCase()}.png`;
+    const publicUrl = (p: string) => `${supabaseUrl}/storage/v1/object/public/navi-skins/${p}`;
+
+    const uploadThumb = async (fullSize: Uint8Array) => {
+      const thumb = await makeThumb(fullSize);
+      const { error } = await supabase.storage
+        .from("navi-skins")
+        .upload(thumbPath, thumb, { contentType: "image/png", upsert: true });
+      if (error) throw new Error(`Thumb upload failed: ${error.message}`);
+      return thumb.length;
+    };
+
+    // Backfill path: derive a thumbnail from art that already exists, without
+    // spending a generation.
+    if (thumbOnly) {
+      const { data: existing } = await supabase.storage.from("navi-skins").download(filePath);
+      if (!existing) throw new Error(`No artwork at ${filePath} to thumbnail`);
+      const bytes = new Uint8Array(await existing.arrayBuffer());
+      const thumbBytes = await uploadThumb(bytes);
+      return new Response(
+        JSON.stringify({ thumbUrl: publicUrl(thumbPath), sourceBytes: bytes.length, thumbBytes }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     if (!force) {
       const { data: fileData } = await supabase.storage.from("navi-skins").download(filePath);
@@ -341,8 +411,17 @@ serve(async (req) => {
       .upload(filePath, binaryData, { contentType: "image/png", upsert: true });
     if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
+    // Always emit the grid thumbnail alongside the full render, so new skins
+    // can never end up full-res-only the way the original 72 did.
+    // Skipped for pathOverride previews, which are one-off and not shown in a grid.
+    let thumbUrl: string | undefined;
+    if (!pathOverride) {
+      await uploadThumb(binaryData);
+      thumbUrl = publicUrl(thumbPath);
+    }
+
     return new Response(
-      JSON.stringify({ imageUrl: `${supabaseUrl}/storage/v1/object/public/navi-skins/${filePath}`, cached: false }),
+      JSON.stringify({ imageUrl: publicUrl(filePath), thumbUrl, cached: false }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

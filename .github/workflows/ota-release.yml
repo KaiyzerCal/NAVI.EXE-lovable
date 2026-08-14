@@ -1,0 +1,80 @@
+name: OTA Release (Live Update)
+
+# Publishes a new self-hosted live-update bundle to the ota-bundles Supabase
+# Storage bucket whenever the web app changes. src/lib/liveUpdate.ts (native
+# side) checks manifest.json at startup and applies whatever's newest here —
+# no app-store review needed for JS/CSS-only changes, same category of
+# update Capgo/Appflow/CodePush operate in. Same setup as mythos-vantara.
+#
+# Uses the anon key (OTA_SUPABASE_ANON_KEY), not a service-role key — a
+# scoped RLS policy allows writes to just this one public, non-sensitive
+# bucket. Safer than putting a database-wide-bypass key in CI for something
+# this low-stakes. (This project's vault "service_role_key" secret turned
+# out to actually be the anon key under a misleading name — worth fixing
+# separately, unrelated to this workflow.)
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "vite.config.ts"
+      - "capacitor.config.ts"
+      - ".github/workflows/ota-release.yml"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Zip bundle and compute checksum
+        id: bundle
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_SHA::12}"
+          cd dist
+          zip -qr "../${VERSION}.zip" .
+          cd ..
+          CHECKSUM=$(sha256sum "${VERSION}.zip" | cut -d' ' -f1)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          cat > manifest.json <<EOF
+          {"version":"${VERSION}","url":"https://fjkkcrmhptrzobajjsqg.supabase.co/storage/v1/object/public/ota-bundles/${VERSION}.zip","checksum":"${CHECKSUM}"}
+          EOF
+          cat manifest.json
+
+      - name: Upload bundle and manifest
+        env:
+          OTA_SUPABASE_URL: ${{ secrets.OTA_SUPABASE_URL }}
+          OTA_SUPABASE_ANON_KEY: ${{ secrets.OTA_SUPABASE_ANON_KEY }}
+          VERSION: ${{ steps.bundle.outputs.version }}
+        run: |
+          set -euo pipefail
+          upload() {
+            local file="$1" dest="$2"
+            code=$(curl -sS -o /tmp/upload_resp.txt -w "%{http_code}" \
+              -X POST "${OTA_SUPABASE_URL}/storage/v1/object/ota-bundles/${dest}" \
+              -H "Authorization: Bearer ${OTA_SUPABASE_ANON_KEY}" \
+              -H "apikey: ${OTA_SUPABASE_ANON_KEY}" \
+              -H "x-upsert: true" \
+              --data-binary "@${file}")
+            echo "PUT ${dest}: HTTP ${code}"
+            cat /tmp/upload_resp.txt
+            echo
+            if [ "$code" -ge 300 ]; then exit 1; fi
+          }
+          upload "${VERSION}.zip" "${VERSION}.zip"
+          upload "manifest.json" "manifest.json"

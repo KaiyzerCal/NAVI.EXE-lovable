@@ -16,10 +16,24 @@ interface OtaManifest {
 }
 
 /**
- * Checks for a newer bundle and applies it. Safe to call unconditionally at
+ * Checks for a newer bundle and stages it. Safe to call unconditionally at
  * startup — no-ops immediately on web. Failures (offline, bad manifest,
  * flaky download) are swallowed: the app just keeps running on whatever
  * bundle is already installed rather than blocking startup on a network call.
+ *
+ * Deliberately does NOT call reload() here. This must run in the background
+ * after the app has already rendered — calling it before render (like the
+ * original version of this function did) means every native launch pays for
+ * a manifest fetch, and a live reload() firing mid-session while
+ * AppDataContext's hooks are still starting up produces "renders, but data
+ * never loads" — the reload wipes whatever was mid-fetch, and a stale
+ * service-worker cache-first response served across the swap can leave the
+ * new page's own fetches stalled too. setNextBundle() is documented by the
+ * plugin to apply "on reload() or restarting the app"; the plugin's own
+ * constructor promotes a staged bundle at native process start independent
+ * of this JS running at all, so a full close-and-reopen still picks it up,
+ * without ever interrupting a live session. (Same fix as mythos-vantara's
+ * liveUpdate.ts, commits #173/#175.)
  */
 export async function checkForUpdate(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
@@ -30,12 +44,17 @@ export async function checkForUpdate(): Promise<void> {
     const manifest = (await res.json()) as OtaManifest;
     if (!manifest?.version || !manifest?.url || !manifest?.checksum) return;
 
-    const current = await LiveUpdate.getCurrentBundle();
-    if (current.bundleId === manifest.version) return;
+    const [current, next] = await Promise.all([LiveUpdate.getCurrentBundle(), LiveUpdate.getNextBundle()]);
+    if (current.bundleId === manifest.version) return; // already running latest
+    if (next.bundleId === manifest.version) return; // already staged for next restart
 
-    await LiveUpdate.downloadBundle({ url: manifest.url, bundleId: manifest.version, checksum: manifest.checksum });
+    try {
+      await LiveUpdate.downloadBundle({ url: manifest.url, bundleId: manifest.version, checksum: manifest.checksum });
+    } catch {
+      // Already downloaded from an earlier check that never got restarted
+      // into (ERROR_BUNDLE_EXISTS) — fine, still (re)stage it below.
+    }
     await LiveUpdate.setNextBundle({ bundleId: manifest.version });
-    await LiveUpdate.reload();
   } catch {
     // Offline, malformed manifest, download failure, etc. — not fatal,
     // the app continues on its current bundle.

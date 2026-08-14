@@ -37,3 +37,7 @@ supabase/.temp/
 # Use a single package manager (npm). Remove the other lockfiles.
 bun.lockb
 bun.lock
+
+# Tauri desktop build output
+src-tauri/target/
+src-tauri/gen/

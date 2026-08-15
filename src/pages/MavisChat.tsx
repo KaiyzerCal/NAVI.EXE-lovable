@@ -535,6 +535,13 @@ export default function MavisChat() {
         }
       } catch (err) {
         console.error("Failed to load chat history:", err);
+        if (!cancelled) {
+          toast({
+            title: "Couldn't load chat",
+            description: "MAVIS couldn't connect to your conversation history, so sending is disabled until this loads. Try reloading.",
+            variant: "destructive",
+          });
+        }
       } finally {
         if (!cancelled) setChatDbLoaded(true);
       }

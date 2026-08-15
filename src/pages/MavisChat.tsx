@@ -1056,8 +1056,16 @@ export default function MavisChat() {
         },
       });
     } catch (e: any) {
-      if (e.name === "AbortError") return;
+      // Always clear isLoading here, even on an aborted stream — stopGeneration()
+      // already resets it for the deliberate Stop-button case, but any other abort
+      // (a duplicate touch/click firing sendMessage twice before React re-renders
+      // isLoading, an in-flight request torn down by app backgrounding, etc.) used
+      // to return early here without resetting it. Once stuck true, the guard at
+      // the top of sendMessage silently no-ops on every future Send — no error,
+      // input just stops working. Only the toast is conditional; the state reset
+      // isn't.
       setIsLoading(false);
+      if (e.name === "AbortError") return;
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
   }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile, navigate]);

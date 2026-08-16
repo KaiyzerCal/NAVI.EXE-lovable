@@ -1045,8 +1045,13 @@ serve(async (req) => {
       stream: true,
     };
 
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") ?? "";
+
     let response: Response | null = null;
-    let usedFallback = false;
+    let usedProvider: string | null = null;
+
+    const isUnfunded = (r: Response | null) =>
+      !r || r.status === 401 || r.status === 402 || r.status === 403 || r.status === 429 || r.status >= 500;
 
     // Primary: Lovable AI Gateway (Gemini)
     try {
@@ -1063,18 +1068,40 @@ serve(async (req) => {
       response = null;
     }
 
-    const shouldFallback =
-      !response ||
-      response.status === 402 ||
-      response.status === 429 ||
-      response.status >= 500;
-
-    if (shouldFallback && OPENAI_API_KEY) {
+    // Tier 2 — Groq (free tier, generous rate limit, OpenAI-compatible SSE —
+    // same shape the stream parser below already expects, so this is a
+    // drop-in fallback with no downstream changes needed). Tried before the
+    // paid OpenAI fallback for the same reason mavis-chat/mavis-persona-router
+    // try free providers first: a funded free tier beats an unfunded paid one.
+    if (isUnfunded(response) && GROQ_API_KEY) {
       const primaryStatus = response?.status ?? "network_error";
       const primaryBody = response ? await response.text().catch(() => "") : "";
       console.warn(
-        `Lovable AI unavailable (status=${primaryStatus}), falling back to OpenAI. Body:`,
+        `Lovable AI unavailable (status=${primaryStatus}), trying Groq. Body:`,
         primaryBody.slice(0, 300)
+      );
+      try {
+        response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...chatPayload, model: "llama-3.3-70b-versatile" }),
+        });
+        if (!isUnfunded(response)) usedProvider = "groq (llama-3.3-70b)";
+      } catch (e) {
+        console.error("Groq fallback fetch threw:", e);
+        response = null;
+      }
+    }
+
+    if (isUnfunded(response) && OPENAI_API_KEY) {
+      const priorStatus = response?.status ?? "network_error";
+      const priorBody = response ? await response.text().catch(() => "") : "";
+      console.warn(
+        `Groq/Lovable unavailable (status=${priorStatus}), falling back to OpenAI. Body:`,
+        priorBody.slice(0, 300)
       );
       try {
         response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1085,7 +1112,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "gpt-4o" : "gpt-4o-mini" }),
         });
-        usedFallback = true;
+        usedProvider = context?.subscription_tier === "elite" ? "openai (gpt-4o)" : "openai (gpt-4o-mini)";
       } catch (e) {
         console.error("OpenAI fallback fetch threw:", e);
       }
@@ -1110,7 +1137,7 @@ serve(async (req) => {
       });
     }
 
-    if (usedFallback) console.log("navi-chat: streaming response from OpenAI fallback (gpt-4o-mini).");
+    if (usedProvider) console.log(`navi-chat: streaming response from fallback provider: ${usedProvider}.`);
 
     // Fire-and-forget: bump last_active + engagement score on profile.
     // Adaptive personality drift was removed — it depended on a

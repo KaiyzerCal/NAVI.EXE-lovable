@@ -1112,6 +1112,21 @@ serve(async (req) => {
           },
           body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "gpt-4o" : "gpt-4o-mini" }),
         });
+        // OpenAI 429 is often a short burst limit rather than a hard quota
+        // stop — retry once after a short backoff before giving up.
+        if (response.status === 429) {
+          const body = await response.text().catch(() => "");
+          console.warn("OpenAI 429, retrying once. Body:", body.slice(0, 300));
+          await new Promise((r) => setTimeout(r, 2000));
+          response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ...chatPayload, model: "gpt-4o-mini" }),
+          });
+        }
         usedProvider = context?.subscription_tier === "elite" ? "openai (gpt-4o)" : "openai (gpt-4o-mini)";
       } catch (e) {
         console.error("OpenAI fallback fetch threw:", e);
@@ -1121,7 +1136,14 @@ serve(async (req) => {
     if (!response || !response.ok) {
       const status = response?.status ?? 500;
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
+        const detail = await response!.text().catch(() => "");
+        console.error("All AI providers exhausted. Final 429 body:", detail.slice(0, 400));
+        const outOfQuota = detail.includes("insufficient_quota");
+        return new Response(JSON.stringify({
+          error: outOfQuota
+            ? "AI is temporarily unavailable: the Lovable AI credits are used up and the OpenAI key is out of quota. Top up either one to restore chat."
+            : "Rate limit exceeded. Please try again in a moment.",
+        }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

@@ -944,6 +944,59 @@ NEVER SAY: "As an AI...", "I'm just a language model...", "How can I assist you 
 You are ${naviName}. You belong to ${userName}. Talk like it.`;
 }
 
+// Converts Gemini's native streamGenerateContent SSE
+// (candidates[].content.parts[].text) into OpenAI-delta-shaped SSE
+// (choices[].delta.content) bytes, so it's a drop-in for the response body
+// the TransformStream below already parses — same trick mythos-vantara's
+// geminiSseToTextStream does, just re-encoded as SSE bytes instead of a
+// ReadableStream<string>, since this function proxies raw Response bodies
+// rather than consuming provider streams through a shared abstraction.
+function geminiSseToOpenAIStream(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const reader = body.getReader();
+  let buf = "";
+
+  function emitDelta(controller: ReadableStreamDefaultController<Uint8Array>, line: string) {
+    if (!line.startsWith("data: ")) return;
+    const data = line.slice(6).trim();
+    if (!data || data === "[DONE]") return;
+    try {
+      const j = JSON.parse(data);
+      const parts: any[] = j.candidates?.[0]?.content?.parts ?? [];
+      const text = parts.filter((p: any) => p.text && !p.thought).map((p: any) => p.text).join("");
+      if (text) {
+        const chunk = { choices: [{ delta: { content: text } }] };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      }
+    } catch { /* skip malformed SSE line */ }
+  }
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            buf += decoder.decode();
+            for (const line of buf.split("\n")) emitDelta(controller, line);
+            break;
+          }
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) emitDelta(controller, line);
+        }
+      } catch (e) {
+        controller.error(e);
+        return;
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+}
+
 serve(async (req) => {
   const corsHeaders = corsHeadersFor(req);
   const preflight = handlePreflight(req);
@@ -961,8 +1014,12 @@ serve(async (req) => {
 
     const { messages, context } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    // Optional, not required — the provider cascade below tries Gemini
+    // (direct) and Groq first specifically so a request can still be served
+    // without ever touching the Lovable Gateway. Previously this threw
+    // immediately if unset, which meant those free tiers were unreachable
+    // whenever Lovable itself was the thing missing/misconfigured.
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API") ?? "";
     // Server-derived identity — ignores any client-supplied context.user_id.
@@ -1045,6 +1102,7 @@ serve(async (req) => {
       stream: true,
     };
 
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
     const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") ?? "";
 
     let response: Response | null = null;
@@ -1053,33 +1111,47 @@ serve(async (req) => {
     const isUnfunded = (r: Response | null) =>
       !r || r.status === 401 || r.status === 402 || r.status === 403 || r.status === 429 || r.status >= 500;
 
-    // Primary: Lovable AI Gateway (Gemini)
-    try {
-      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash" }),
-      });
-    } catch (e) {
-      console.error("Lovable AI gateway fetch threw:", e);
-      response = null;
+    // Tier 0 — Gemini 2.0 Flash, direct Google API key (free, 15 RPM).
+    // Deliberately NOT the Lovable Gateway's "google/gemini-2.5-flash" model
+    // below — that's the same underlying model but billed against Lovable AI
+    // credits. This hits Gemini directly, at no Lovable cost, exactly the
+    // free-tier-first pattern mythos-vantara's _shared/providers.ts already
+    // uses for MAVIS/council/persona chat (callGeminiStream / Tier 0a).
+    if (GEMINI_API_KEY) {
+      try {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: messages.map((m: any) => ({
+                role: m.role === "user" ? "user" : "model",
+                parts: [{ text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
+              })),
+              generationConfig: { maxOutputTokens: 4096 },
+            }),
+          }
+        );
+        if (!isUnfunded(geminiRes)) {
+          response = new Response(geminiSseToOpenAIStream(geminiRes.body!), {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          });
+          usedProvider = "gemini-2.0-flash (direct)";
+        } else {
+          console.warn(`Gemini direct unavailable (status=${geminiRes.status}), trying Groq.`);
+        }
+      } catch (e) {
+        console.error("Gemini direct fetch threw:", e);
+      }
     }
 
-    // Tier 2 — Groq (free tier, generous rate limit, OpenAI-compatible SSE —
+    // Tier 1 — Groq (free tier, generous rate limit, OpenAI-compatible SSE —
     // same shape the stream parser below already expects, so this is a
-    // drop-in fallback with no downstream changes needed). Tried before the
-    // paid OpenAI fallback for the same reason mavis-chat/mavis-persona-router
-    // try free providers first: a funded free tier beats an unfunded paid one.
-    if (isUnfunded(response) && GROQ_API_KEY) {
-      const primaryStatus = response?.status ?? "network_error";
-      const primaryBody = response ? await response.text().catch(() => "") : "";
-      console.warn(
-        `Lovable AI unavailable (status=${primaryStatus}), trying Groq. Body:`,
-        primaryBody.slice(0, 300)
-      );
+    // drop-in fallback with no downstream changes needed).
+    if (!response && GROQ_API_KEY) {
       try {
         response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
@@ -1090,8 +1162,25 @@ serve(async (req) => {
           body: JSON.stringify({ ...chatPayload, model: "llama-3.3-70b-versatile" }),
         });
         if (!isUnfunded(response)) usedProvider = "groq (llama-3.3-70b)";
+        else { console.warn(`Groq unavailable (status=${response.status}), trying Lovable Gateway.`); response = null; }
       } catch (e) {
         console.error("Groq fallback fetch threw:", e);
+      }
+    }
+
+    // Tier 2 — Lovable AI Gateway (Gemini, billed against Lovable AI credits)
+    if (isUnfunded(response) && LOVABLE_API_KEY) {
+      try {
+        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash" }),
+        });
+      } catch (e) {
+        console.error("Lovable AI gateway fetch threw:", e);
         response = null;
       }
     }
@@ -1100,7 +1189,7 @@ serve(async (req) => {
       const priorStatus = response?.status ?? "network_error";
       const priorBody = response ? await response.text().catch(() => "") : "";
       console.warn(
-        `Groq/Lovable unavailable (status=${priorStatus}), falling back to OpenAI. Body:`,
+        `Every free/Gateway provider unavailable (status=${priorStatus}), falling back to OpenAI. Body:`,
         priorBody.slice(0, 300)
       );
       try {
@@ -1148,7 +1237,7 @@ serve(async (req) => {
         });
       }
       if (status === 402 || status === 401) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted on both providers." }), {
+        return new Response(JSON.stringify({ error: "AI credits exhausted on every configured provider." }), {
           status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

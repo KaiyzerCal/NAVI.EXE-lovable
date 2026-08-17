@@ -314,6 +314,9 @@ async function streamChat({
   onDone(extractedActions);
 }
 
+/** An AbortController that records whether we aborted it on purpose. */
+type AbortWithIntent = AbortController & { intentional?: boolean };
+
 const INITIAL_MESSAGE: DisplayMessage = {
   id: "initial",
   role: "assistant",
@@ -343,7 +346,17 @@ export default function MavisChat() {
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  // Distinguishes an abort we caused on purpose (Stop button, or superseding
+  // an in-flight request with a newer one) from one we didn't (the OS tearing
+  // the connection down when the app is backgrounded, a dropped network).
+  // Both surface as an identical AbortError, and treating every one as
+  // intentional is why an interrupted reply used to vanish with no feedback.
+  //
+  // The flag lives on the controller rather than in a shared ref because
+  // abort() rejects the in-flight promise asynchronously: a shared ref would
+  // already have been reset for the *next* request by the time the aborted
+  // one's catch block actually ran.
+  const abortRef = useRef<AbortWithIntent | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── TTS state ──────────────────────────────────────────────────────────────
@@ -684,6 +697,7 @@ export default function MavisChat() {
 
   // ── Stop generation ────────────────────────────────────────────────────────
   const stopGeneration = useCallback(() => {
+    if (abortRef.current) abortRef.current.intentional = true;
     abortRef.current?.abort();
     setIsLoading(false);
   }, []);
@@ -863,9 +877,10 @@ export default function MavisChat() {
     setIsLoading(true);
     stopSpeaking();
 
-    // abort any previous stream
+    // abort any previous stream — deliberate, so it must not raise an error
+    if (abortRef.current) abortRef.current.intentional = true;
     abortRef.current?.abort();
-    const controller = new AbortController();
+    const controller: AbortWithIntent = new AbortController();
     abortRef.current = controller;
 
     let userMsgId: string;
@@ -1065,7 +1080,20 @@ export default function MavisChat() {
       // input just stops working. Only the toast is conditional; the state reset
       // isn't.
       setIsLoading(false);
-      if (e.name === "AbortError") return;
+      if (e.name === "AbortError") {
+        // A deliberate stop (or a newer message superseding this one) is not
+        // an error. Anything else that aborted this request is — staying
+        // silent there is what made a torn-down request indistinguishable
+        // from NAVI simply never answering.
+        if (!controller.intentional) {
+          toast({
+            title: "Connection interrupted",
+            description: "The reply was cut off before it arrived. Send it again.",
+            variant: "destructive",
+          });
+        }
+        return;
+      }
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
     }
   }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile, navigate]);

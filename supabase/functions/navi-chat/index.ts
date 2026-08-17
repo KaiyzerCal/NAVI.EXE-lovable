@@ -5,6 +5,44 @@ import { getAuthedUser } from "../_shared/auth.ts";
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// ── Upstream timeouts ────────────────────────────────────────────────────────
+// Every outbound call from this function used to be unbounded. A single slow
+// hop (an exhausted free-tier provider that takes 30s to answer with a 429, a
+// cold embedding call) would stall the whole request with nothing sent to the
+// client — which reads as "sent the message, nothing ever came back", and on
+// Android the connection is torn down long before the reply arrives.
+const T = {
+  supabase: 5_000,   // profile / admin lookups
+  embed:    4_000,   // OpenAI embeddings
+  memory:   4_000,   // pgvector memory search RPC
+  search:   6_000,   // Tavily web search
+  provider: 12_000,  // time for a model to START responding (headers only)
+} as const;
+
+/**
+ * Bounds how long we wait for a provider to *begin* responding, without
+ * capping the stream itself.
+ *
+ * fetch() resolves as soon as response headers arrive, so clearing the timer
+ * there leaves the body free to stream for as long as the answer needs.
+ * Passing AbortSignal.timeout() straight to a streaming fetch would instead
+ * tear down a perfectly healthy long reply mid-sentence once the timeout
+ * elapsed — which is why this can't just be a signal on the request.
+ */
+async function fetchHeaderBounded(
+  url: string,
+  init: RequestInit,
+  ms: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type NaviAction = { type: string; params: Record<string, unknown> };
@@ -555,6 +593,7 @@ async function embedText(text: string, apiKey: string): Promise<number[] | null>
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: "text-embedding-3-small", input: text.slice(0, 8000) }),
+      signal: AbortSignal.timeout(T.embed),
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -583,6 +622,7 @@ async function searchNaViMemories(
         match_threshold: 0.72,
         match_count:     8,
       }),
+      signal: AbortSignal.timeout(T.memory),
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -628,6 +668,7 @@ async function tavilySearch(query: string): Promise<string> {
         search_depth: "basic",
         max_results: 5,
       }),
+      signal: AbortSignal.timeout(T.search),
     });
     if (!res.ok) {
       console.error("Tavily error:", res.status, await res.text());
@@ -1032,7 +1073,7 @@ serve(async (req) => {
         const serviceHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
         const profileRes = await fetch(
           `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier,daily_message_count,message_count_reset_date`,
-          { headers: serviceHeaders }
+          { headers: serviceHeaders, signal: AbortSignal.timeout(T.supabase) }
         );
         if (profileRes.ok) {
           const profiles = await profileRes.json();
@@ -1046,7 +1087,7 @@ serve(async (req) => {
             // profile tier hasn't been updated after admin was added to DB.
             const adminRes = await fetch(
               `${SUPABASE_URL}/rest/v1/admin_users?user_id=eq.${userId}&select=user_id`,
-              { headers: serviceHeaders }
+              { headers: serviceHeaders, signal: AbortSignal.timeout(T.supabase) }
             );
             const isAdmin = adminRes.ok && ((await adminRes.json())?.length ?? 0) > 0;
 
@@ -1073,6 +1114,40 @@ serve(async (req) => {
     }
 
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+
+    // ── Open the SSE stream NOW, before any slow work ────────────────────────
+    // Everything below (memory search, web search, and the provider cascade)
+    // used to run to completion before the Response was constructed, so the
+    // client got no bytes at all until a model had already started answering.
+    // On Android that silent gap is long enough for the in-flight request to
+    // be torn down — and the client treats an aborted stream as a no-op, so it
+    // looks like the message simply vanished. Browsers are more patient, which
+    // is why the same backend "works, just slowly" on the web build.
+    //
+    // Emitting a comment line here flushes response headers immediately. The
+    // client's parser skips any line that doesn't begin with "data: ", so this
+    // is invisible to it — it just keeps the connection demonstrably alive.
+    const outbound = new TransformStream<Uint8Array, Uint8Array>();
+    const openerEncoder = new TextEncoder();
+    const opener = outbound.writable.getWriter();
+    await opener.write(openerEncoder.encode(": navi-chat stream open\n\n"));
+    opener.releaseLock();
+
+    /** Surfaces a failure as assistant text, since headers are already sent. */
+    const failInStream = async (message: string): Promise<void> => {
+      const w = outbound.writable.getWriter();
+      try {
+        const chunk = { choices: [{ delta: { content: message } }] };
+        await w.write(openerEncoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+        await w.write(openerEncoder.encode("data: [DONE]\n\n"));
+        await w.close();
+      } catch { /* client already gone */ }
+    };
+
+    // Once the stream is open we can no longer send an HTTP error status, so
+    // provider failures below become in-stream assistant messages instead.
+    (async () => {
+     try {
 
     // ── Parallel: web search + semantic memory retrieval ──────────────────
     const [webSearchResults, semanticMemories] = await Promise.all([
@@ -1119,7 +1194,7 @@ serve(async (req) => {
     // uses for MAVIS/council/persona chat (callGeminiStream / Tier 0a).
     if (GEMINI_API_KEY) {
       try {
-        const geminiRes = await fetch(
+        const geminiRes = await fetchHeaderBounded(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`,
           {
             method: "POST",
@@ -1132,7 +1207,8 @@ serve(async (req) => {
               })),
               generationConfig: { maxOutputTokens: 4096 },
             }),
-          }
+          },
+          T.provider,
         );
         if (!isUnfunded(geminiRes)) {
           response = new Response(geminiSseToOpenAIStream(geminiRes.body!), {
@@ -1153,14 +1229,14 @@ serve(async (req) => {
     // drop-in fallback with no downstream changes needed).
     if (!response && GROQ_API_KEY) {
       try {
-        response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        response = await fetchHeaderBounded("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${GROQ_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ ...chatPayload, model: "llama-3.3-70b-versatile" }),
-        });
+        }, T.provider);
         if (!isUnfunded(response)) usedProvider = "groq (llama-3.3-70b)";
         else { console.warn(`Groq unavailable (status=${response.status}), trying Lovable Gateway.`); response = null; }
       } catch (e) {
@@ -1171,14 +1247,14 @@ serve(async (req) => {
     // Tier 2 — Lovable AI Gateway (Gemini, billed against Lovable AI credits)
     if (isUnfunded(response) && LOVABLE_API_KEY) {
       try {
-        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        response = await fetchHeaderBounded("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${LOVABLE_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash" }),
-        });
+        }, T.provider);
       } catch (e) {
         console.error("Lovable AI gateway fetch threw:", e);
         response = null;
@@ -1193,14 +1269,14 @@ serve(async (req) => {
         priorBody.slice(0, 300)
       );
       try {
-        response = await fetch("https://api.openai.com/v1/chat/completions", {
+        response = await fetchHeaderBounded("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ ...chatPayload, model: context?.subscription_tier === "elite" ? "gpt-4o" : "gpt-4o-mini" }),
-        });
+        }, T.provider);
         usedProvider = context?.subscription_tier === "elite" ? "openai (gpt-4o)" : "openai (gpt-4o-mini)";
       } catch (e) {
         console.error("OpenAI fallback fetch threw:", e);
@@ -1210,20 +1286,17 @@ serve(async (req) => {
     if (!response || !response.ok) {
       const status = response?.status ?? 500;
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        await failInStream("⚠ Rate limit reached on every provider. Give it a moment and try again.");
+        return;
       }
       if (status === 402 || status === 401) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted on every configured provider." }), {
-          status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        await failInStream("⚠ AI credits are exhausted on every configured provider.");
+        return;
       }
       const t = response ? await response.text().catch(() => "") : "no response";
       console.error("AI provider error (final):", status, t);
-      return new Response(JSON.stringify({ error: "AI API error" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      await failInStream("⚠ Every AI provider failed to respond. Try again shortly.");
+      return;
     }
 
     if (usedProvider) console.log(`navi-chat: streaming response from fallback provider: ${usedProvider}.`);
@@ -1350,12 +1423,21 @@ serve(async (req) => {
       },
     });
 
-    // Pipe upstream response through our transform
+    // Pipe upstream response through our transform, then on into the stream
+    // the client is already connected to.
     response.body!.pipeTo(writable).catch((e) => {
       console.error("[NAVI] Stream pipe error:", e);
     });
 
-    return new Response(readable, {
+    await readable.pipeTo(outbound.writable);
+
+     } catch (streamErr) {
+       console.error("chat error (post-stream):", streamErr);
+       await failInStream("⚠ Something broke while generating that reply. Try again.");
+     }
+    })();
+
+    return new Response(outbound.readable, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {

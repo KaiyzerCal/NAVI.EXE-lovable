@@ -41,25 +41,38 @@ export async function loadMessages(conversationId: string): Promise<ChatMessage[
   return (data ?? []) as ChatMessage[];
 }
 
+/** How long a message write may take before we give up on it. */
+const SAVE_TIMEOUT_MS = 10_000;
+
 export async function saveMessage(
   conversationId: string,
   userId: string,
   role: "user" | "assistant",
   content: string
 ): Promise<string> {
+  // Bounded: this used to be able to hang indefinitely on a stalled mobile
+  // connection, and the caller awaited it before rendering anything.
   const { data, error } = await supabase
     .from("chat_messages")
     .insert({ conversation_id: conversationId, user_id: userId, role, content })
     .select("id")
+    .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS))
     .single();
 
   if (error) throw error;
 
-  // Update conversation timestamp
-  await supabase
+  // Bump the conversation's ordering timestamp. Deliberately not awaited: it
+  // only affects which conversation sorts first in the list, and making the
+  // caller wait on a second round-trip to persist one message is what made
+  // sending feel stuck. A failure here is not worth surfacing.
+  void supabase
     .from("chat_conversations")
     .update({ updated_at: new Date().toISOString() })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS))
+    .then(({ error: touchError }) => {
+      if (touchError) console.warn("[chat] conversation timestamp not updated:", touchError.message);
+    });
 
   return data!.id;
 }

@@ -883,14 +883,17 @@ export default function MavisChat() {
     const controller: AbortWithIntent = new AbortController();
     abortRef.current = controller;
 
-    let userMsgId: string;
-    try {
-      userMsgId = await saveMessage(conversationId, user.id, "user", userContent);
-    } catch {
-      toast({ title: "Error", description: "Failed to save message", variant: "destructive" });
-      setIsLoading(false);
-      return;
-    }
+    // Show the message immediately, then persist in the background.
+    //
+    // This used to await saveMessage() — two Supabase round-trips — before
+    // rendering anything, while setInput("") had already cleared the box. On a
+    // slow connection that left the input empty, no bubble on screen, and the
+    // send button spinning: it looked exactly like a message stuck uploading.
+    // A throw was worse, since the typed text was already gone.
+    //
+    // The assistant reply is handled this same way further down: rendered under
+    // a placeholder id while it streams, then swapped to the real id once saved.
+    const pendingId = `pending-${Date.now()}`;
 
     // Fire-and-forget AI memory extraction for this message
     if (userContent.length > 20) {
@@ -906,13 +909,30 @@ export default function MavisChat() {
     }
 
     const userMsg: DisplayMessage = {
-      id: userMsgId,
+      id: pendingId,
       role: "user",
       content: userContent,
       timestamp: new Date(),
     };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
+
+    // Swap in the real row id once the write lands. If it fails the bubble
+    // stays put and the reply still streams — losing a history row should not
+    // cost the operator their answer, and the message is already on screen.
+    void saveMessage(conversationId, user.id, "user", userContent)
+      .then((savedId) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === pendingId ? { ...m, id: savedId } : m))
+        );
+      })
+      .catch((err) => {
+        console.error("[NAVI] user message not saved to history:", err);
+        toast({
+          title: "Message not saved",
+          description: "It was sent, but could not be written to your history.",
+        });
+      });
 
     let assistantContent = "";
     const chatHistory = updatedMessages

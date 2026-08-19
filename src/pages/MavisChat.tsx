@@ -13,6 +13,7 @@ import { executeAction as executeClientAction, type NaviAction, type NaviActionR
 import { useNavigate } from "react-router-dom";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
+import { Capacitor } from "@capacitor/core";
 
 const CHAT_URL             = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
 const NAVI_ACTIONS_URL     = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
@@ -870,7 +871,43 @@ export default function MavisChat() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading || !user || !session?.access_token || !conversationId) return;
+    // Nothing typed, or a send already in flight — genuinely nothing to do, and
+    // the UI already reflects it. Return quietly.
+    if (!input.trim() || isLoading) return;
+
+    // Everything below is a precondition that SHOULD hold by the time the
+    // composer is usable. When one doesn't, the old code returned silently:
+    // no toast, no console line, no state change. Tapping send did nothing at
+    // all, which is indistinguishable from the app ignoring the tap and is
+    // impossible to diagnose from a device — the failure reported as "chat
+    // works on web but not in the APK" looks exactly like this from outside.
+    //
+    // Each of these can plausibly differ on native: the session is kept in
+    // localStorage, which a WebView can evict, and conversationId comes from a
+    // Supabase round-trip that can fail. Name which one is missing rather than
+    // swallowing it.
+    const missing: string[] = [];
+    if (!user) missing.push("user");
+    if (!session?.access_token) missing.push("session token");
+    if (!conversationId) missing.push("conversation");
+    if (missing.length) {
+      const detail = `Chat unavailable — missing ${missing.join(", ")}.`;
+      console.error("[chat] send blocked:", detail, {
+        native: Capacitor.isNativePlatform(),
+        platform: Capacitor.getPlatform(),
+        hasUser: !!user,
+        hasToken: !!session?.access_token,
+        conversationId,
+      });
+      toast({
+        title: "Can't send yet",
+        description: missing.includes("session token")
+          ? "Your session expired. Sign out and back in."
+          : detail,
+        variant: "destructive",
+      });
+      return;
+    }
 
     const userContent = input.trim();
     setInput("");

@@ -30,15 +30,30 @@ export async function getOrCreateConversation(userId: string): Promise<string> {
   return newConv!.id;
 }
 
+/**
+ * How many past messages to load into the view.
+ *
+ * This query had no limit at all, so it returned every message a conversation
+ * had ever accumulated — and MavisChat then sent that whole array to navi-chat
+ * on every single request. Both the render cost and the prompt grew without
+ * bound for the life of the thread.
+ *
+ * Newest-first with a limit, then reversed, so the cap keeps the RECENT
+ * messages. Ordering ascending with a limit would have pinned the view to the
+ * oldest ones instead.
+ */
+const HISTORY_LIMIT = 200;
+
 export async function loadMessages(conversationId: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from("chat_messages")
     .select("id, role, content, created_at")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(HISTORY_LIMIT);
 
   if (error) throw error;
-  return (data ?? []) as ChatMessage[];
+  return ((data ?? []) as ChatMessage[]).reverse();
 }
 
 /** How long a message write may take before we give up on it. */

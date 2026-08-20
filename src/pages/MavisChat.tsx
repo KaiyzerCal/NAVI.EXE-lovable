@@ -972,8 +972,17 @@ export default function MavisChat() {
       });
 
     let assistantContent = "";
+    // Only the recent turns go to the model.
+    //
+    // This mapped the entire loaded conversation with no slice, so the request
+    // body grew for the life of the thread — every message ever sent was
+    // re-uploaded on every reply, on mobile data, and re-billed as input
+    // tokens. The full history stays on screen and in the database; this bounds
+    // only what travels.
+    const HISTORY_TURNS = 20;
     const chatHistory = updatedMessages
       .filter((m) => m.id !== "initial")
+      .slice(-HISTORY_TURNS)
       .map((m) => ({ role: m.role, content: m.content }));
 
     try {
@@ -1003,16 +1012,20 @@ export default function MavisChat() {
           codex_points: (profile as any).codex_points ?? 0,
           cali_coins: (profile as any).cali_coins ?? 0,
           // Full objects with IDs so AI can reference them in actions
-          quests: quests.map((q) => ({
+          // Bounded like journal_entries and achievements already were.
+          // These four were mapped whole, so a player who accumulates quests,
+          // skills, gear or buffs silently grew the prompt on every message.
+          // Incomplete quests first so the cap keeps what is actionable.
+          quests: [...quests].sort((a, b) => Number(a.completed) - Number(b.completed)).slice(0, 20).map((q) => ({
             id: q.id, name: q.name, type: q.type, progress: q.progress,
             total: q.total, xp_reward: q.xp_reward, completed: q.completed,
             loot_description: (q as any).loot_description || "",
           })),
-          skills: skills.map((s) => ({
+          skills: skills.slice(0, 20).map((s) => ({
             id: s.id, name: s.name, category: s.category,
             level: s.level, max_level: (s as any).max_level ?? 10, xp: s.xp,
           })),
-          equipment: equipment.map((e) => ({
+          equipment: [...equipment].sort((a, b) => Number(b.equipped) - Number(a.equipped)).slice(0, 20).map((e) => ({
             id: e.id, name: e.name, slot: e.slot, rarity: e.rarity,
             is_equipped: e.equipped, stat_bonuses: (e as any).stat_bonuses || {},
           })),
@@ -1022,7 +1035,7 @@ export default function MavisChat() {
           achievements: achievements.slice(0, 15).map((a) => ({
             name: a.name, unlocked: a.unlocked,
           })),
-          buffs: buffs.map((b) => ({
+          buffs: buffs.slice(0, 15).map((b) => ({
             id: b.id, name: b.name, effect_type: (b as any).effect_type || "buff",
             stat_affected: (b as any).stat_affected || "", modifier_value: (b as any).modifier_value || 0,
             source: (b as any).source || "manual", expires_at: (b as any).expires_at || null,

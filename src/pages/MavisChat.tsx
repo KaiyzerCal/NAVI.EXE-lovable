@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
+import { getRunningBundleLabel } from "@/lib/liveUpdate";
 
 const CHAT_URL             = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
 const NAVI_ACTIONS_URL     = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-actions`;
@@ -1191,9 +1192,17 @@ export default function MavisChat() {
     );
   }
 
+  // Show which OTA bundle is actually running, on native only.
+  //
+  // Every OTA failure path is deliberately silent, so a device gives no
+  // indication of whether a shipped fix is present. That made "the chat is
+  // broken" and "this build predates the fix" look identical from the outside.
+  const [bundleLabel, setBundleLabel] = useState<string | null>(null);
+  useEffect(() => { void getRunningBundleLabel().then(setBundleLabel); }, []);
+
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <PageHeader title="NAVI AI" subtitle="// NEURAL LINK ACTIVE">
+      <PageHeader title="NAVI AI" subtitle={bundleLabel ? `// NEURAL LINK ACTIVE · ${bundleLabel}` : "// NEURAL LINK ACTIVE"}>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}

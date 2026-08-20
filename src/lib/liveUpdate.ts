@@ -79,3 +79,31 @@ export async function confirmBootSuccess(): Promise<void> {
     // on its own.
   }
 }
+
+/**
+ * The bundle the app is currently running, for display.
+ *
+ * OTA failures are all swallowed by design (see checkForUpdate), which is
+ * correct — a flaky manifest fetch should never block startup. The cost is
+ * that there is no way to tell, from a running device, whether a fix has
+ * actually landed. That ambiguity has now blocked debugging the NAVI chat
+ * problem twice: a symptom that looks like broken code is indistinguishable
+ * from an old bundle that never got promoted.
+ *
+ * Returns a short id for the running bundle, "builtin" when running the APK's
+ * own assets with no OTA applied, or null on web where the concept does not
+ * apply.
+ */
+export async function getRunningBundleLabel(): Promise<string | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    const current = await LiveUpdate.getCurrentBundle();
+    const id = current?.bundleId;
+    // The plugin reports the built-in assets as "public" (or undefined on some
+    // versions) when no OTA bundle has been promoted.
+    if (!id || id === "public") return "builtin";
+    return id.slice(0, 12);
+  } catch {
+    return "unknown";
+  }
+}

@@ -247,6 +247,59 @@ function inferFallbackActions(userMessage: string, cleanText: string, appData?: 
   return [];
 }
 
+/**
+ * Non-streaming send, used on native.
+ *
+ * This is the same shape mythos-vantara's persona chat uses — a single
+ * supabase.functions.invoke() — and that path works on Android today. The
+ * streaming implementation below does not, and several rounds of bounding it
+ * (timeouts, a stall watchdog, an isLoading backstop) did not change the
+ * symptom on device. Rather than keep hardening a transport that cannot be
+ * observed from here, native takes the plain request/response path: no raw
+ * fetch, no ReadableStream, no manual SSE parsing, no watchdog.
+ *
+ * The cost is the typewriter effect on native. The reply arrives in one piece
+ * instead of token by token. Web keeps streaming, where it demonstrably works.
+ */
+async function invokeChat({
+  messages,
+  context,
+  onDelta,
+  onDone,
+}: {
+  messages: { role: string; content: string }[];
+  context?: Record<string, any>;
+  // Accepted so the call site can pass one object to either transport.
+  // signal is deliberately unused: functions.invoke() offers no reliable
+  // cancellation, so pressing Stop on native clears the UI (stopGeneration
+  // resets isLoading) while the request finishes server-side and is discarded.
+  // Trading precise cancellation for a transport that works is the right way
+  // round; a reply nobody can see is better than a composer nobody can use.
+  signal?: AbortSignal;
+  accessToken?: string;
+  onDelta: (text: string) => void;
+  onDone: (actions: NaviAction[]) => void;
+}) {
+  const { data, error } = await supabase.functions.invoke("navi-chat", {
+    body: { messages, context, stream: false },
+  });
+  // invoke()'s error.message is always the generic non-2xx string; the real
+  // reason is in the response body, same as mythos-vantara's edgeErrorMessage.
+  if (error) {
+    let detail = "";
+    try {
+      const body = await (error as { context?: Response }).context?.json?.();
+      detail = body?.error || body?.message || "";
+    } catch { /* body already consumed or not JSON */ }
+    throw new Error(detail || error.message || "Request failed");
+  }
+  if ((data as any)?.error) throw new Error(String((data as any).error));
+
+  const content = (data as any)?.content ?? "";
+  if (content) onDelta(content);
+  onDone(((data as any)?.navi_actions ?? []) as NaviAction[]);
+}
+
 async function streamChat({
   messages,
   context,
@@ -1053,7 +1106,11 @@ export default function MavisChat() {
       .map((m) => ({ role: m.role, content: m.content }));
 
     try {
-      await streamChat({
+      // Native takes the plain invoke() path; web keeps streaming. See
+      // invokeChat's comment for why. Both call the same edge function and
+      // consume the same generated output — only the transport differs.
+      const send = Capacitor.isNativePlatform() ? invokeChat : streamChat;
+      await send({
         messages: chatHistory,
         signal: controller.signal,
         accessToken: session.access_token,

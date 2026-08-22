@@ -1053,7 +1053,12 @@ serve(async (req) => {
       });
     }
 
-    const { messages, context } = await req.json();
+    // `stream` defaults to true so every existing caller is unaffected.
+    // Passing false makes this return one JSON body instead of SSE, which lets
+    // the client use supabase.functions.invoke() — the same plain
+    // request/response path mythos-vantara's persona chat uses successfully on
+    // Android, with no ReadableStream, no manual SSE parsing and no watchdog.
+    const { messages, context, stream: wantsStream = true } = await req.json();
 
     // Optional, not required — the provider cascade below tries Gemini
     // (direct) and Groq first specifically so a request can still be served
@@ -1459,6 +1464,41 @@ serve(async (req) => {
        await failInStream("⚠ Something broke while generating that reply. Try again.");
      }
     })();
+
+    // Non-streaming mode: drain the stream we would have sent and answer with
+    // a single JSON body. The generation pipeline above is untouched — this
+    // consumes exactly the same output, so both modes cannot drift apart.
+    if (!wantsStream) {
+      const reader = outbound.readable.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let content = "";
+      let naviActions: unknown[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("
+")) !== -1) {
+          let line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          if (line.endsWith("")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+          const json = line.slice(6).trim();
+          if (json === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(json);
+            if (Array.isArray(parsed?.navi_actions)) { naviActions = parsed.navi_actions; continue; }
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (delta) content += delta;
+          } catch { /* partial or non-JSON line; the stream re-sends complete ones */ }
+        }
+      }
+      return new Response(JSON.stringify({ content, navi_actions: naviActions }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     return new Response(outbound.readable, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },

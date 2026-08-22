@@ -872,9 +872,23 @@ export default function MavisChat() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
-    // Nothing typed, or a send already in flight — genuinely nothing to do, and
-    // the UI already reflects it. Return quietly.
-    if (!input.trim() || isLoading) return;
+    // Nothing typed — genuinely nothing to do.
+    if (!input.trim()) return;
+
+    // A send already in flight. This used to return silently on the reasoning
+    // that the spinner already communicates it, which was wrong: if isLoading
+    // is stuck true — a stream torn down by a crash, a reply that never
+    // arrived — then every subsequent send is swallowed and the composer looks
+    // simply dead. Observed exactly that on device: the stop button showing
+    // with no message on screen and nothing typed since. Say so, and point at
+    // the control that clears it.
+    if (isLoading) {
+      toast({
+        title: "Still waiting on a reply",
+        description: "Tap the red stop button to cancel it, then send again.",
+      });
+      return;
+    }
 
     // Everything below is a precondition that SHOULD hold by the time the
     // composer is usable. When one doesn't, the old code returned silently:

@@ -245,7 +245,9 @@ function AppShell() {
               down with it — the user can still navigate elsewhere. */}
           <Sentry.ErrorBoundary
             key={location.pathname}
-            fallback={({ resetError }) => <ErrorFallback resetError={resetError} />}
+            fallback={({ error, componentStack, eventId, resetError }) => (
+              <ErrorFallback error={error} componentStack={componentStack} eventId={eventId} resetError={resetError} />
+            )}
           >
           <Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-primary" size={24} /></div>}>
           <Routes>

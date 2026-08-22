@@ -24,7 +24,9 @@ Sentry.init({
 // runs in the background after render instead (see below); if it finds an
 // update it stages it for the next full restart rather than reloading live.
 createRoot(document.getElementById("root")!).render(
-  <Sentry.ErrorBoundary fallback={({ resetError }) => <ErrorFallback resetError={resetError} fullScreen />}>
+  <Sentry.ErrorBoundary fallback={({ error, componentStack, eventId, resetError }) => (
+      <ErrorFallback error={error} componentStack={componentStack} eventId={eventId} resetError={resetError} fullScreen />
+    )}>
     <App />
   </Sentry.ErrorBoundary>
 );

@@ -512,7 +512,18 @@ export default function MavisChat() {
 
   const stopSpeaking = useCallback(() => {
     ttsQueueRef.current = [];
-    window.speechSynthesis.cancel();
+    // Android's native WebView does not implement speechSynthesis at all — the
+    // object is simply undefined there, the same gap mythos-vantara documents
+    // in VoiceChatOverlay. Unguarded, this threw a TypeError, and because
+    // sendMessage calls it immediately after setIsLoading(true) and well
+    // before its try block, the throw escaped the function entirely: the flag
+    // stayed set, the optimistic bubble never rendered, no toast fired, and
+    // the composer's `disabled={isLoading}` left the textarea dead for the
+    // rest of the session. The ErrorBoundary never saw it either, since this
+    // runs in an event handler rather than a render.
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     setCurrentlySpokenId(null);
   }, []);
 
@@ -595,7 +606,7 @@ export default function MavisChat() {
         }
         speakNext();
       };
-      window.speechSynthesis.speak(utterance);
+      if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.speak(utterance);
     };
     speakNext();
   }, [currentlySpokenId, stopSpeaking]);
@@ -615,7 +626,7 @@ export default function MavisChat() {
   useEffect(() => {
     if (!currentlySpokenId) return;
     const id = window.setInterval(() => {
-      if (window.speechSynthesis.speaking) {
+      if (window.speechSynthesis?.speaking) {
         window.speechSynthesis.pause();
         window.speechSynthesis.resume();
       }
@@ -1032,6 +1043,17 @@ export default function MavisChat() {
     const userContent = input.trim();
     setInput("");
     setIsLoading(true);
+
+    // The try opens here, not 70 lines further down where it used to.
+    // Everything between — stopSpeaking(), the abort handling, the optimistic
+    // setMessages, the saveMessage call — ran outside any try/catch, so a
+    // synchronous throw in any of it escaped sendMessage completely: isLoading
+    // stayed true, no bubble rendered, no toast fired, and the finally below
+    // never ran because it belonged to a block execution never reached. That
+    // is exactly how the unguarded window.speechSynthesis.cancel() on the next
+    // line presented on Android. Covering the whole body means the next thing
+    // that throws here reports itself instead of silently killing the composer.
+    try {
     stopSpeaking();
 
     // abort any previous stream — deliberate, so it must not raise an error
@@ -1105,7 +1127,6 @@ export default function MavisChat() {
       .slice(-HISTORY_TURNS)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    try {
       // Native takes the plain invoke() path; web keeps streaming. See
       // invokeChat's comment for why. Both call the same edge function and
       // consume the same generated output — only the transport differs.

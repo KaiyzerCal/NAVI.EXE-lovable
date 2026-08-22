@@ -262,16 +262,56 @@ async function streamChat({
   onDelta: (text: string) => void;
   onDone: (actions: NaviAction[]) => void;
 }) {
-  const resp = await fetch(CHAT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ messages, context }),
-    signal,
-  });
+  // Watchdog. Nothing here was bounded: the fetch had no timeout and the read
+  // loop below is `while (true) { await reader.read() }`, so a stalled
+  // connection — a dropped mobile network, a black-holed socket — left the
+  // promise permanently pending. Neither the success path nor the catch ran,
+  // setIsLoading(false) never fired, and the composer's `disabled={isLoading}`
+  // left the textarea permanently greyed out. That presents as "typing does
+  // nothing, with no error", because nothing ever threw.
+  //
+  // A blanket AbortSignal.timeout is the wrong tool on a streaming response —
+  // it would cut off a healthy long reply mid-sentence. This instead bounds
+  // *silence*: the timer is re-armed on every chunk, so a stream that keeps
+  // producing output runs as long as it likes, while one that stops producing
+  // is torn down and surfaces as a real AbortError the caller already handles.
+  const HEADERS_MS = 30_000;   // time to first byte
+  const STALL_MS   = 45_000;   // max gap between chunks
+  const watchdog: AbortWithIntent = new AbortController();
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  const armWatchdog = (ms: number) => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      // Not `intentional` — the caller must treat this as a real failure and
+      // tell the operator, not swallow it the way it does a Stop-button abort.
+      watchdog.abort();
+    }, ms);
+  };
+  // Abort if either the caller cancels or the watchdog fires.
+  const onCallerAbort = () => watchdog.abort();
+  signal.addEventListener("abort", onCallerAbort, { once: true });
+  const cleanup = () => {
+    clearTimeout(stallTimer);
+    signal.removeEventListener("abort", onCallerAbort);
+  };
+
+  let resp: Response;
+  try {
+    armWatchdog(HEADERS_MS);
+    resp = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ messages, context }),
+      signal: watchdog.signal,
+    });
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: "Request failed" }));
@@ -285,9 +325,20 @@ async function streamChat({
   let buffer = "";
   let extractedActions: NaviAction[] = [];
 
+  // Give the body more room than the headers got: a model can legitimately
+  // think for a while between tokens, but never indefinitely.
+  armWatchdog(STALL_MS);
+
   while (true) {
-    const { done, value } = await reader.read();
+    let done: boolean, value: Uint8Array | undefined;
+    try {
+      ({ done, value } = await reader.read());
+    } catch (e) {
+      cleanup();
+      throw e;
+    }
     if (done) break;
+    armWatchdog(STALL_MS);
     buffer += decoder.decode(value, { stream: true });
 
     let newlineIdx: number;
@@ -297,7 +348,7 @@ async function streamChat({
       if (line.endsWith("\r")) line = line.slice(0, -1);
       if (!line.startsWith("data: ")) continue;
       const json = line.slice(6).trim();
-      if (json === "[DONE]") { onDone(extractedActions); return; }
+      if (json === "[DONE]") { cleanup(); onDone(extractedActions); return; }
       try {
         const parsed = JSON.parse(json);
         // Handle navi_actions event injected by the edge function
@@ -313,6 +364,7 @@ async function streamChat({
       }
     }
   }
+  cleanup();
   onDone(extractedActions);
 }
 
@@ -1180,6 +1232,14 @@ export default function MavisChat() {
         return;
       }
       toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
+    } finally {
+      // Backstop. Both the success path and the catch already clear this, but
+      // a future path that returns without doing so would disable the composer
+      // permanently — the textarea is `disabled={isLoading}`, so a stuck flag
+      // means the operator cannot type at all and gets no error explaining why.
+      // That failure mode is too quiet to risk relying on every branch
+      // remembering.
+      setIsLoading(false);
     }
   }, [input, isLoading, user, session, conversationId, messages, profile, quests, skills, equipment, entries, achievements, buffs, memoryContext, messageThreadContext, mediaContext, refetchQuests, refetchJournal, refetchSkills, refetchEquipment, refetchEffects, refetchProfile, refetchAchievements, updateProfile, navigate]);
 

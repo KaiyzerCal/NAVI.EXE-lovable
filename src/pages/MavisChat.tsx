@@ -1197,6 +1197,19 @@ export default function MavisChat() {
     [sendMessage]
   );
 
+  // NOTE: these must stay above the dbLoading early-return below. Declaring
+  // them after it makes them conditional — skipped while loading, run once
+  // loaded — which changes the hook count between renders and throws React
+  // error #310 ("Rendered more hooks than during the previous render"). That
+  // is exactly what happened when this was first added.
+  // Show which OTA bundle is actually running, on native only.
+  //
+  // Every OTA failure path is deliberately silent, so a device gives no
+  // indication of whether a shipped fix is present. That made "the chat is
+  // broken" and "this build predates the fix" look identical from the outside.
+  const [bundleLabel, setBundleLabel] = useState<string | null>(null);
+  useEffect(() => { void getRunningBundleLabel().then(setBundleLabel); }, []);
+
   if (dbLoading) {
     return (
       <div className="flex flex-col h-[calc(100vh-2rem)] items-center justify-center">
@@ -1205,14 +1218,6 @@ export default function MavisChat() {
       </div>
     );
   }
-
-  // Show which OTA bundle is actually running, on native only.
-  //
-  // Every OTA failure path is deliberately silent, so a device gives no
-  // indication of whether a shipped fix is present. That made "the chat is
-  // broken" and "this build predates the fix" look identical from the outside.
-  const [bundleLabel, setBundleLabel] = useState<string | null>(null);
-  useEffect(() => { void getRunningBundleLabel().then(setBundleLabel); }, []);
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">

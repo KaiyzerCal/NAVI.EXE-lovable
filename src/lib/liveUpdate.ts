@@ -35,8 +35,50 @@ interface OtaManifest {
  * without ever interrupting a live session. (Same fix as mythos-vantara's
  * liveUpdate.ts, commits #173/#175.)
  */
+const VERSION_CODE_KEY = "navi.lastNativeVersionCode";
+
+/**
+ * Drop any staged/active OTA bundle when the native app itself has been
+ * reinstalled or upgraded.
+ *
+ * The plugin keeps downloaded bundles in the app's data directory, which
+ * survives installing a new APK over an old one. So a device that once
+ * downloaded a bundle keeps booting into that JS forever, shadowing the newer
+ * assets baked into every APK installed afterwards — reinstalling appears to
+ * change nothing at all, because functionally it doesn't.
+ *
+ * getVersionCode() is a native call, so it reports the APK that is actually
+ * installed regardless of which JS bundle is currently running. That is what
+ * makes this detectable from inside a stale bundle. It only works if the
+ * version code actually differs between builds, which is why CI now stamps it
+ * from the run number (.github/workflows/android-build.yml) — it was
+ * hardcoded to 1 for every build ever produced.
+ */
+async function resetIfNativeVersionChanged(): Promise<void> {
+  try {
+    const { versionCode } = await LiveUpdate.getVersionCode();
+    if (!versionCode) return;
+    const seen = localStorage.getItem(VERSION_CODE_KEY);
+    if (seen === versionCode) return;
+
+    // First run after install/upgrade. Anything downloaded belongs to an older
+    // APK, so fall back to this one's own assets.
+    if (seen !== null) {
+      console.warn(`[liveUpdate] native version ${seen} -> ${versionCode}; resetting to built-in bundle`);
+      await LiveUpdate.reset();
+    }
+    localStorage.setItem(VERSION_CODE_KEY, versionCode);
+  } catch {
+    // Never block startup on this.
+  }
+}
+
 export async function checkForUpdate(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
+
+  // Before considering a newer bundle, make sure we are not still running an
+  // old one that outlived the APK it came with.
+  await resetIfNativeVersionChanged();
 
   try {
     const res = await fetch(MANIFEST_URL, { cache: "no-store" });

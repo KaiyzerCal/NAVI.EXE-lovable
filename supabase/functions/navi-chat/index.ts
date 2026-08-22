@@ -1479,11 +1479,10 @@ serve(async (req) => {
         if (done) break;
         buf += dec.decode(value, { stream: true });
         let nl: number;
-        while ((nl = buf.indexOf("
-")) !== -1) {
+        while ((nl = buf.indexOf("\n")) !== -1) {
           let line = buf.slice(0, nl);
           buf = buf.slice(nl + 1);
-          if (line.endsWith("")) line = line.slice(0, -1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
           if (!line.startsWith("data: ")) continue;
           const json = line.slice(6).trim();
           if (json === "[DONE]") continue;

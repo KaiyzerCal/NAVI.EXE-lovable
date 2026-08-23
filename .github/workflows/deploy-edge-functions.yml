@@ -90,6 +90,23 @@ jobs:
           fi
           echo "Deploy target: $ref"
           echo "DEPLOY_REF=$ref" >> "$GITHUB_ENV"
+
+          # Fail here, with the reason, rather than deep inside the CLI.
+          #
+          # fjkkcrmhptrzobajjsqg is provisioned by Lovable and lives in a
+          # Lovable-owned Supabase organisation. SUPABASE_ACCESS_TOKEN belongs
+          # to the operator's own account, which is not a member of that org,
+          # so the management API answers 403 for it. No token the operator can
+          # generate from their own dashboard will change that.
+          #
+          # Deploys to this project have to go through Lovable, which owns it:
+          # ask the Lovable agent for the project to deploy the function, or
+          # use the supabase--deploy_edge_functions tool against project
+          # 8fada453-44c4-4213-a8f4-afbeaf21de89.
+          if ! supabase functions list --project-ref "$ref" >/dev/null 2>&1; then
+            echo "::error::SUPABASE_ACCESS_TOKEN cannot access $ref (403). This project is Lovable-owned, so CI cannot deploy to it — deploy through Lovable instead. Failing now rather than deploying somewhere the app never calls."
+            exit 1
+          fi
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       - name: Deploy changed edge functions

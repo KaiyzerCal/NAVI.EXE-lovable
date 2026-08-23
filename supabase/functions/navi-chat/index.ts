@@ -46,6 +46,45 @@ async function fetchHeaderBounded(
 }
 
 /**
+ * Module-level diagnostic writer, usable before auth has run.
+ *
+ * The per-request recordDiag defined inside the handler closes over userId, so
+ * it cannot be called until auth completes — which meant nothing was recorded
+ * when the stall was upstream of auth. This one takes no dependencies.
+ */
+async function recordDiagRaw(stage: string, detail: string): Promise<void> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/navi_chat_diagnostics`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ stage, detail: detail.slice(0, 2000) }),
+      signal: AbortSignal.timeout(4_000),
+    });
+  } catch { /* diagnostics must never break or delay the request */ }
+}
+
+/** Rejects with a named error if `p` has not settled within `ms`. */
+async function withTimeout<T2>(p: Promise<T2>, ms: number, label: string): Promise<T2> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Bounds silence *within* a response body, which fetchHeaderBounded cannot.
  *
  * fetchHeaderBounded clears its timer as soon as headers arrive — deliberately,
@@ -1097,9 +1136,22 @@ serve(async (req) => {
   if (preflight) return preflight;
 
   try {
+    // Fire-and-forget marker at the absolute top of the handler.
+    //
+    // Every diagnostic added so far sat further down and none of them ever
+    // recorded, which left "the function is never invoked" and "the function
+    // is invoked and stalls immediately" indistinguishable — and those need
+    // opposite fixes. This is deliberately not awaited and takes no
+    // dependency on auth or the body, so nothing above it can prevent it.
+    void recordDiagRaw("hit", req.headers.get("x-client-info") ?? "unknown-client");
+
     // Authoritatively identify the caller from their verified JWT.
     // Do NOT trust any user id supplied in the request body.
-    const authedUser = await getAuthedUser(req);
+    //
+    // Bounded: auth.getUser() is a network round trip with no timeout of its
+    // own, and it is the first thing that happens on every request. A stall
+    // here hangs the whole invocation before any instrumentation below runs.
+    const authedUser = await withTimeout(getAuthedUser(req), T.supabase, "getAuthedUser");
     if (!authedUser) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },

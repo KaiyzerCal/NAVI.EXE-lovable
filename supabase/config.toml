@@ -19,3 +19,15 @@ verify_jwt = true
 
 [functions.navi-agent-runner]
 verify_jwt = true
+
+# Auth is enforced inside the handler: getAuthedUser() runs before any provider
+# call and returns 401 on its own, so the gateway check is redundant here.
+#
+# Turning it off is what makes the function observable from outside. Every probe
+# of this function so far was rejected by the gateway before the handler started,
+# which produced fast 401s that read exactly like the function answering — and
+# several wrong conclusions were drawn from them. With the gateway open, the
+# pre-auth `x-navi-diag` response reports which provider keys the runtime can
+# actually see, which is otherwise unknowable without Lovable log access.
+[functions.navi-chat]
+verify_jwt = false

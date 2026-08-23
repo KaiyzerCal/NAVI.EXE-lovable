@@ -1187,9 +1187,27 @@ serve(async (req) => {
     // is invisible to it — it just keeps the connection demonstrably alive.
     const outbound = new TransformStream<Uint8Array, Uint8Array>();
     const openerEncoder = new TextEncoder();
-    const opener = outbound.writable.getWriter();
-    await opener.write(openerEncoder.encode(": navi-chat stream open\n\n"));
-    opener.releaseLock();
+    // Only when we are actually streaming.
+    //
+    // A TransformStream's readable side has a default highWaterMark of 0, so
+    // this write only resolves once something reads. On the streaming path the
+    // platform reads outbound.readable as soon as the Response is returned, so
+    // it resolves immediately and does its job of flushing headers early.
+    //
+    // On the stream:false path added in #19 nothing reads until the drain loop
+    // at the very end of this handler — which this await sits in front of. The
+    // result was a deadlock: the write never resolved, the handler never
+    // reached the drain, and the invocation sat silent until Supabase killed
+    // it with "Request idle timeout limit (150s) reached". No reply, no error,
+    // and not even the entry diagnostic below, since that is further down.
+    //
+    // The keep-alive is meaningless for a single JSON response anyway; it
+    // exists to stop Android tearing down an idle SSE connection.
+    if (wantsStream) {
+      const opener = outbound.writable.getWriter();
+      await opener.write(openerEncoder.encode(": navi-chat stream open\n\n"));
+      opener.releaseLock();
+    }
 
     /** Surfaces a failure as assistant text, since headers are already sent. */
     // Record why a reply failed somewhere durable.

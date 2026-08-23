@@ -17,6 +17,7 @@ const T = {
   memory:   4_000,   // pgvector memory search RPC
   search:   6_000,   // Tavily web search
   provider: 12_000,  // time for a model to START responding (headers only)
+  actions:  8_000,   // post-stream action extraction (OpenAI function calling)
 } as const;
 
 /**
@@ -558,6 +559,15 @@ What actions did NAVI explicitly confirm performing?`;
         max_tokens: 800,
         temperature: 0,
       }),
+      // Bounded. This was the only unbounded fetch left in the file, and it
+      // runs from the stream transform's flush — AFTER the reply has already
+      // been generated. A hang here never closes the stream, so Supabase kills
+      // the whole invocation at its 150s idle limit and the finished reply is
+      // discarded. That is the "Request idle timeout limit (150s) reached"
+      // seen on device: the chat was working and throwing the answer away.
+      // Failure is already non-fatal here (the catch returns []), so a timeout
+      // costs the action extraction for that turn and nothing else.
+      signal: AbortSignal.timeout(T.actions),
     });
 
     if (!res.ok) {
@@ -1139,7 +1149,37 @@ serve(async (req) => {
     opener.releaseLock();
 
     /** Surfaces a failure as assistant text, since headers are already sent. */
+    // Record why a reply failed somewhere durable.
+    //
+    // failInStream writes into the response stream and swallows if the
+    // client has already gone, so a failure can leave no trace at all —
+    // which is exactly how this has presented: no reply, no error, nothing
+    // in the thread. Edge function logs are not reachable for this project
+    // (Supabase MCP is permission-denied, the Lovable workspace is out of
+    // credits), so the database is the only channel that survives.
+    const recordDiag = async (stage: string, detail: string): Promise<void> => {
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/navi_chat_diagnostics`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_SERVICE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+            Prefer: "return=minimal",
+          },
+          body: JSON.stringify({ user_id: userId, stage, detail: detail.slice(0, 2000) }),
+        });
+      } catch { /* diagnostics must never break the request */ }
+    };
+
+    // Proves the request arrived and authenticated. Without this there is no
+    // way to tell "the client never called the function" from "the function
+    // ran and produced nothing" — and those need opposite fixes.
+    await recordDiag("entry", `msgs=${Array.isArray(messages) ? messages.length : 0} stream=${wantsStream}`);
+
     const failInStream = async (message: string): Promise<void> => {
+      await recordDiag("failInStream", message);
       const w = outbound.writable.getWriter();
       try {
         const chunk = { choices: [{ delta: { content: message } }] };
@@ -1349,6 +1389,7 @@ serve(async (req) => {
     }
 
     if (usedProvider) console.log(`navi-chat: streaming response from fallback provider: ${usedProvider}.`);
+    await recordDiag("provider", usedProvider ?? "primary/unknown");
 
     // Fire-and-forget: bump last_active + engagement score on profile.
     // Adaptive personality drift was removed — it depended on a

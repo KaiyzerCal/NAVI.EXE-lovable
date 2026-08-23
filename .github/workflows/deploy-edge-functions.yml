@@ -5,6 +5,20 @@ on:
     paths:
       - "supabase/functions/**"
       - ".github/workflows/deploy-edge-functions.yml"
+  # Manual trigger with an explicit list. Without this there is no way to
+  # redeploy a function whose FILES have not changed — exactly what is
+  # needed after adding or rotating an edge-function secret, since a
+  # running isolate holds the environment it booted with until replaced.
+  # The only alternative was pushing a no-op commit. mythos-vantara's
+  # equivalent workflow already takes this input.
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: >-
+          Space or comma separated function names to deploy. Overrides the
+          usual "changed since last push" detection.
+        required: false
+        type: string
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -45,6 +59,14 @@ jobs:
           fi
           changed_dirs=$(git diff --name-only "$before_sha" HEAD -- 'supabase/functions/*/**' \
             | cut -d/ -f1-3 | sort -u)
+          manual="${{ github.event.inputs.functions }}"
+          if [ -n "$manual" ]; then
+            changed_dirs=""
+            for fn in $(echo "$manual" | tr ',' ' '); do
+              changed_dirs="$changed_dirs supabase/functions/$fn"
+            done
+            echo "Manual deploy requested: $manual"
+          fi
           if [ -z "$changed_dirs" ]; then
             echo "No edge function files changed in this push."
             exit 0

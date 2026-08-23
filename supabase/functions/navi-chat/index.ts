@@ -17,6 +17,7 @@ const T = {
   memory:   4_000,   // pgvector memory search RPC
   search:   6_000,   // Tavily web search
   provider: 12_000,  // time for a model to START responding (headers only)
+  stall:    30_000,  // max silence between body chunks once streaming starts
   actions:  8_000,   // post-stream action extraction (OpenAI function calling)
 } as const;
 
@@ -42,6 +43,48 @@ async function fetchHeaderBounded(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Bounds silence *within* a response body, which fetchHeaderBounded cannot.
+ *
+ * fetchHeaderBounded clears its timer as soon as headers arrive — deliberately,
+ * so a long reply is not truncated. The cost is that the body itself has no
+ * limit at all: a provider that answers 200 and then sends nothing hangs here
+ * indefinitely, Supabase eventually kills the whole invocation with "Request
+ * idle timeout limit (150s) reached", and the request produces no output
+ * whatsoever. No reply, no error, nothing persisted. That is the failure seen
+ * on device.
+ *
+ * The timer is re-armed on every chunk, so a healthy stream runs as long as it
+ * needs; only genuine silence trips it. On trip the stream errors, which
+ * surfaces through the existing catch as a real failure with a reason, rather
+ * than as a platform timeout with none.
+ */
+function stallGuarded(body: ReadableStream<Uint8Array>, ms: number): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const stall = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`provider stalled: no data for ${ms}ms`)), ms);
+      });
+      try {
+        const { done, value } = await Promise.race([reader.read(), stall]);
+        if (done) { controller.close(); return; }
+        controller.enqueue(value);
+      } catch (e) {
+        try { await reader.cancel(); } catch { /* already gone */ }
+        controller.error(e);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    async cancel(reason) {
+      clearTimeout(timer);
+      try { await reader.cancel(reason); } catch { /* already gone */ }
+    },
+  });
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -1529,7 +1572,10 @@ serve(async (req) => {
 
     // Pipe upstream response through our transform, then on into the stream
     // the client is already connected to.
-    response.body!.pipeTo(writable).catch((e) => {
+    // Guard the body, not just the headers. A provider that answers 200 and
+    // then goes silent used to hang here with no limit until Supabase killed
+    // the whole invocation at 150s — producing no reply and no error at all.
+    stallGuarded(response.body!, T.stall).pipeTo(writable).catch((e) => {
       console.error("[NAVI] Stream pipe error:", e);
     });
 

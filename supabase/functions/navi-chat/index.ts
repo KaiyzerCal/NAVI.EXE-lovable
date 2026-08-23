@@ -1145,6 +1145,91 @@ function geminiSseToOpenAIStream(body: ReadableStream<Uint8Array>): ReadableStre
   });
 }
 
+/**
+ * Anthropic's SSE shape, rewritten as OpenAI deltas.
+ *
+ * Same role as geminiSseToOpenAIStream above: everything downstream of the
+ * cascade — the drain loop, the action parser, the client — reads OpenAI
+ * `choices[0].delta.content`, so a provider that speaks anything else is
+ * adapted here rather than special-cased in four places.
+ *
+ * Anthropic emits typed events; only content_block_delta carries text, and
+ * only when its delta is a text_delta. thinking_delta and input_json_delta
+ * use the same event with a different delta type and must not be treated as
+ * reply text.
+ */
+function anthropicSseToOpenAIStream(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const reader = body.getReader();
+  let buf = "";
+
+  function emitDelta(controller: ReadableStreamDefaultController<Uint8Array>, line: string) {
+    if (!line.startsWith("data: ")) return;
+    const data = line.slice(6).trim();
+    if (!data || data === "[DONE]") return;
+    try {
+      const j = JSON.parse(data);
+      if (j.type !== "content_block_delta") return;
+      const text = j.delta?.type === "text_delta" ? j.delta.text : "";
+      if (text) {
+        const chunk = { choices: [{ delta: { content: text } }] };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      }
+    } catch { /* skip malformed SSE line */ }
+  }
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            buf += decoder.decode();
+            for (const line of buf.split("\n")) emitDelta(controller, line);
+            break;
+          }
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) emitDelta(controller, line);
+        }
+      } catch (e) {
+        controller.error(e);
+        return;
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+}
+
+/**
+ * OpenAI-style messages, adapted to what Anthropic will accept.
+ *
+ * Anthropic takes the system prompt as a separate top-level field rather than
+ * a message, and rejects a conversation whose user/assistant roles do not
+ * strictly alternate — which this app's history can violate, since a failed
+ * turn can persist an assistant row with no user turn between it and the next.
+ * Consecutive same-role turns are merged, and anything before the first user
+ * turn is dropped, because a history starting with an assistant message is
+ * also rejected. mythos-vantara's callClaude does the same merging.
+ */
+function toAnthropicMessages(msgs: any[]): { role: "user" | "assistant"; content: string }[] {
+  const out: { role: "user" | "assistant"; content: string }[] = [];
+  for (const m of msgs) {
+    if (m.role === "system") continue;
+    const role: "user" | "assistant" = m.role === "assistant" ? "assistant" : "user";
+    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    if (!content) continue;
+    if (out.length === 0 && role !== "user") continue;
+    const last = out[out.length - 1];
+    if (last && last.role === role) last.content += `\n\n${content}`;
+    else out.push({ role, content });
+  }
+  return out;
+}
+
 serve(async (req) => {
   const corsHeaders = corsHeadersFor(req);
   const preflight = handlePreflight(req);
@@ -1229,6 +1314,14 @@ serve(async (req) => {
             body: JSON.stringify({ ...mini, model: "gpt-4o-mini" }) }));
       }
 
+      const claudeKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      const claudeModel = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-20251001";
+      if (claudeKey) {
+        jobs.push(probe(`anthropic:${claudeModel}`, "https://api.anthropic.com/v1/messages",
+          { method: "POST", headers: { "x-api-key": claudeKey, "anthropic-version": "2023-06-01", ...jJson },
+            body: JSON.stringify({ model: claudeModel, max_tokens: 5, messages: [{ role: "user", content: "hi" }] }) }));
+      }
+
       let diagWrite = "not attempted";
       try {
         await recordDiagRaw("selftest", "probe");
@@ -1247,6 +1340,8 @@ serve(async (req) => {
           GROQ_MODEL: groqM,
           LOVABLE_API_KEY: !!lovable,
           OPENAI_API: !!openai,
+          ANTHROPIC_API_KEY: !!claudeKey,
+          ANTHROPIC_MODEL: claudeModel,
         },
         diagWrite,
         providers: await Promise.all(jobs),
@@ -1525,6 +1620,9 @@ serve(async (req) => {
     // the same GROQ_MODEL convention mythos-vantara uses. A future
     // decommission is then a dashboard change rather than a redeploy.
     const GROQ_MODEL = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+    const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-20251001";
+    const ANTHROPIC_MODEL_ELITE = Deno.env.get("ANTHROPIC_MODEL_ELITE") ?? "claude-sonnet-4-6";
 
     let response: Response | null = null;
     let usedProvider: string | null = null;
@@ -1661,6 +1759,60 @@ serve(async (req) => {
         selectedProvider = usedProvider;
       } catch (e) {
         console.error("OpenAI fallback fetch threw:", e);
+      }
+    }
+
+    // Last tier — Anthropic, mirroring mythos-vantara's claude-haiku fallback.
+    //
+    // Placed after OpenAI rather than before it so the existing routing is
+    // unchanged: this only picks up requests that would otherwise have failed
+    // outright. Until now, OpenAI being out of quota meant the whole cascade
+    // ended in an error message, since Gemini and Groq free tiers share the
+    // property that they can be rate-limited at the same moment.
+    //
+    // The model id comes from the environment for the same reason GROQ_MODEL
+    // does: pinned ids are retired eventually, and a retired id fails in a way
+    // that reads as "no funded key" rather than "wrong model name".
+    if (isUnfunded(response) && ANTHROPIC_API_KEY) {
+      const anthropicMessages = toAnthropicMessages(chatPayload.messages);
+      if (anthropicMessages.length === 0) {
+        console.warn("Anthropic tier skipped: no user turn to send.");
+      } else {
+        try {
+          const model = context?.subscription_tier === "elite" ? ANTHROPIC_MODEL_ELITE : ANTHROPIC_MODEL;
+          const claudeRes = await fetchHeaderBounded("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: 4096,
+              system: systemPrompt,
+              messages: anthropicMessages,
+              stream: true,
+            }),
+          }, T.provider);
+          // Same reasoning as the Gemini and Groq tiers: check `ok`, not
+          // `!isUnfunded`. Anthropic answers 400 for an unknown model id or a
+          // malformed message sequence, and a 400 body fed to the SSE parser
+          // yields zero deltas and a silent empty reply.
+          if (claudeRes.ok) {
+            response = new Response(anthropicSseToOpenAIStream(claudeRes.body!), {
+              status: 200,
+              headers: { "Content-Type": "text/event-stream" },
+            });
+            usedProvider = `anthropic (${model})`;
+            selectedProvider = usedProvider;
+          } else {
+            const body = await claudeRes.text().catch(() => "");
+            console.warn(`Anthropic unavailable (status=${claudeRes.status}): ${body.slice(0, 300)}`);
+          }
+        } catch (e) {
+          console.error("Anthropic fallback fetch threw:", e);
+        }
       }
     }
 

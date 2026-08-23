@@ -1309,7 +1309,24 @@ export default function MavisChat() {
         }
         return;
       }
-      toast({ title: "NAVI Error", description: e.message || "Failed to get response", variant: "destructive" });
+      // Put the failure in the thread, not only in a toast.
+      //
+      // A toast is transient and easy to miss, and it leaves no trace anywhere
+      // afterwards — which is how this has read as "it just silently fails"
+      // for several rounds while the actual reason existed and was discarded.
+      // Writing it as an assistant message means the operator sees what broke
+      // without reproducing it, and it is recoverable later from
+      // chat_messages instead of only from logs the operator cannot reach.
+      const reason = e?.message || String(e) || "Failed to get response";
+      const errText = `⚠ ${reason}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: `error-${Date.now()}`, role: "assistant", content: errText, timestamp: new Date() },
+      ]);
+      if (conversationId && user) {
+        void saveMessage(conversationId, user.id, "assistant", errText).catch(() => {});
+      }
+      toast({ title: "NAVI Error", description: reason, variant: "destructive" });
     } finally {
       // Backstop. Both the success path and the catch already clear this, but
       // a future path that returns without doing so would disable the composer

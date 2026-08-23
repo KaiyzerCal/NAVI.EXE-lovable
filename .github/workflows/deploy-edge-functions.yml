@@ -59,18 +59,37 @@ jobs:
       # the ref the app itself uses (supabase/config.toml, .env.local and the
       # OTA manifest URL all agree on fjkkcrmhptrzobajjsqg) answers that
       # without printing the value: MATCH and MISMATCH are not secrets.
-      - name: Check the deploy target is the project the app talks to
+      # The deploy target follows supabase/config.toml, not the secret.
+      #
+      # secrets.SUPABASE_PROJECT_REF pointed at a different project than the
+      # one the app talks to, so every edge function deployed from this
+      # workflow landed somewhere the app never calls. The job still reported
+      # success, the CLI still printed "Deployed Functions on project ***"
+      # with the ref masked, and the running navi-chat kept serving whatever
+      # code it had before — which is why a long series of fixes to it changed
+      # nothing observable, and why navi_chat_diagnostics stayed empty no
+      # matter how the instrumentation was rewritten.
+      #
+      # config.toml is version-controlled, is already what the Supabase CLI
+      # treats as the source of truth for this project, and agrees with
+      # .env.local and the OTA manifest URL. Deriving the ref from it means
+      # this cannot silently drift again, and a wrong value shows up in a
+      # diff rather than in a masked log line. The secret remains a fallback
+      # for the case where config.toml has no project_id.
+      - name: Resolve deploy target
         run: |
           set -euo pipefail
-          expected="$(grep -m1 '^project_id' supabase/config.toml | cut -d'"' -f2)"
-          echo "config.toml project_id: $expected"
-          if [ -z "${SUPABASE_PROJECT_REF:-}" ]; then
-            echo "RESULT: SECRET_UNSET"
-          elif [ "$SUPABASE_PROJECT_REF" = "$expected" ]; then
-            echo "RESULT: MATCH — deploying to the project the app uses"
-          else
-            echo "RESULT: MISMATCH — deploying to a DIFFERENT project than the app uses"
+          ref="$(grep -m1 '^project_id' supabase/config.toml | cut -d'"' -f2 || true)"
+          if [ -z "$ref" ]; then
+            ref="${SUPABASE_PROJECT_REF:-}"
+            echo "config.toml has no project_id; falling back to the secret."
           fi
+          if [ -z "$ref" ]; then
+            echo "No project ref available from config.toml or secrets." >&2
+            exit 1
+          fi
+          echo "Deploy target: $ref"
+          echo "DEPLOY_REF=$ref" >> "$GITHUB_ENV"
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       - name: Deploy changed edge functions
@@ -98,7 +117,7 @@ jobs:
             fn="$(basename "$dir")"
             if [ "$fn" = "_shared" ]; then continue; fi
             echo "::group::Deploy $fn"
-            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+            supabase functions deploy "$fn" --project-ref "$DEPLOY_REF"
             echo "::endgroup::"
           done
         env:

@@ -1158,7 +1158,14 @@ serve(async (req) => {
     // is invoked and stalls immediately" indistinguishable — and those need
     // opposite fixes. This is deliberately not awaited and takes no
     // dependency on auth or the body, so nothing above it can prevent it.
-    void recordDiagRaw("hit", req.headers.get("x-client-info") ?? "unknown-client");
+    // Awaited, not fire-and-forget.
+    //
+    // `void recordDiagRaw(...)` did not work: the edge runtime tears the
+    // isolate down as soon as the response is sent, so an in-flight insert is
+    // cancelled before it leaves. A probe returning 401 in ~1s wrote no row
+    // despite the marker demonstrably running. Bounded at 4s inside, so the
+    // worst case is small and the common case is a few tens of milliseconds.
+    await recordDiagRaw("hit", req.headers.get("x-client-info") ?? "unknown-client");
 
     // Authoritatively identify the caller from their verified JWT.
     // Do NOT trust any user id supplied in the request body.

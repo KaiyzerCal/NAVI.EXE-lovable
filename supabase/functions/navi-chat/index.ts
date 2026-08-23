@@ -1158,6 +1158,37 @@ serve(async (req) => {
     // is invoked and stalls immediately" indistinguishable — and those need
     // opposite fixes. This is deliberately not awaited and takes no
     // dependency on auth or the body, so nothing above it can prevent it.
+    // Self-report, ahead of everything.
+    //
+    // Three separate attempts to record diagnostics to the database produced
+    // nothing — first gated on a service-role key that is not configured, then
+    // on an anon key that appears equally absent, and in between defeated by
+    // the isolate being torn down before an unawaited insert could leave. Each
+    // failure looked identical from the outside to "the function is never
+    // reached", and I drew the wrong conclusion from it more than once.
+    //
+    // The response body is the one channel demonstrably working: a probe gets
+    // it back in under a second. This answers, in a single call and with no
+    // dependency on keys, storage or timing, which environment the function
+    // actually has. Booleans only — never values.
+    if (req.headers.get("x-navi-diag")) {
+      return new Response(JSON.stringify({
+        ok: true,
+        env: {
+          SUPABASE_URL: !!SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY: !!SUPABASE_SERVICE_KEY,
+          SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY,
+          OPENAI_API: !!Deno.env.get("OPENAI_API"),
+          OPENAI_API_KEY: !!Deno.env.get("OPENAI_API_KEY"),
+          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          GEMINI_API_KEY: !!Deno.env.get("GEMINI_API_KEY"),
+          GROQ_API_KEY: !!Deno.env.get("GROQ_API_KEY"),
+          GROQ_MODEL: Deno.env.get("GROQ_MODEL") ?? null,
+        },
+        now: new Date().toISOString(),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Awaited, not fire-and-forget.
     //
     // `void recordDiagRaw(...)` did not work: the edge runtime tears the

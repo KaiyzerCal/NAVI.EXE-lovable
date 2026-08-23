@@ -1220,14 +1220,24 @@ serve(async (req) => {
           },
           T.provider,
         );
-        if (!isUnfunded(geminiRes)) {
+        // `ok`, not `!isUnfunded`. isUnfunded only lists 401/402/403/429/5xx,
+        // and Google returns **400 INVALID_ARGUMENT** for a bad, restricted or
+        // mistyped API key — not 401. A 400 therefore passed this check, and
+        // the error body got wrapped in the SSE parser as though it were a
+        // successful stream. The parser found no candidates[].content.parts[]
+        // text, emitted zero deltas and a [DONE], and the caller rendered
+        // nothing: no error, no failInStream, no fallthrough to a paid tier.
+        // A silent empty reply is the worst possible presentation of "your key
+        // is wrong", so any non-2xx now counts as a failure and says why.
+        if (geminiRes.ok) {
           response = new Response(geminiSseToOpenAIStream(geminiRes.body!), {
             status: 200,
             headers: { "Content-Type": "text/event-stream" },
           });
           usedProvider = "gemini-flash-latest (direct)";
         } else {
-          console.warn(`Gemini direct unavailable (status=${geminiRes.status}), trying Groq.`);
+          const body = await geminiRes.text().catch(() => "");
+          console.warn(`Gemini direct unavailable (status=${geminiRes.status}): ${body.slice(0, 300)} — trying Groq.`);
         }
       } catch (e) {
         console.error("Gemini direct fetch threw:", e);
@@ -1247,8 +1257,14 @@ serve(async (req) => {
           },
           body: JSON.stringify({ ...chatPayload, model: GROQ_MODEL }),
         }, T.provider);
-        if (!isUnfunded(response)) usedProvider = `groq (${GROQ_MODEL})`;
-        else { console.warn(`Groq unavailable (status=${response.status}), trying Lovable Gateway.`); response = null; }
+        // Same reasoning as the Gemini tier above: a 400 (bad key, unknown
+        // model) is not "unfunded" but is certainly not a usable stream.
+        if (response.ok) usedProvider = `groq (${GROQ_MODEL})`;
+        else {
+          const body = await response.text().catch(() => "");
+          console.warn(`Groq unavailable (status=${response.status}): ${body.slice(0, 300)} — trying Lovable Gateway.`);
+          response = null;
+        }
       } catch (e) {
         console.error("Groq fallback fetch threw:", e);
       }
@@ -1392,6 +1408,20 @@ serve(async (req) => {
         // Process any remaining buffer content
         if (sseLineBuffer.trim() && sseLineBuffer.trim() !== "data: [DONE]") {
           controller.enqueue(encoder.encode(sseLineBuffer + "\n"));
+        }
+
+        // A provider answered 2xx but produced no text at all. Previously this
+        // ended as a clean [DONE] with zero deltas, so the client rendered an
+        // empty bubble and persisted an empty assistant row — indistinguishable
+        // from the model choosing to say nothing, with the reason living only
+        // in logs the operator cannot reach. Say it in the stream instead.
+        if (!fullResponseText.trim()) {
+          const why = usedProvider
+            ? `${usedProvider} returned an empty completion`
+            : "no provider produced any output";
+          console.error(`navi-chat: empty completion (${why})`);
+          const emptyChunk = { choices: [{ delta: { content: `⚠ ${why}. Nothing was generated — this is a provider problem, not your message.` } }] };
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(emptyChunk)}\n\n`));
         }
 
         // Extract structured actions via OpenAI function calling

@@ -1288,7 +1288,27 @@ serve(async (req) => {
     // here hangs the whole invocation before any instrumentation below runs.
     const authedUser = await withTimeout(getAuthedUser(req), T.supabase, "getAuthedUser");
     if (!authedUser) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      // Report what the runtime actually received.
+      //
+      // This line is the one place in the handler known for certain to be
+      // reached, and until now it said only "Unauthorized". Two separate
+      // probes placed above it — a header in #32, a query parameter in #35 —
+      // both failed to fire, and from outside there was no way to tell whether
+      // the gateway rewrites the URL, drops the query string, or the deployed
+      // bundle is simply not the one in main. Echoing the observed request
+      // settles that in one call. Nothing secret is included: names and
+      // booleans only, never values.
+      return new Response(JSON.stringify({
+        error: "Unauthorized",
+        seen: {
+          url: req.url,
+          method: req.method,
+          searchParams: [...new URL(req.url).searchParams.keys()],
+          headerNames: [...req.headers.keys()],
+          hasAuthorization: !!req.headers.get("authorization"),
+          build: "selftest-echo-1",
+        },
+      }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

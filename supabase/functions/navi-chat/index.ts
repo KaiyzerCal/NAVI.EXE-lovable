@@ -1184,6 +1184,11 @@ serve(async (req) => {
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
     const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") ?? "";
+    // Groq decommissioned llama-3.3-70b-versatile (404 model_not_found) and
+    // publishes no rolling alias, so the id is read from the environment —
+    // the same GROQ_MODEL convention mythos-vantara uses. A future
+    // decommission is then a dashboard change rather than a redeploy.
+    const GROQ_MODEL = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
 
     let response: Response | null = null;
     let usedProvider: string | null = null;
@@ -1200,7 +1205,7 @@ serve(async (req) => {
     if (GEMINI_API_KEY) {
       try {
         const geminiRes = await fetchHeaderBounded(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1220,7 +1225,7 @@ serve(async (req) => {
             status: 200,
             headers: { "Content-Type": "text/event-stream" },
           });
-          usedProvider = "gemini-2.0-flash (direct)";
+          usedProvider = "gemini-flash-latest (direct)";
         } else {
           console.warn(`Gemini direct unavailable (status=${geminiRes.status}), trying Groq.`);
         }
@@ -1240,9 +1245,9 @@ serve(async (req) => {
             Authorization: `Bearer ${GROQ_API_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ ...chatPayload, model: "llama-3.3-70b-versatile" }),
+          body: JSON.stringify({ ...chatPayload, model: GROQ_MODEL }),
         }, T.provider);
-        if (!isUnfunded(response)) usedProvider = "groq (llama-3.3-70b)";
+        if (!isUnfunded(response)) usedProvider = `groq (${GROQ_MODEL})`;
         else { console.warn(`Groq unavailable (status=${response.status}), trying Lovable Gateway.`); response = null; }
       } catch (e) {
         console.error("Groq fallback fetch threw:", e);

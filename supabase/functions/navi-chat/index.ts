@@ -1171,6 +1171,88 @@ serve(async (req) => {
     // it back in under a second. This answers, in a single call and with no
     // dependency on keys, storage or timing, which environment the function
     // actually has. Booleans only — never values.
+    // Self-test: measures the provider cascade instead of inferring it.
+    //
+    // Triggered by a query parameter, deliberately not a header. The
+    // x-navi-diag header below was added for exactly this purpose and never
+    // fired even when a probe demonstrably sent it, because the edge gateway
+    // forwards only its own allow-listed request headers and silently drops
+    // the rest. That looked identical to "the function is not running" and is
+    // one of several instruments here that reported nothing while being broken
+    // themselves. Query strings are part of the URL and always survive.
+    //
+    // This calls each provider with a five-token prompt and reports the real
+    // status and error body for each, plus whether the diagnostics insert
+    // actually succeeds. Runs before auth so it needs no user session.
+    if (new URL(req.url).searchParams.get("selftest") === "e7f1c4a9-navi") {
+      const probe = async (name: string, url: string, init: RequestInit) => {
+        const t0 = Date.now();
+        try {
+          const r = await withTimeout(fetch(url, init), 15_000, name);
+          const body = await r.text().catch(() => "");
+          return { name, status: r.status, ok: r.ok, ms: Date.now() - t0, body: body.slice(0, 300) };
+        } catch (e) {
+          return { name, status: null, ok: false, ms: Date.now() - t0, body: `threw: ${(e as Error)?.message ?? String(e)}` };
+        }
+      };
+
+      const gemini  = Deno.env.get("GEMINI_API_KEY") ?? "";
+      const groq    = Deno.env.get("GROQ_API_KEY") ?? "";
+      const groqM   = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
+      const lovable = Deno.env.get("LOVABLE_API_KEY") ?? "";
+      const openai  = Deno.env.get("OPENAI_API") ?? "";
+      const mini    = { messages: [{ role: "user", content: "hi" }], max_tokens: 5, stream: false };
+      const jJson   = { "Content-Type": "application/json" };
+
+      const jobs: Promise<unknown>[] = [];
+      if (gemini) {
+        jobs.push(probe("gemini-flash-latest",
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${gemini}`,
+          { method: "POST", headers: jJson, body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: "hi" }] }],
+              generationConfig: { maxOutputTokens: 5 },
+            }) }));
+      }
+      if (groq) {
+        jobs.push(probe(`groq:${groqM}`, "https://api.groq.com/openai/v1/chat/completions",
+          { method: "POST", headers: { Authorization: `Bearer ${groq}`, ...jJson },
+            body: JSON.stringify({ ...mini, model: groqM }) }));
+      }
+      if (lovable) {
+        jobs.push(probe("lovable-gateway", "https://ai.gateway.lovable.dev/v1/chat/completions",
+          { method: "POST", headers: { Authorization: `Bearer ${lovable}`, ...jJson },
+            body: JSON.stringify({ ...mini, model: "google/gemini-2.5-flash" }) }));
+      }
+      if (openai) {
+        jobs.push(probe("openai:gpt-4o-mini", "https://api.openai.com/v1/chat/completions",
+          { method: "POST", headers: { Authorization: `Bearer ${openai}`, ...jJson },
+            body: JSON.stringify({ ...mini, model: "gpt-4o-mini" }) }));
+      }
+
+      let diagWrite = "not attempted";
+      try {
+        await recordDiagRaw("selftest", "probe");
+        diagWrite = "returned without throwing";
+      } catch (e) {
+        diagWrite = `threw: ${(e as Error)?.message ?? String(e)}`;
+      }
+
+      return new Response(JSON.stringify({
+        env: {
+          SUPABASE_URL: !!SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY: !!SUPABASE_SERVICE_KEY,
+          SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY,
+          GEMINI_API_KEY: !!gemini,
+          GROQ_API_KEY: !!groq,
+          GROQ_MODEL: groqM,
+          LOVABLE_API_KEY: !!lovable,
+          OPENAI_API: !!openai,
+        },
+        diagWrite,
+        providers: await Promise.all(jobs),
+      }, null, 2), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (req.headers.get("x-navi-diag")) {
       return new Response(JSON.stringify({
         ok: true,

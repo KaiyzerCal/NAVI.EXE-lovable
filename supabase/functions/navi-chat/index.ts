@@ -4,6 +4,7 @@ import { getAuthedUser } from "../_shared/auth.ts";
 
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 // ── Upstream timeouts ────────────────────────────────────────────────────────
 // Every outbound call from this function used to be unbounded. A single slow
@@ -53,17 +54,31 @@ async function fetchHeaderBounded(
  * when the stall was upstream of auth. This one takes no dependencies.
  */
 async function recordDiagRaw(stage: string, detail: string): Promise<void> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
+  // Falls back to the anon key.
+  //
+  // The first version required SUPABASE_SERVICE_ROLE_KEY and returned early
+  // without it — which is very likely why nothing was ever recorded: a probe
+  // call that reached the handler and returned 401 (so the marker definitely
+  // ran) still produced no row. The secrets configured on this project are
+  // COMPOSIO_API_KEY, LOVABLE_API_KEY, OPENAI_API, Supabase_API, Tavily_API
+  // and the VAPID pair; SUPABASE_SERVICE_ROLE_KEY is not among them.
+  //
+  // That same guard also gates the semantic memory search and the profile
+  // fetch, so if it is genuinely absent those have been silently no-oping too.
+  // `keyKind` is recorded so the next row settles that question outright.
+  const key = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+  const keyKind = SUPABASE_SERVICE_KEY ? "service" : (SUPABASE_ANON_KEY ? "anon" : "none");
+  if (!SUPABASE_URL || !key) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/navi_chat_diagnostics`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        apikey: SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        apikey: key,
+        Authorization: `Bearer ${key}`,
         Prefer: "return=minimal",
       },
-      body: JSON.stringify({ stage, detail: detail.slice(0, 2000) }),
+      body: JSON.stringify({ stage, detail: `[${keyKind}] ${detail}`.slice(0, 2000) }),
       signal: AbortSignal.timeout(4_000),
     });
   } catch { /* diagnostics must never break or delay the request */ }

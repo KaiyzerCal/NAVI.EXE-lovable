@@ -664,6 +664,30 @@ export type Database = {
         }
         Relationships: []
       }
+      navi_chat_diagnostics: {
+        Row: {
+          created_at: string
+          detail: string | null
+          id: string
+          stage: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          stage?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          stage?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       navi_companion_messages: {
         Row: {
           content: string

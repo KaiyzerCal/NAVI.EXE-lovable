@@ -1290,6 +1290,9 @@ serve(async (req) => {
     // Emitting a comment line here flushes response headers immediately. The
     // client's parser skips any line that doesn't begin with "data: ", so this
     // is invisible to it — it just keeps the connection demonstrably alive.
+    // Mirrors usedProvider out of the IIFE so the non-streaming drain below
+    // can name which tier answered (or that none did) in its response.
+    let selectedProvider: string | null = null;
     const outbound = new TransformStream<Uint8Array, Uint8Array>();
     const openerEncoder = new TextEncoder();
     // Only when we are actually streaming.
@@ -1344,15 +1347,40 @@ serve(async (req) => {
     // ran and produced nothing" — and those need opposite fixes.
     await recordDiag("entry", `msgs=${Array.isArray(messages) ? messages.length : 0} stream=${wantsStream}`);
 
+    // Guarantees the outbound stream ends, whatever state it is in.
+    //
+    // getWriter() used to sit outside the try. Once pipeTo() has locked
+    // outbound.writable — which it does as soon as a provider starts streaming
+    // — getWriter() throws "locked to a reader". That throw escaped
+    // failInStream, hit the IIFE's catch, which called failInStream again, and
+    // threw again. Nothing ever closed the writable, so the non-streaming
+    // drain loop at the end of the handler waited forever and the platform
+    // killed the invocation at its 150s idle limit: no reply, no error, and
+    // none of the diagnostics below this point.
+    //
+    // Now every step is guarded, and if the writable cannot be written to it is
+    // aborted instead — which still terminates the reader, so the request ends
+    // with a real failure rather than a timeout.
+    let outboundFinished = false;
     const failInStream = async (message: string): Promise<void> => {
-      await recordDiag("failInStream", message);
-      const w = outbound.writable.getWriter();
+      if (outboundFinished) return;
+      outboundFinished = true;
+      try { await recordDiag("failInStream", message); } catch { /* never fatal */ }
       try {
-        const chunk = { choices: [{ delta: { content: message } }] };
-        await w.write(openerEncoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-        await w.write(openerEncoder.encode("data: [DONE]\n\n"));
-        await w.close();
-      } catch { /* client already gone */ }
+        const w = outbound.writable.getWriter();
+        try {
+          const chunk = { choices: [{ delta: { content: message } }] };
+          await w.write(openerEncoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          await w.write(openerEncoder.encode("data: [DONE]\n\n"));
+          await w.close();
+        } finally {
+          try { w.releaseLock(); } catch { /* already released by close() */ }
+        }
+      } catch {
+        // Writable is locked by an in-flight pipe, or already errored. Abort so
+        // the reader terminates rather than hanging.
+        try { await outbound.writable.abort(message); } catch { /* nothing left to do */ }
+      }
     };
 
     // Once the stream is open we can no longer send an HTTP error status, so
@@ -1441,6 +1469,7 @@ serve(async (req) => {
             headers: { "Content-Type": "text/event-stream" },
           });
           usedProvider = "gemini-flash-latest (direct)";
+          selectedProvider = usedProvider;
         } else {
           const body = await geminiRes.text().catch(() => "");
           console.warn(`Gemini direct unavailable (status=${geminiRes.status}): ${body.slice(0, 300)} — trying Groq.`);
@@ -1465,8 +1494,10 @@ serve(async (req) => {
         }, T.provider);
         // Same reasoning as the Gemini tier above: a 400 (bad key, unknown
         // model) is not "unfunded" but is certainly not a usable stream.
-        if (response.ok) usedProvider = `groq (${GROQ_MODEL})`;
-        else {
+        if (response.ok) {
+          usedProvider = `groq (${GROQ_MODEL})`;
+          selectedProvider = usedProvider;
+        } else {
           const body = await response.text().catch(() => "");
           console.warn(`Groq unavailable (status=${response.status}): ${body.slice(0, 300)} — trying Lovable Gateway.`);
           response = null;
@@ -1525,6 +1556,7 @@ serve(async (req) => {
           }, T.provider);
         }
         usedProvider = context?.subscription_tier === "elite" ? "openai (gpt-4o)" : "openai (gpt-4o-mini)";
+        selectedProvider = usedProvider;
       } catch (e) {
         console.error("OpenAI fallback fetch threw:", e);
       }
@@ -1714,15 +1746,32 @@ serve(async (req) => {
     // a single JSON body. The generation pipeline above is untouched — this
     // consumes exactly the same output, so both modes cannot drift apart.
     if (!wantsStream) {
+      // Hard ceiling on the drain.
+      //
+      // Every wait inside the pipeline is individually bounded now, but this
+      // loop is the last thing standing between a bug anywhere upstream and a
+      // 150s platform kill that returns nothing at all. If the stream has not
+      // finished in 90s the request answers with the reason instead of dying
+      // silently — a named failure the operator can act on beats a timeout.
+      const drainDeadline = Date.now() + 90_000;
       const reader = outbound.readable.getReader();
       const dec = new TextDecoder();
       let buf = "";
       let content = "";
       let naviActions: unknown[] = [];
+      let drainTimedOut = false;
       while (true) {
-        const { done, value } = await reader.read();
+        const remaining = drainDeadline - Date.now();
+        if (remaining <= 0) { drainTimedOut = true; break; }
+        let done: boolean, value: Uint8Array | undefined;
+        try {
+          ({ done, value } = await withTimeout(reader.read(), remaining, "drain"));
+        } catch {
+          drainTimedOut = true;
+          break;
+        }
         if (done) break;
-        buf += dec.decode(value, { stream: true });
+        buf += dec.decode(value!, { stream: true });
         let nl: number;
         while ((nl = buf.indexOf("\n")) !== -1) {
           let line = buf.slice(0, nl);
@@ -1739,6 +1788,22 @@ serve(async (req) => {
           } catch { /* partial or non-JSON line; the stream re-sends complete ones */ }
         }
       }
+      // Never answer with a bare empty string. An empty content field renders
+      // as an empty bubble and persists an empty assistant row, which is
+      // indistinguishable from the model declining to answer — the exact
+      // ambiguity that made this take so long to pin down.
+      if (drainTimedOut || !content.trim()) {
+        try { await reader.cancel(); } catch { /* already done */ }
+        const why = drainTimedOut
+          ? "the reply did not finish within 90s"
+          : `${selectedProvider ?? "no provider"} produced no output`;
+        return new Response(JSON.stringify({
+          content: `⚠ NAVI could not answer: ${why}. Provider: ${selectedProvider ?? "none selected"}.`,
+          navi_actions: [],
+          diagnostic: { drainTimedOut, usedProvider: selectedProvider ?? null },
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       return new Response(JSON.stringify({ content, navi_actions: naviActions }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

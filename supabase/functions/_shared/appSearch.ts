@@ -117,7 +117,7 @@ export interface AppSearchHit {
  */
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type QueryClient = { from(table: string): any };
+type QueryClient = { from(table: string): any; rpc?: (fn: string, args: Record<string, unknown>) => any };
 
 /** Columns worth having before a row is known to be worth fetching. */
 function selectForCandidates(t: SearchableTable): string {
@@ -148,6 +148,52 @@ function scoreCandidate(c: Candidate): number {
     (c.bodyHit ? SCORE_BODY : 0);
 }
 
+/** Which scopes actually carry vectors — journal and quests only. */
+const EMBEDDED_SCOPES = ["journal", "quests"];
+const ANY_SCOPE = ["all", "everything", "*", "auto", "default"];
+
+/**
+ * Nearest neighbours for the question, via search_navi_records.
+ *
+ * Returns [] for every failure mode — no embed function, no key, an RPC
+ * that doesn't exist yet, a row whose embedding was never backfilled.
+ * Semantic search is an addition to keyword search, never a replacement.
+ */
+async function semanticHits(
+  sb: QueryClient,
+  userId: string,
+  query: string,
+  opts: { scope?: string | null; limit?: number; embed?: (t: string) => Promise<number[] | null> },
+): Promise<Array<{ kind: string; id: string; title: string; content: string; created_at?: string }>> {
+  if (!opts.embed) return [];
+  try {
+    const vec = await opts.embed(query);
+    if (!vec) return [];
+
+    const raw = String(opts.scope ?? "").trim().toLowerCase();
+    const rpcScope = EMBEDDED_SCOPES.includes(raw) ? raw : "all";
+    if (raw && !ANY_SCOPE.includes(raw) && !EMBEDDED_SCOPES.includes(raw)) return [];
+
+    if (typeof sb.rpc !== "function") return [];
+
+    const { data } = await sb.rpc("search_navi_records", {
+      p_user_id: userId,
+      p_query: vec,
+      p_count: (opts.limit ?? 8) * 2,
+      p_scope: rpcScope,
+    });
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      kind: String(r.kind ?? ""),
+      id: String(r.id ?? ""),
+      title: String(r.title ?? "") || "(untitled)",
+      content: String(r.content ?? ""),
+      created_at: String(r.created_at ?? "") || undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Full-text search across the operator's own rows. Same two-phase design as
  * Vantara's version: phase 1 asks which rows match on id/title/date only
@@ -158,7 +204,19 @@ export async function searchAppData(
   sb: QueryClient,
   userId: string,
   query: string,
-  opts: { scope?: string | null; limit?: number; candidateCap?: number } = {},
+  opts: {
+    scope?: string | null;
+    limit?: number;
+    candidateCap?: number;
+    /**
+     * Turns on the semantic half of the search (journal + quests, the only
+     * two tables with an embedding column — see the 20260831020000
+     * migration). Passed in rather than imported so this module stays
+     * runnable anywhere there's no embedding key, the same reason Vantara's
+     * version takes it this way.
+     */
+    embed?: (text: string) => Promise<number[] | null>;
+  } = {},
 ): Promise<AppSearchHit[]> {
   const terms = extractTerms(query);
   const orQuery = buildTsQuery(query);
@@ -192,6 +250,12 @@ export async function searchAppData(
       if (terms.length > 1) run("all", t.bodyCol, andQuery);
     }
   }
+
+  // Started here, beside the keyword probes, not after the shortlist is
+  // built — a question sharing no words with the entry is exactly the case
+  // semantic search exists for, so it must not sit behind an early return
+  // keyword search takes when it finds nothing.
+  const semanticP = semanticHits(sb, userId, query, opts);
 
   const settled = await Promise.all(probes);
 
@@ -227,7 +291,8 @@ export async function searchAppData(
     })
     .slice(0, Math.max(0, limit));
 
-  if (shortlist.length === 0) return [];
+  const semantic = await semanticP;
+  if (shortlist.length === 0 && semantic.length === 0) return [];
 
   const wanted = new Map<string, { t: SearchableTable; ids: string[] }>();
   for (const c of shortlist) {
@@ -254,6 +319,23 @@ export async function searchAppData(
       created_at: t.hasCreatedAt ? String(row.created_at ?? "") || undefined : undefined,
     })),
   );
+
+  // Semantic hits, merged in rather than replacing the keyword results — the
+  // two are complementary. Only journal and quests are embedded, so this
+  // widens what those two can match without touching the other 13 tables.
+  for (const hit of semantic) {
+    const key = `${hit.kind}:${hit.id}`;
+    if (!full.some((f) => f.id === key)) {
+      full.push({
+        id: key,
+        kind: hit.kind,
+        title: hit.title,
+        content: hit.content,
+        category: undefined,
+        created_at: hit.created_at,
+      });
+    }
+  }
 
   return rankEntries(full, terms, limit).map((r) => ({
     kind: r.kind,

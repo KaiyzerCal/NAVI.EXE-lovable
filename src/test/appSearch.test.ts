@@ -2,7 +2,7 @@
 // column name the registry claims is checked against the generated Supabase
 // types, because a wrong name is a silent empty result, not an error.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -118,5 +118,54 @@ describe("every scope is reachable from navi-chat", () => {
   it("calls searchAppData and feeds the result into buildSystemPrompt", () => {
     expect(CHAT).toMatch(/searchAppData\(/);
     expect(CHAT).toMatch(/buildSystemPrompt\([^)]*searchResults/);
+  });
+
+  it("shares one embedding call between memory search and app search, rather than paying twice", () => {
+    // embedText costs an OpenAI call. Two independent calls for the same
+    // lastUserMsg.content in the same turn would double that cost for no
+    // benefit — this was a real bug in the first draft of this wiring.
+    expect(CHAT).toMatch(/sharedEmbeddingPromise/);
+    const embedCalls = [...CHAT.matchAll(/embedText\(lastUserMsg\.content/g)];
+    expect(embedCalls.length, "embedText(lastUserMsg.content...) should be called exactly once").toBe(1);
+  });
+});
+
+describe("semantic search over journal and quests", () => {
+  // Same shape as mythos-vantara's equivalent check: the set of tables
+  // carrying vectors is stated in two places here (the migration that adds
+  // the column and function, and appSearch.ts's EMBEDDED_SCOPES allowlist)
+  // — drift between them is silent, so it's checked directly rather than
+  // trusted to stay in sync by hand.
+  const APP = read("supabase/functions/_shared/appSearch.ts");
+  const MIGRATION_DIR = "supabase/migrations";
+  const MIGRATIONS = readdirSync(join(ROOT, MIGRATION_DIR))
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .map((f) => read(`${MIGRATION_DIR}/${f}`))
+    .join("\n");
+
+  it("declares EMBEDDED_SCOPES matching the tables the migration actually embeds", () => {
+    const declared = /const EMBEDDED_SCOPES = \[([^\]]+)\]/.exec(APP)?.[1] ?? "";
+    const scopes = [...declared.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+    expect(scopes.sort()).toEqual(["journal", "quests"]);
+
+    for (const scope of scopes) {
+      expect(MIGRATIONS, `${scope} is in EMBEDDED_SCOPES but the migration doesn't add its embedding column`)
+        .toMatch(new RegExp(`ADD COLUMN IF NOT EXISTS embedding vector\\(1536\\)`));
+      expect(MIGRATIONS, `${scope} is in EMBEDDED_SCOPES but search_navi_records has no branch for it`)
+        .toMatch(new RegExp(`'${scope}'::text`));
+    }
+  });
+
+  it("calls search_navi_records, not mythos-vantara's match_operator_entries", () => {
+    // Easy mistake porting code between the two repos — the RPC name has to
+    // match what this repo's migration actually defines.
+    expect(APP).toMatch(/search_navi_records/);
+    expect(APP).not.toMatch(/match_operator_entries/);
+  });
+
+  it("navi-chat passes an embed callback into searchAppData", () => {
+    const CHAT = read("supabase/functions/navi-chat/index.ts");
+    expect(CHAT).toMatch(/searchAppData\([^)]*embed:/s);
   });
 });

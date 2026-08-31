@@ -1599,6 +1599,13 @@ serve(async (req) => {
     (async () => {
      try {
 
+    // One embedding call for lastUserMsg.content, shared by the memory
+    // search below and the journal/quest semantic search inside
+    // searchAppData — each independently calling embedText for the same
+    // text would double the OpenAI cost of every message for no benefit.
+    const sharedEmbeddingPromise: Promise<number[] | null> =
+      userId && lastUserMsg ? embedText(lastUserMsg.content, OPENAI_API_KEY) : Promise.resolve(null);
+
     // ── Parallel: web search + semantic memory + app data retrieval ────────
     const [webSearchResults, semanticMemories, searchResults] = await Promise.all([
       lastUserMsg && needsWebSearch(lastUserMsg.content)
@@ -1607,7 +1614,7 @@ serve(async (req) => {
 
       (async (): Promise<string> => {
         if (!userId || !lastUserMsg) return "";
-        const embedding = await embedText(lastUserMsg.content, OPENAI_API_KEY);
+        const embedding = await sharedEmbeddingPromise;
         if (!embedding) return "";
         const results = await searchNaViMemories(userId, embedding);
         if (!results.length) return "";
@@ -1616,13 +1623,19 @@ serve(async (req) => {
           .join("\n");
       })(),
 
-      // Keyword search across everything — quests, skills, achievements, past
-      // chat, journal entries older than the recent slice APP STATE carries.
-      // Failure degrades to nothing found rather than costing the reply.
+      // Keyword + semantic search across everything — quests, skills,
+      // achievements, past chat, journal entries older than the recent
+      // slice APP STATE carries. Semantic (journal + quests only, the two
+      // tables with an embedding column) reaches entries that share no
+      // words with the question. Failure degrades to nothing found rather
+      // than costing the reply.
       (async (): Promise<string> => {
         if (!userId || !lastUserMsg || !searchClient) return "";
         try {
-          const hits = await searchAppData(searchClient, userId, lastUserMsg.content, { limit: 8 });
+          const hits = await searchAppData(searchClient, userId, lastUserMsg.content, {
+            limit: 8,
+            embed: () => sharedEmbeddingPromise,
+          });
           return formatSearchBlock(hits, true);
         } catch {
           return "";

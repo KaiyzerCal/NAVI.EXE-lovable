@@ -564,6 +564,7 @@ export type Database = {
           category: string
           content: string
           created_at: string
+          embedding: string | null
           id: string
           importance: string
           tags: string[]
@@ -576,6 +577,7 @@ export type Database = {
           category?: string
           content?: string
           created_at?: string
+          embedding?: string | null
           id?: string
           importance?: string
           tags?: string[]
@@ -588,6 +590,7 @@ export type Database = {
           category?: string
           content?: string
           created_at?: string
+          embedding?: string | null
           id?: string
           importance?: string
           tags?: string[]
@@ -1349,6 +1352,7 @@ export type Database = {
           created_at: string
           debuff_penalty_id: string | null
           description: string | null
+          embedding: string | null
           equipment_reward_id: string | null
           id: string
           linked_skill_id: string | null
@@ -1367,6 +1371,7 @@ export type Database = {
           created_at?: string
           debuff_penalty_id?: string | null
           description?: string | null
+          embedding?: string | null
           equipment_reward_id?: string | null
           id?: string
           linked_skill_id?: string | null
@@ -1385,6 +1390,7 @@ export type Database = {
           created_at?: string
           debuff_penalty_id?: string | null
           description?: string | null
+          embedding?: string | null
           equipment_reward_id?: string | null
           id?: string
           linked_skill_id?: string | null
@@ -1833,6 +1839,22 @@ export type Database = {
       navi_level_from_xp: { Args: { _total_xp: number }; Returns: number }
       purchase_quest_pack: { Args: { p_pack_id: string }; Returns: undefined }
       purchase_shop_item: { Args: { p_item_id: string }; Returns: undefined }
+      search_navi_records: {
+        Args: {
+          p_count?: number
+          p_query: string
+          p_scope?: string
+          p_user_id: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+          similarity: number
+          title: string
+        }[]
+      }
       seed_my_achievements: {
         Args: never
         Returns: {

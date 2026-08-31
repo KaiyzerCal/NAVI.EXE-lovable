@@ -169,3 +169,52 @@ describe("semantic search over journal and quests", () => {
     expect(CHAT).toMatch(/searchAppData\([^)]*embed:/s);
   });
 });
+
+describe("write-time embedding hooks", () => {
+  // Backfill alone means a new journal entry or quest sits unembedded until
+  // whatever next calls navi-embed-memories for that user happens to run —
+  // which for most users is "nothing, ever", since no cron calls it. Every
+  // real write path for journal_entries and quests needs to trigger an
+  // embed itself. There are more of these than mythos-vantara's equivalent
+  // needed: NAVI has no single action executor everything funnels through
+  // — the same create_quest/create_journal logic is duplicated across a
+  // server action executor, a client-side fallback of the same, an
+  // autonomous agent runner, and the two direct-write React hooks the
+  // journal/quest pages use.
+  const SITES = [
+    ["useJournal.ts (client hook)", "src/hooks/useJournal.ts"],
+    ["useQuests.ts (client hook)", "src/hooks/useQuests.ts"],
+    ["naviActions.ts (client fallback executor)", "src/lib/naviActions.ts"],
+    ["navi-actions (server executor)", "supabase/functions/navi-actions/index.ts"],
+    ["navi-agent-runner (autonomous agent)", "supabase/functions/navi-agent-runner/index.ts"],
+  ] as const;
+
+  it.each(SITES)("%s imports triggerEmbed and calls it at least twice (journal + quests)", (_name, path) => {
+    const src = read(path);
+    expect(src, `${path} does not import triggerEmbed`).toMatch(/import\s*\{\s*triggerEmbed\s*\}/);
+    const calls = [...src.matchAll(/triggerEmbed\(/g)];
+    expect(calls.length, `${path} calls triggerEmbed fewer than 2 times — expected at least one journal and one quests site`)
+      .toBeGreaterThanOrEqual(2);
+  });
+
+  it("navi-extract-memories scopes its embed trigger to memory only, not all three tables", () => {
+    // Omitting scope defaults to scanning journal_entries and quests too —
+    // wasted round trips on a call that only ever writes navi_core_memory.
+    const src = read("supabase/functions/navi-extract-memories/index.ts");
+    expect(src).toMatch(/triggerEmbed\(user_id,\s*["']memory["']\)/);
+  });
+
+  it("an update that changes embedded content nulls the embedding before re-triggering, everywhere it's touched", () => {
+    // A stale embedding is worse than a missing one — it ranks the row by
+    // what it used to say. Every update path that can change journal
+    // content or quest description must null embedding in the same write,
+    // not just fire triggerEmbed and hope the backfill's blank-content
+    // filter sorts it out (it won't — the row isn't blank, it's stale).
+    for (const [, path] of SITES) {
+      const src = read(path);
+      if (!/update\(/.test(src)) continue;
+      const nullsEmbedding = /embedding:\s*null/.test(src) || /\.embedding\s*=\s*null/.test(src);
+      expect(nullsEmbedding, `${path} updates a row but never nulls embedding on content/description change`).toBe(true);
+    }
+  });
+});

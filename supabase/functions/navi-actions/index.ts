@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { triggerEmbed } from "../_shared/embedTrigger.ts";
 
 type NaviAction = {
   type: string;
@@ -83,6 +84,7 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
       if (error) throw error;
       console.log("[navi-actions] Quest created:", data?.id);
       await logActivity(sb, userId, "quest_created", `Quest created: ${String(params.name || "New Quest")}`, 0);
+      triggerEmbed(userId, "quests");
       return;
     }
 
@@ -92,9 +94,14 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
       for (const key of ["name", "description", "type", "total", "xp_reward", "progress", "completed", "linked_skill_id", "loot_description", "equipment_reward_id", "buff_reward_id", "debuff_penalty_id"]) {
         if (params[key] !== undefined) updates[key] = params[key];
       }
+      // A description change invalidates the embedding — nulled so the stale
+      // vector can't rank the quest by what it used to say. Other fields
+      // (progress, completion, rewards) don't touch what got embedded.
+      if (updates.description !== undefined) updates.embedding = null;
       const { error } = await sb.from("quests").update(updates).eq("id", String(params.quest_id)).eq("user_id", userId);
       if (error) throw error;
       await logActivity(sb, userId, "quest_updated", `Quest updated: ${String(params.quest_id)}`, 0);
+      if (updates.description !== undefined) triggerEmbed(userId, "quests");
       return;
     }
 
@@ -240,6 +247,7 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
       console.log("[navi-actions] Journal created:", data?.id);
       await awardXP(sb, userId, xpEarned);
       await logActivity(sb, userId, "journal_created", `Journal entry: ${title}`, xpEarned);
+      triggerEmbed(userId, "journal");
       return;
     }
 
@@ -251,8 +259,12 @@ async function executeAction(sb: ReturnType<typeof createClient>, userId: string
       if (params.tags !== undefined) updates.tags = asStringArray(params.tags);
       if (params.category !== undefined) updates.category = params.category;
       if (params.importance !== undefined) updates.importance = params.importance;
+      // Content invalidates the embedding; title/tags/category/importance
+      // don't touch what got embedded.
+      if (updates.content !== undefined) updates.embedding = null;
       const { error } = await sb.from("journal_entries").update(updates).eq("id", String(params.entry_id)).eq("user_id", userId);
       if (error) throw error;
+      if (updates.content !== undefined) triggerEmbed(userId, "journal");
       return;
     }
 

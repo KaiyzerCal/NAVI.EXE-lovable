@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { triggerEmbed } from "../_shared/embedTrigger.ts";
 
 // Retrigger: the live deployment of this function had drifted to an old
 // stub ("No AI provider available") that predates the real OpenAI
@@ -220,7 +221,9 @@ async function executeNaviTool(
         type: args.type ?? "Side",
         total: args.total ?? 1,
         xp_reward: args.xp_reward ?? 50,
+        embedding: null,
       }).eq("id", existing.id);
+      triggerEmbed(userId, "quests");
       return { resultText: `Quest updated: ${args.name}`, actionRecord: { type: "update_quest", name: args.name } };
     }
     const { data: q } = await sb.from("quests").insert({
@@ -231,6 +234,7 @@ async function executeNaviTool(
       total: args.total ?? 1,
       xp_reward: args.xp_reward ?? 50,
     }).select("id").single();
+    if (q) triggerEmbed(userId, "quests");
     return {
       resultText: q ? `Quest created: ${args.name}` : "Failed to create quest",
       actionRecord: { type: "create_quest", name: args.name },
@@ -259,6 +263,7 @@ async function executeNaviTool(
       category:   args.category ?? "personal",
       importance: args.importance ?? "medium",
     }).select("id").single();
+    if (j) triggerEmbed(userId, "journal");
     return {
       resultText: j ? `Journal entry created: ${args.title}` : "Failed to create journal entry",
       actionRecord: { type: "create_journal", title: args.title },

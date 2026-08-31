@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { triggerEmbed } from "@/lib/embedTrigger";
 
 export type QuestType = "Daily" | "Weekly" | "Main" | "Side" | "Minor" | "Epic";
 
@@ -80,6 +81,7 @@ export function useQuests() {
       }
       const quest = data as Quest;
       setQuests((prev) => [quest, ...prev]);
+      triggerEmbed(user.id, "quests");
       return quest;
     },
     [user]
@@ -109,6 +111,11 @@ export function useQuests() {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .then(({ data }) => { if (data) setQuests(data as Quest[]); });
+      } else if (input.description !== undefined) {
+        // Only a description change invalidates the embedding — progress,
+        // completion, and reward-amount edits don't touch what got embedded.
+        supabase.from("quests").update({ embedding: null }).eq("id", id).eq("user_id", user.id)
+          .then(() => triggerEmbed(user.id, "quests"));
       }
     },
     [user]

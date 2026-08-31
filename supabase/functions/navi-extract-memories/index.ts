@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 // comment in navi-analyze-media/index.ts for why (merge-commit push, CI
 // diff logic silently deployed nothing).
 import { getAuthedUser, serviceClient } from "../_shared/auth.ts";
+import { triggerEmbed } from "../_shared/embedTrigger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,17 +83,11 @@ serve(async (req) => {
     { onConflict: "user_id,memory_type,content", ignoreDuplicates: true }
   );
 
-  // Trigger embedding for newly saved memories (fire-and-forget)
-  const embedUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/navi-embed-memories`;
-  fetch(embedUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-    },
-    body: JSON.stringify({ user_id }),
-  }).catch(() => {});
+  // Trigger embedding for newly saved memories (fire-and-forget). Scoped to
+  // "memory" specifically — navi-embed-memories defaults to scanning all
+  // three tables (memory/journal/quests) when scope is omitted, which was
+  // two unnecessary table scans on every extraction call here.
+  triggerEmbed(user_id, "memory");
 
   return new Response(JSON.stringify({ inserted: count ?? memories.length }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },

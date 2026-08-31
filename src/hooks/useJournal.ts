@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { triggerEmbed } from "@/lib/embedTrigger";
 
 export interface JournalEntry {
   id: string;
@@ -71,6 +72,7 @@ export function useJournal() {
 
       const entry = data as JournalEntry;
       setEntries((prev) => [entry, ...prev]);
+      triggerEmbed(user.id, "journal");
 
       // Award XP atomically via RPC — no race condition
       const { error: xpErr } = await supabase.rpc("award_xp", { _amount: xp });
@@ -94,6 +96,7 @@ export function useJournal() {
           importance: 3,
         }).then(({ error }) => {
           if (error) console.warn("[useJournal] memory save failed:", error.message);
+          else triggerEmbed(user.id, "memory");
         });
       }
 
@@ -119,6 +122,12 @@ export function useJournal() {
       if (error) {
         console.error("[useJournal] update error:", error);
         toast({ title: "Error", description: "Failed to update entry.", variant: "destructive" });
+      } else if (input.content !== undefined) {
+        // Stale embedding is worse than a missing one — it would rank the
+        // entry by what it used to say. Only content changes need a re-embed;
+        // a title-only or tag-only edit doesn't touch what got embedded.
+        supabase.from("journal_entries").update({ embedding: null }).eq("id", id).eq("user_id", user.id)
+          .then(() => triggerEmbed(user.id, "journal"));
       }
     },
     [user]

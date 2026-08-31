@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { triggerEmbed } from "@/lib/embedTrigger";
 
 export interface NaviAction {
   type: string;
@@ -176,6 +177,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
         }).select("id").maybeSingle();
         if (error) return fail(type, `Failed to create quest`, error.message);
         await logActivity(userId, "quest_created", `Quest created: ${p.name}`, 0);
+        triggerEmbed(userId, "quests");
         return ok(type, `Created quest "${p.name}".`, {
           affectedTables: ["quests", "activity_log"],
           affectedIds: { quest_id: data?.id ?? null },
@@ -271,8 +273,12 @@ export async function executeAction(userId: string, action: NaviAction): Promise
           if (p[key] !== undefined) updates[key] = p[key];
         }
         if (!Object.keys(updates).length) return fail(type, "No updatable fields provided");
+        // Description invalidates the embedding; other fields don't touch
+        // what got embedded.
+        if (updates.description !== undefined) updates.embedding = null;
         const { error } = await supabase.from("quests").update(updates).eq("id", p.quest_id).eq("user_id", userId);
         if (error) return fail(type, "Failed to update quest", error.message);
+        if (updates.description !== undefined) triggerEmbed(userId, "quests");
         return ok(type, `Updated quest.`, {
           affectedTables: ["quests"], affectedIds: { quest_id: p.quest_id },
         });
@@ -301,14 +307,16 @@ export async function executeAction(userId: string, action: NaviAction): Promise
         };
         if (p.progress !== undefined) payload.progress = p.progress;
         if (existing && existing[0]) {
-          const { error } = await supabase.from("quests").update(payload).eq("id", (existing[0] as any).id);
+          const { error } = await supabase.from("quests").update({ ...payload, embedding: null }).eq("id", (existing[0] as any).id);
           if (error) return fail(type, "Failed to update quest", error.message);
+          triggerEmbed(userId, "quests");
           return ok(type, `Updated quest "${p.name}".`, {
             affectedTables: ["quests"], affectedIds: { quest_id: (existing[0] as any).id },
           });
         }
         const { data, error } = await supabase.from("quests").insert(payload).select("id").maybeSingle();
         if (error) return fail(type, "Failed to create quest", error.message);
+        triggerEmbed(userId, "quests");
         return ok(type, `Created quest "${p.name}".`, {
           affectedTables: ["quests"], affectedIds: { quest_id: data?.id ?? null },
         });
@@ -538,6 +546,7 @@ export async function executeAction(userId: string, action: NaviAction): Promise
         const xpRes = await applyXpToProfile(userId, xpEarned);
         const xpResOk = xpRes.ok;
         await logActivity(userId, "journal_created", `Journal entry: ${p.title}`, xpEarned);
+        triggerEmbed(userId, "journal");
         return ok(type, `Saved entry "${p.title}" (+${xpEarned} XP).`, {
           affectedTables: ["journal_entries", "profiles", "activity_log"],
           affectedIds: { entry_id: data?.id ?? null },
@@ -553,8 +562,12 @@ export async function executeAction(userId: string, action: NaviAction): Promise
           if (p[key] !== undefined) updates[key] = p[key];
         }
         if (!Object.keys(updates).length) return fail(type, "No updatable fields provided");
+        // Content invalidates the embedding; title/tags/category/importance
+        // don't touch what got embedded.
+        if (updates.content !== undefined) updates.embedding = null;
         const { error } = await supabase.from("journal_entries").update(updates).eq("id", p.entry_id).eq("user_id", userId);
         if (error) return fail(type, "Failed to update journal", error.message);
+        if (updates.content !== undefined) triggerEmbed(userId, "journal");
         return ok(type, `Updated journal entry.`, {
           affectedTables: ["journal_entries"], affectedIds: { entry_id: p.entry_id },
         });

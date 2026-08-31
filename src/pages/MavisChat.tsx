@@ -1053,13 +1053,14 @@ export default function MavisChat() {
     // is exactly how the unguarded window.speechSynthesis.cancel() on the next
     // line presented on Android. Covering the whole body means the next thing
     // that throws here reports itself instead of silently killing the composer.
+    let controller: AbortWithIntent | null = null;
     try {
     stopSpeaking();
 
     // abort any previous stream — deliberate, so it must not raise an error
     if (abortRef.current) abortRef.current.intentional = true;
     abortRef.current?.abort();
-    const controller: AbortWithIntent = new AbortController();
+    controller = new AbortController() as AbortWithIntent;
     abortRef.current = controller;
 
     // Show the message immediately, then persist in the background.
@@ -1300,7 +1301,7 @@ export default function MavisChat() {
         // an error. Anything else that aborted this request is — staying
         // silent there is what made a torn-down request indistinguishable
         // from NAVI simply never answering.
-        if (!controller.intentional) {
+        if (!controller?.intentional) {
           toast({
             title: "Connection interrupted",
             description: "The reply was cut off before it arrived. Send it again.",

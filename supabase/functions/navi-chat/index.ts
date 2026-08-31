@@ -1,10 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { corsHeadersFor, handlePreflight } from "../_shared/cors.ts";
 import { getAuthedUser } from "../_shared/auth.ts";
+import { searchAppData, formatSearchBlock } from "../_shared/appSearch.ts";
 
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+// Every other DB access in this file goes through raw fetch() to PostgREST —
+// searchAppData needs the .from(table).select().eq().textSearch() builder
+// chain instead, the same interface Vantara's identical module was written
+// and tested against, so this is the one client instance in the file built
+// with supabase-js rather than fetch. Service-role: search must reach the
+// operator's full data regardless of RLS, the same as every other admin call
+// here already does via the service key.
+const searchClient = SUPABASE_URL && SUPABASE_SERVICE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  : null;
 
 // ── Upstream timeouts ────────────────────────────────────────────────────────
 // Every outbound call from this function used to be unbounded. A single slow
@@ -809,7 +822,7 @@ function needsWebSearch(lastUserMessage: string): string | null {
   return null;
 }
 
-function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories: string): string {
+function buildSystemPrompt(ctx: any, webSearchResults: string, semanticMemories: string, searchResults: string): string {
   const level = ctx.navi_level ?? 1;
   const title = getLevelTitle(level);
   const xpTotal = ctx.xp_total ?? 0;
@@ -1055,6 +1068,7 @@ ${webSection}
 
 APP STATE:
 ${appState}
+${searchResults}
 SESSION: ${timeOfDay}
 ${memorySection}${recentSection}
 CONTEXTUAL INTELLIGENCE:
@@ -1585,8 +1599,8 @@ serve(async (req) => {
     (async () => {
      try {
 
-    // ── Parallel: web search + semantic memory retrieval ──────────────────
-    const [webSearchResults, semanticMemories] = await Promise.all([
+    // ── Parallel: web search + semantic memory + app data retrieval ────────
+    const [webSearchResults, semanticMemories, searchResults] = await Promise.all([
       lastUserMsg && needsWebSearch(lastUserMsg.content)
         ? tavilySearch(lastUserMsg.content)
         : Promise.resolve(""),
@@ -1601,9 +1615,22 @@ serve(async (req) => {
           .map((m) => `[${m.memory_type}] ${m.content}`)
           .join("\n");
       })(),
+
+      // Keyword search across everything — quests, skills, achievements, past
+      // chat, journal entries older than the recent slice APP STATE carries.
+      // Failure degrades to nothing found rather than costing the reply.
+      (async (): Promise<string> => {
+        if (!userId || !lastUserMsg || !searchClient) return "";
+        try {
+          const hits = await searchAppData(searchClient, userId, lastUserMsg.content, { limit: 8 });
+          return formatSearchBlock(hits, true);
+        } catch {
+          return "";
+        }
+      })(),
     ]);
 
-    const systemPrompt = buildSystemPrompt(context || {}, webSearchResults, semanticMemories);
+    const systemPrompt = buildSystemPrompt(context || {}, webSearchResults, semanticMemories, searchResults);
 
     const chatPayload = {
       messages: [

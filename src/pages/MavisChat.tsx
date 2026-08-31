@@ -1301,7 +1301,7 @@ export default function MavisChat() {
         // an error. Anything else that aborted this request is — staying
         // silent there is what made a torn-down request indistinguishable
         // from NAVI simply never answering.
-        if (!controller.intentional) {
+        if (!controller?.intentional) {
           toast({
             title: "Connection interrupted",
             description: "The reply was cut off before it arrived. Send it again.",

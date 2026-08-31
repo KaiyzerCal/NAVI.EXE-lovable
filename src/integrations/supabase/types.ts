@@ -757,6 +757,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          embedding: string | null
           id: string
           importance: number
           memory_type: string
@@ -766,6 +767,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          embedding?: string | null
           id?: string
           importance?: number
           memory_type?: string
@@ -775,6 +777,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          embedding?: string | null
           id?: string
           importance?: number
           memory_type?: string
@@ -1839,6 +1842,20 @@ export type Database = {
       navi_level_from_xp: { Args: { _total_xp: number }; Returns: number }
       purchase_quest_pack: { Args: { p_pack_id: string }; Returns: undefined }
       purchase_shop_item: { Args: { p_item_id: string }; Returns: undefined }
+      search_navi_memories: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          p_user_id: string
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          importance: number
+          memory_type: string
+          similarity: number
+        }[]
+      }
       search_navi_records: {
         Args: {
           p_count?: number

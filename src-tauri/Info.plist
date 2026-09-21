@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Tauri's macOS bundler merges a src-tauri/Info.plist (if present) into
+	     the generated app bundle's Info.plist. Same gap as the Capacitor iOS
+	     build: without this key, WKWebView denies getUserMedia(audio) outright
+	     with no permission prompt, since macOS requires an app to declare why
+	     it wants the mic before it will ever ask. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>NAVI lets you talk instead of type in chat. Your voice is only used to transcribe what you say — nothing is recorded or sent anywhere else.</string>
+</dict>
+</plist>

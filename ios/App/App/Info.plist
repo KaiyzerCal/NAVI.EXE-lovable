@@ -22,6 +22,14 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Without this, iOS denies every getUserMedia(audio) call outright and
+	     never shows a permission prompt at all — there's no Settings toggle
+	     for the user to grant, because the app never declared it wants the
+	     mic. That's the exact "microphone access required" message the
+	     in-app Web Speech API error surfaces on iOS: not a user permission
+	     the user can fix, a declaration this file was missing. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>NAVI lets you talk instead of type in chat. Your voice is only used to transcribe what you say — nothing is recorded or sent anywhere else.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

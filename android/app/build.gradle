@@ -16,7 +16,28 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // A committed debug.keystore, not the implicit one Gradle auto-generates
+    // at ~/.android/debug.keystore when none exists. On a GitHub Actions
+    // runner that path never exists — it's a fresh VM every run — so every
+    // CI build was silently signed with a brand-new random key, and every
+    // "install this APK to update" was actually a signature mismatch that
+    // silently failed (or errored past without being noticed), leaving the
+    // OLD build running with none of that run's fixes. This is a debug-only
+    // key (androiddebugkey/android are Android's own standard, publicly
+    // documented debug defaults, not a real secret) — safe to commit, and
+    // the whole point is that it's the same key on every build from now on.
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

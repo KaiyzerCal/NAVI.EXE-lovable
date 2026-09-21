@@ -30,6 +30,11 @@
 	     the user can fix, a declaration this file was missing. -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NAVI lets you talk instead of type in chat. Your voice is only used to transcribe what you say — nothing is recorded or sent anywhere else.</string>
+	<!-- Required separately from NSMicrophoneUsageDescription by
+	     @capacitor-community/speech-recognition — iOS's Speech framework
+	     gates on both. -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>NAVI transcribes what you say so you can talk instead of type in chat. Nothing is recorded or sent anywhere else.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { extractMemoriesFromMessage, compressMemories, buildMemoryContext } from "@/lib/memoryEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
+import { useElevenLabsTts } from "@/hooks/useElevenLabsTts";
 import { getRunningBundleLabel } from "@/lib/liveUpdate";
 
 const CHAT_URL             = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navi-chat`;
@@ -467,13 +468,23 @@ export default function MavisChat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── TTS state ──────────────────────────────────────────────────────────────
+  // Ported from mythos-vantara's useElevenLabsTts, replacing the hand-rolled
+  // window.speechSynthesis queue this file used to carry. That hand-rolled
+  // version was never actually fixed on Android, only made safe: Android's
+  // native WebView has no speechSynthesis at all (window.speechSynthesis is
+  // undefined there, not just unsupported), so every "VOICE ON" reply was
+  // silently producing zero audio on the one platform this app ships to as a
+  // native app. The shared hook wraps @capacitor-community/text-to-speech for
+  // native platforms specifically so voice output actually works there, plus
+  // gives NAVI the same ElevenLabs-premium / browser-free cascade Vantara has
+  // — falling back gracefully to free voices when ELEVENLABS_API_KEY isn't
+  // configured in this project yet, same as it does there.
+  const { speak: ttsSpeak, stop: ttsStop } = useElevenLabsTts();
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("mavis.voiceEnabled") === "1";
   });
   const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
-  const ttsQueueRef = useRef<string[]>([]);
-  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   // Persist voice on/off preference
   useEffect(() => {
@@ -482,158 +493,34 @@ export default function MavisChat() {
     } catch {}
   }, [voiceEnabled]);
 
-  // Pick the best available voice (prefer high-quality neural / natural English voices)
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const pickVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (!voices.length) return;
-      const score = (v: SpeechSynthesisVoice) => {
-        const n = v.name.toLowerCase();
-        let s = 0;
-        if (/en[-_]/i.test(v.lang) || /^en$/i.test(v.lang)) s += 10;
-        if (/natural|neural|online|premium|enhanced/.test(n)) s += 8;
-        if (/google/.test(n)) s += 6;
-        if (/microsoft/.test(n) && /(aria|jenny|libby|sonia|natasha|clara)/.test(n)) s += 7;
-        if (/(samantha|karen|victoria|serena|allison|ava|zoe|joanna)/.test(n)) s += 5;
-        if (/female/.test(n)) s += 2;
-        if (v.localService) s += 1;
-        return s;
-      };
-      const sorted = [...voices].sort((a, b) => score(b) - score(a));
-      preferredVoiceRef.current = sorted[0] || null;
-    };
-    pickVoice();
-    window.speechSynthesis.onvoiceschanged = pickVoice;
-    return () => {
-      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
-    };
-  }, []);
-
   const stopSpeaking = useCallback(() => {
-    ttsQueueRef.current = [];
-    // Android's native WebView does not implement speechSynthesis at all — the
-    // object is simply undefined there, the same gap mythos-vantara documents
-    // in VoiceChatOverlay. Unguarded, this threw a TypeError, and because
-    // sendMessage calls it immediately after setIsLoading(true) and well
-    // before its try block, the throw escaped the function entirely: the flag
-    // stayed set, the optimistic bubble never rendered, no toast fired, and
-    // the composer's `disabled={isLoading}` left the textarea dead for the
-    // rest of the session. The ErrorBoundary never saw it either, since this
-    // runs in an event handler rather than a render.
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    ttsStop();
     setCurrentlySpokenId(null);
-  }, []);
+  }, [ttsStop]);
 
   const speakMessage = useCallback((msgId: string, content: string) => {
     if (currentlySpokenId === msgId) { stopSpeaking(); return; }
-    stopSpeaking();
-    // Strip Markdown / code / links / emojis so the voice reads natural prose.
-    const cleaned = content
-      .replace(/```[\s\S]*?```/g, " ")              // fenced code blocks
-      .replace(/`[^`]*`/g, " ")                      // inline code
-      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")         // images
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")      // links → label
-      .replace(/^\s{0,3}#{1,6}\s+/gm, "")           // headings
-      .replace(/^\s*[-*+]\s+/gm, "")                 // list bullets
-      .replace(/^\s*>\s?/gm, "")                     // blockquotes
-      .replace(/[*_~`>|]/g, "")                      // residual markdown chars
-      .replace(/:::ACTION[\s\S]*?:::/gi, " ")       // navi action tags
-      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ") // emoji
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!cleaned) return;
-
-    // Split into sentence-sized chunks. Group short sentences together up to
-    // ~240 chars for smoother prosody, and split overly long ones on punctuation.
-    const MAX = 240;
-    const sentences = cleaned.match(/[^.!?\n]+[.!?]+|[^.!?\n]+$/g) || [cleaned];
-    const chunks: string[] = [];
-    let buf = "";
-    const flush = () => { if (buf.trim()) chunks.push(buf.trim()); buf = ""; };
-    for (const s of sentences) {
-      const trimmed = s.trim();
-      if (!trimmed) continue;
-      if (trimmed.length > MAX) {
-        flush();
-        const parts = trimmed.match(/[^,;:]+[,;:]?|.+/g) || [trimmed];
-        let sub = "";
-        for (const p of parts) {
-          if ((sub + " " + p).trim().length > MAX) {
-            if (sub.trim()) chunks.push(sub.trim());
-            sub = p;
-          } else {
-            sub = (sub + " " + p).trim();
-          }
-        }
-        if (sub.trim()) chunks.push(sub.trim());
-        continue;
-      }
-      if ((buf + " " + trimmed).trim().length > MAX) {
-        flush();
-        buf = trimmed;
-      } else {
-        buf = (buf + " " + trimmed).trim();
-      }
-    }
-    flush();
-    if (chunks.length === 0) return;
-
-    const preferred = preferredVoiceRef.current;
-
-    ttsQueueRef.current = chunks;
+    if (!content.trim()) return;
+    // useElevenLabsTts does its own markdown/code/action-tag/emoji stripping
+    // (cleanForSpeech) and sentence chunking internally — no need to redo
+    // that here. Defaults to the ElevenLabs "Sarah" voice so this upgrades
+    // to premium speech automatically the moment ELEVENLABS_API_KEY is set
+    // in this project's Supabase secrets; until then every call fails over
+    // to the free tier (native TTS on Android, Web Speech elsewhere) exactly
+    // as it did before, just actually audible on Android now.
     setCurrentlySpokenId(msgId);
-
-    const speakNext = () => {
-      const next = ttsQueueRef.current.shift();
-      if (!next) {
-        setCurrentlySpokenId(null);
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(next);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.05;
-      utterance.volume = 1.0;
-      if (preferred?.lang) utterance.lang = preferred.lang;
-      if (preferred) utterance.voice = preferred;
-      utterance.onend = () => speakNext();
-      utterance.onerror = (e: any) => {
-        // Ignore benign 'interrupted'/'canceled' errors so the queue keeps moving.
-        if (e?.error && e.error !== "interrupted" && e.error !== "canceled") {
-          console.warn("TTS error:", e.error);
-        }
-        speakNext();
-      };
-      if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.speak(utterance);
-    };
-    speakNext();
-  }, [currentlySpokenId, stopSpeaking]);
+    ttsSpeak(content, { gender: "female", voiceId: "EXAVITQu4vr4xnSDxMaL" }).finally(() => {
+      setCurrentlySpokenId((cur) => (cur === msgId ? null : cur));
+    });
+  }, [currentlySpokenId, stopSpeaking, ttsSpeak]);
 
   // Stop any in-flight speech when the chat unmounts.
   useEffect(() => {
-    return () => {
-      try { window.speechSynthesis.cancel(); } catch {}
-    };
-  }, []);
+    return () => { ttsStop(); };
+  }, [ttsStop]);
 
   // Auto-speak new assistant messages when voice is enabled
   const lastMessageRef = useRef<string | null>(null);
-
-  // Chrome pauses speechSynthesis after ~15s. Periodically pause/resume
-  // to keep the queue running through long messages.
-  useEffect(() => {
-    if (!currentlySpokenId) return;
-    const id = window.setInterval(() => {
-      if (window.speechSynthesis?.speaking) {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-      }
-    }, 10000);
-    return () => window.clearInterval(id);
-  }, [currentlySpokenId]);
-
   useEffect(() => {
     if (!voiceEnabled) return;
     const lastMsg = messages[messages.length - 1];

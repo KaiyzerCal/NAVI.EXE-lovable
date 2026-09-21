@@ -35,4 +35,12 @@
     <!-- Required on Android 13+ (API 33) to actually display push notifications
          once @capacitor/push-notifications is wired to a real Firebase project. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Without this, the WebView's getUserMedia(audio) call for the in-chat
+         voice button fails immediately as a permission denial and Android
+         never shows a runtime permission dialog at all — a manifest
+         declaration is required before that dialog can appear, it isn't
+         optional or requestable at runtime alone. This is what surfaced as
+         "microphone access required for voice input" with no prompt ever
+         shown. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>

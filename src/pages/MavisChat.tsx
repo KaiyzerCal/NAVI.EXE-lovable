@@ -1,8 +1,9 @@
 import PageHeader from "@/components/PageHeader";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw, Paperclip } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Square, Copy, ChevronDown, Volume2, VolumeX, RefreshCw, Paperclip, Phone } from "lucide-react";
 import VoiceInput from "@/components/VoiceInput";
+import { VoiceChatOverlay } from "@/components/VoiceChatOverlay";
 import UploadZone from "@/components/UploadZone";
 import ReactMarkdown from "react-markdown";
 import { toast } from "@/hooks/use-toast";
@@ -485,6 +486,7 @@ export default function MavisChat() {
     return localStorage.getItem("mavis.voiceEnabled") === "1";
   });
   const [currentlySpokenId, setCurrentlySpokenId] = useState<string | null>(null);
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
 
   // Persist voice on/off preference
   useEffect(() => {
@@ -519,16 +521,19 @@ export default function MavisChat() {
     return () => { ttsStop(); };
   }, [ttsStop]);
 
-  // Auto-speak new assistant messages when voice is enabled
+  // Auto-speak new assistant messages when voice is enabled. Skipped while
+  // the voice call overlay is open — that overlay speaks its own replies
+  // (see VoiceChatOverlay), and without this guard both would fire for the
+  // same message, playing it twice.
   const lastMessageRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!voiceEnabled) return;
+    if (!voiceEnabled || voiceOverlayOpen) return;
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.role === "assistant" && lastMsg.id !== "streaming" && lastMsg.id !== "initial" && lastMsg.id !== lastMessageRef.current) {
       lastMessageRef.current = lastMsg.id;
       speakMessage(lastMsg.id, lastMsg.content);
     }
-  }, [messages, voiceEnabled, speakMessage]);
+  }, [messages, voiceEnabled, voiceOverlayOpen, speakMessage]);
 
   // ── Load conversation ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -874,9 +879,14 @@ export default function MavisChat() {
   }, []);
 
   // ── Send message ──────────────────────────────────────────────────────────
-  const sendMessage = useCallback(async () => {
-    // Nothing typed — genuinely nothing to do.
-    if (!input.trim()) return;
+  // overrideText lets a caller dispatch text that never went through the
+  // input box — the voice call overlay's spoken transcript, specifically —
+  // without the setInput()-then-immediately-read-input() race that would
+  // otherwise happen: setInput schedules a state update, it doesn't apply it
+  // before this function's own closure reads `input` on the very next line.
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    // Nothing typed and nothing passed in — genuinely nothing to do.
+    if (!(overrideText ?? input).trim()) return;
 
     // A send already in flight. This used to return silently on the reasoning
     // that the spinner already communicates it, which was wrong: if isLoading
@@ -927,7 +937,7 @@ export default function MavisChat() {
       return;
     }
 
-    const userContent = input.trim();
+    const userContent = (overrideText ?? input).trim();
     setInput("");
     setIsLoading(true);
 
@@ -1253,6 +1263,14 @@ export default function MavisChat() {
   const [bundleLabel, setBundleLabel] = useState<string | null>(null);
   useEffect(() => { void getRunningBundleLabel().then(setBundleLabel); }, []);
 
+  // Latest assistant reply, for the voice call overlay to speak once
+  // isLoading finishes — same exclusions as the auto-speak effect above so
+  // it never reads a streaming placeholder or the initial greeting as "the
+  // reply that just arrived".
+  const lastBotMessage = [...messages].reverse().find(
+    (m) => m.role === "assistant" && m.id !== "streaming" && m.id !== "initial"
+  )?.content ?? "";
+
   if (dbLoading) {
     return (
       <div className="flex flex-col h-[calc(100vh-2rem)] items-center justify-center">
@@ -1263,9 +1281,24 @@ export default function MavisChat() {
   }
 
   return (
+    <>
     <div className="flex flex-col h-[calc(100vh-2rem)]">
       <PageHeader title="NAVI AI" subtitle={bundleLabel ? `// NEURAL LINK ACTIVE · ${bundleLabel}` : "// NEURAL LINK ACTIVE"}>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              // Stop anything the outer auto-speak might be mid-playing —
+              // the overlay owns audio from here, see the guarded useEffect
+              // above.
+              ttsStop();
+              setVoiceOverlayOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
+            title="Talk to NAVI — tap-to-speak voice conversation"
+          >
+            <Phone size={12} />
+            CALL
+          </button>
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted border border-border text-muted-foreground text-xs font-mono hover:text-foreground hover:border-primary/30 transition-colors"
@@ -1519,6 +1552,17 @@ export default function MavisChat() {
         );
       })()}
     </div>
+    <AnimatePresence>
+      {voiceOverlayOpen && (
+        <VoiceChatOverlay
+          onClose={() => setVoiceOverlayOpen(false)}
+          sendMessage={async (text) => { await sendMessage(text); }}
+          lastBotMessage={lastBotMessage}
+          isLoading={isLoading}
+        />
+      )}
+    </AnimatePresence>
+    </>
   );
 }
 
